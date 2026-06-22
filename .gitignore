@@ -1,0 +1,26 @@
+# Wails build output
+build/
+
+# Wails dev mode generated files
+wailsjs/
+frontend/wailsjs/
+
+# Go
+*.exe
+*.test
+*.out
+/vendor/
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Binary
+nicosia
+nicosia.exe
