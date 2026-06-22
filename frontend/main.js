@@ -923,6 +923,20 @@ document.getElementById('btn-import').addEventListener('click', async () => {
   }
 })
 
+document.getElementById('btn-import-project').addEventListener('click', async () => {
+  try {
+    const msg = await go.ImportProject()
+    if (!msg) return // cancelled
+    projects = await go.LoadProjects()
+    renderSidebar()
+    renderGroups()
+    renderMain()
+    alert(msg)
+  } catch (err) {
+    alert('Import failed: ' + err)
+  }
+})
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   // Edit modal wiring

@@ -188,6 +188,7 @@
     #sidebar.collapsed .project-avatar { display: flex; }
     #sidebar.collapsed #add-project-btn { display: none; }
     #sidebar.collapsed #new-project-form { display: none !important; }
+    #sidebar.collapsed #btn-import-project { display: none; }
     #sidebar.collapsed #data-actions { display: none; }
     #sidebar.collapsed .resize-handle { display: none; }
     #sidebar.collapsed .project-item {
@@ -208,6 +209,22 @@
       transition: border-color .15s, color .15s;
     }
     #add-project-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    #btn-import-project {
+      margin: 0 10px 8px;
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 12px;
+      text-align: center;
+      width: calc(100% - 20px);
+      box-sizing: border-box;
+      transition: border-color .15s, color .15s;
+    }
+    #btn-import-project:hover { border-color: var(--accent); color: var(--accent); }
 
     #data-actions {
       display: flex;
@@ -991,6 +1008,7 @@
       <button class="btn-cancel" id="np-cancel">Cancel</button>
     </div>
   </div>
+  <button id="btn-import-project" title="Import a single project from JSON or YAML">↓ Import Project</button>
   <div id="data-actions">
     <button id="btn-export" title="Export all projects to JSON or YAML">↑ Export</button>
     <button id="btn-import" title="Import projects from JSON or YAML">↓ Import</button>

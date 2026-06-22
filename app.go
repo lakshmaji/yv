@@ -436,6 +436,31 @@ func unmarshalProjects(data []byte, ext string) ([]Project, error) {
 	return projects, err
 }
 
+// unmarshalOneProject parses a single Project from JSON or YAML.
+// Accepts either a single object or an array (takes the first element).
+func unmarshalOneProject(data []byte, ext string) (Project, error) {
+	if ext == ".yaml" || ext == ".yml" {
+		var p Project
+		if err := yaml.Unmarshal(data, &p); err == nil && p.ID != "" {
+			return p, nil
+		}
+		var ps []Project
+		if err := yaml.Unmarshal(data, &ps); err == nil && len(ps) > 0 {
+			return ps[0], nil
+		}
+		return Project{}, fmt.Errorf("no project found in file")
+	}
+	var p Project
+	if err := json.Unmarshal(data, &p); err == nil && p.ID != "" {
+		return p, nil
+	}
+	var ps []Project
+	if err := json.Unmarshal(data, &ps); err == nil && len(ps) > 0 {
+		return ps[0], nil
+	}
+	return Project{}, fmt.Errorf("no project found in file")
+}
+
 // ExportProjects opens a save dialog and writes all projects to the chosen file (JSON or YAML).
 func (a *App) ExportProjects() (string, error) {
 	a.ctxMu.RLock()
@@ -523,6 +548,56 @@ func (a *App) ImportProjects() (string, error) {
 		return fmt.Sprintf("Imported %d project(s), skipped %d (already exist)", added, skipped), nil
 	}
 	return fmt.Sprintf("Imported %d project(s)", added), nil
+}
+
+// ImportProject opens a file dialog and imports exactly one project from JSON or YAML.
+// If the file contains an array, only the first project is imported.
+// Existing projects are never modified.
+func (a *App) ImportProject() (string, error) {
+	a.ctxMu.RLock()
+	ctx := a.ctx
+	a.ctxMu.RUnlock()
+
+	path, err := wailsRuntime.OpenFileDialog(ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Import Project",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON / YAML (*.json;*.yaml;*.yml)", Pattern: "*.json;*.yaml;*.yml"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	p, err := unmarshalOneProject(data, ext)
+	if err != nil {
+		return "", fmt.Errorf("parse: %w", err)
+	}
+
+	existing := a.LoadProjects()
+	for _, e := range existing {
+		if e.ID == p.ID {
+			return fmt.Sprintf("Skipped: project %q already exists", p.Name), nil
+		}
+	}
+
+	existing = append(existing, p)
+	configP, err := configPath()
+	if err != nil {
+		return "", err
+	}
+	if err := writeProjects(configP, existing); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Imported project %q", p.Name), nil
 }
 
 func defaultProjects() []Project {
