@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "nicosia",
-  "outputfilename": "nicosia",
+  "name": "yv",
+  "outputfilename": "yv",
   "version": "2",
   "frontend:dir": "frontend",
   "author": {
@@ -10,7 +10,7 @@
   },
   "info": {
     "companyName": "Personal",
-    "productName": "Nicosia Command Runner",
+    "productName": "yv",
     "productVersion": "1.0.0",
     "copyright": "© 2026",
     "comments": "Run dev commands per project"
