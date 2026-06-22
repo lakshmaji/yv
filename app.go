@@ -461,6 +461,51 @@ func unmarshalOneProject(data []byte, ext string) (Project, error) {
 	return Project{}, fmt.Errorf("no project found in file")
 }
 
+// ExportProject opens a save dialog and writes a single project to the chosen file (JSON or YAML).
+func (a *App) ExportProject(projectID string) (string, error) {
+	a.ctxMu.RLock()
+	ctx := a.ctx
+	a.ctxMu.RUnlock()
+
+	var p *Project
+	for _, proj := range a.LoadProjects() {
+		if proj.ID == projectID {
+			p = &proj
+			break
+		}
+	}
+	if p == nil {
+		return "", fmt.Errorf("project not found")
+	}
+
+	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "Export Project",
+		DefaultFilename: p.Name + ".json",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
+			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	var out []byte
+	if ext == ".yaml" || ext == ".yml" {
+		out, err = yaml.Marshal(p)
+	} else {
+		out, err = json.MarshalIndent(p, "", "  ")
+	}
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, out, 0o644)
+}
+
 // ExportProjects opens a save dialog and writes all projects to the chosen file (JSON or YAML).
 func (a *App) ExportProjects() (string, error) {
 	a.ctxMu.RLock()

@@ -81,7 +81,17 @@ function renderSidebar() {
       <span class="project-avatar">${initials}</span>
       <span class="project-dot"></span>
       <span class="project-name">${escHtml(p.name)}</span>
+      <button class="project-export-btn" title="Export project">↑</button>
     `;
+    item.querySelector('.project-export-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const result = await go.ExportProject(p.id);
+        if (result) alert('Exported to ' + result);
+      } catch (err) {
+        alert('Export failed: ' + err);
+      }
+    });
     item.addEventListener('click', () => selectProject(p.id));
     list.appendChild(item);
   }
