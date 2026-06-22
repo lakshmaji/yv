@@ -199,29 +199,21 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 	}
 
 	go func() {
-		// Run pre-hook commands sequentially; abort on any failure
+		// Build a single shell script for pre-hooks + main command so that
+		// environment changes in pre-hooks (eval, export, source, direnv) carry
+		// into subsequent hooks and the main command.
+		var script strings.Builder
+		script.WriteString("set -e\n")
 		for i, preCmd := range cmd.PreCommands {
-			emit(fmt.Sprintf("[PRE] %d/%d: %s", i+1, len(cmd.PreCommands), preCmd))
-			exitCode, err := a.runShellCommand(cmd.ID, preCmd, workDir, emit)
-			if err != nil {
-				if ctx != nil {
-					wailsRuntime.EventsEmit(ctx, doneEvent, CommandResult{ExitCode: -1, Error: "pre-hook error: " + err.Error()})
-				}
-				return
-			}
-			if exitCode != 0 {
-				if ctx != nil {
-					wailsRuntime.EventsEmit(ctx, doneEvent, CommandResult{
-						ExitCode: exitCode,
-						Error:    fmt.Sprintf("pre-hook %d/%d failed (exit %d)", i+1, len(cmd.PreCommands), exitCode),
-					})
-				}
-				return
-			}
+			// Echo the [PRE] label. Single-quote the command text so $(...) and
+			// special chars are printed literally, not expanded.
+			escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
+			fmt.Fprintf(&script, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
+			script.WriteString(preCmd + "\n")
 		}
+		script.WriteString(cmd.Command + "\n")
 
-		// Run the main command
-		exitCode, err := a.runShellCommand(cmd.ID, cmd.Command, workDir, emit)
+		exitCode, err := a.runShellCommand(cmd.ID, script.String(), workDir, emit)
 		result := CommandResult{}
 		if err != nil {
 			result.ExitCode = -1
