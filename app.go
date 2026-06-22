@@ -28,6 +28,7 @@ type CommandConfig struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Command string `json:"command"`
+	Group   string `json:"group"`
 }
 
 type CommandResult struct {
@@ -248,31 +249,37 @@ func defaultProjects() []Project {
 					ID:      "pos-1",
 					Label:   "Clean & Build Release APK",
 					Command: "./gradlew clean && ./gradlew app:assembleRelease",
+					Group:   "Android",
 				},
 				{
 					ID:      "pos-2",
 					Label:   "Install APK",
 					Command: "adb install -r app/build/outputs/apk/release/app-release.apk",
+					Group:   "Android",
 				},
 				{
 					ID:      "pos-3",
 					Label:   "Launch App",
 					Command: "adb shell am start -n au.oolio.pos/.MainActivity",
+					Group:   "Android",
 				},
 				{
 					ID:      "pos-4",
 					Label:   "Force Stop App",
 					Command: "adb shell am force-stop au.oolio.pos",
+					Group:   "Android",
 				},
 				{
 					ID:      "pos-5",
 					Label:   "Start Pixel Tablet Emulator",
 					Command: "emulator -avd Pixel_Tablet -no-snapshot-load",
+					Group:   "Android",
 				},
 				{
 					ID:      "pos-6",
 					Label:   "List AVDs",
 					Command: "emulator -list-avds",
+					Group:   "Android",
 				},
 			},
 		},

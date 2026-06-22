@@ -19,6 +19,7 @@
       --mono:     'SF Mono', 'Menlo', 'Consolas', monospace;
       --radius:   6px;
       --sidebar:  220px;
+      --groups:   140px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,10 +32,10 @@
       height: 100vh;
       display: grid;
       grid-template-rows: 44px 1fr;
-      grid-template-columns: var(--sidebar) 1fr;
+      grid-template-columns: var(--sidebar) var(--groups) 1fr;
       grid-template-areas:
-        "header header"
-        "sidebar main";
+        "header header header"
+        "sidebar groups main";
       overflow: hidden;
     }
 
@@ -196,6 +197,53 @@
       cursor: pointer;
     }
     .btn-cancel:hover { color: var(--text); }
+
+    /* ── Groups panel ────────────────────────────────────── */
+    #groups-panel {
+      grid-area: groups;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #groups-header {
+      padding: 12px 12px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #groups-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+
+    .group-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: background .1s;
+      border-left: 3px solid transparent;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .group-item:hover { background: var(--card); }
+    .group-item.active {
+      background: var(--card);
+      border-left-color: var(--accent);
+      color: var(--accent);
+    }
 
     /* ── Main panel ───────────────────────────────────────── */
     #main {
@@ -408,7 +456,8 @@
     }
     #add-cmd-form input:focus { outline: none; border-color: var(--accent); }
 
-    #add-cmd-label   { width: 160px; }
+    #add-cmd-label   { width: 140px; }
+    #add-cmd-group   { width: 110px; }
     #add-cmd-command { flex: 1; min-width: 200px; font-family: var(--mono); font-size: 12px; }
 
     #add-cmd-submit {
@@ -459,6 +508,11 @@
       <button class="btn-cancel" id="np-cancel">Cancel</button>
     </div>
   </div>
+</nav>
+
+<nav id="groups-panel">
+  <div id="groups-header">Groups</div>
+  <div id="groups-list"></div>
 </nav>
 
 <main id="main">

@@ -5,6 +5,7 @@ const runtime = window.runtime;
 // ── State ──────────────────────────────────────────────────────────────────
 let projects = [];
 let selectedId = null;
+let selectedGroup = 'All';
 
 // per cmdID: { lines: string[], collapsed: bool, exitCode: number|null }
 const cmdState = new Map();
@@ -44,8 +45,34 @@ function renderSidebar() {
 
 function selectProject(id) {
   selectedId = id;
+  selectedGroup = 'All';
   renderSidebar();
+  renderGroups();
   renderMain();
+}
+
+// ── Groups panel rendering ─────────────────────────────────────────────────
+function renderGroups() {
+  const list = document.getElementById('groups-list');
+  list.innerHTML = '';
+
+  const proj = selectedProject();
+  if (!proj) return;
+
+  const groups = [...new Set(proj.commands.map(c => c.group).filter(Boolean))].sort();
+  const items = ['All', ...groups];
+
+  for (const g of items) {
+    const item = document.createElement('div');
+    item.className = 'group-item' + (g === selectedGroup ? ' active' : '');
+    item.textContent = g;
+    item.addEventListener('click', () => {
+      selectedGroup = g;
+      renderGroups();
+      renderMain();
+    });
+    list.appendChild(item);
+  }
 }
 
 // ── Main panel rendering ───────────────────────────────────────────────────
@@ -58,6 +85,8 @@ function renderMain() {
     return;
   }
 
+  const groupDefault = selectedGroup !== 'All' ? selectedGroup : '';
+
   main.innerHTML = `
     <div id="project-header">
       <span id="project-title">${escHtml(proj.name)}</span>
@@ -66,13 +95,18 @@ function renderMain() {
     <div id="commands-list"></div>
     <form id="add-cmd-form" autocomplete="off">
       <input id="add-cmd-label"   placeholder="Label" required />
+      <input id="add-cmd-group"   placeholder="Group" value="${escHtml(groupDefault)}" />
       <input id="add-cmd-command" placeholder="shell command…" required />
       <button id="add-cmd-submit" type="submit">+ Add Command</button>
     </form>
   `;
 
+  const cmds = selectedGroup === 'All'
+    ? proj.commands
+    : proj.commands.filter(c => c.group === selectedGroup);
+
   const list = document.getElementById('commands-list');
-  for (const cmd of proj.commands) {
+  for (const cmd of cmds) {
     list.appendChild(buildCmdRow(cmd));
   }
 
@@ -287,13 +321,15 @@ async function addCommand() {
   if (!proj) return;
 
   const labelEl   = document.getElementById('add-cmd-label');
+  const groupEl   = document.getElementById('add-cmd-group');
   const commandEl = document.getElementById('add-cmd-command');
 
   const label   = labelEl.value.trim();
+  const group   = groupEl.value.trim();
   const command = commandEl.value.trim();
   if (!label || !command) return;
 
-  const newCmd = { id: uid(), label, command };
+  const newCmd = { id: uid(), label, command, group };
   proj.commands.push(newCmd);
 
   const result = await go.SaveProjects(projects);
@@ -305,6 +341,7 @@ async function addCommand() {
 
   labelEl.value = '';
   commandEl.value = '';
+  renderGroups();
   renderMain();
 }
 
@@ -358,6 +395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     projects = [];
   }
   renderSidebar();
+  renderGroups();
   if (projects.length > 0) {
     selectProject(projects[0].id);
   }
