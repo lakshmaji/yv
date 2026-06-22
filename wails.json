@@ -1,0 +1,22 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "nicosia",
+  "outputfilename": "nicosia",
+  "version": "2",
+  "frontend:dir": "frontend",
+  "author": {
+    "name": "lakshmaji",
+    "email": "lakshmaji.mutyala@oolio.com"
+  },
+  "info": {
+    "companyName": "Personal",
+    "productName": "Nicosia Command Runner",
+    "productVersion": "1.0.0",
+    "copyright": "© 2026",
+    "comments": "Run dev commands per project"
+  },
+  "mac": {
+    "identifier": "com.lakshmaji.nicosia",
+    "category": "public.app-category.developer-tools"
+  }
+}

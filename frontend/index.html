@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nicosia</title>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --card:     #21262d;
+      --accent:   #58a6ff;
+      --green:    #3fb950;
+      --red:      #f85149;
+      --yellow:   #d29922;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --mono:     'SF Mono', 'Menlo', 'Consolas', monospace;
+      --radius:   6px;
+      --sidebar:  220px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 44px 1fr;
+      grid-template-columns: var(--sidebar) 1fr;
+      grid-template-areas:
+        "header header"
+        "sidebar main";
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    #header {
+      grid-area: header;
+      --wails-draggable: drag;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+    }
+
+    #header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .3px;
+      --wails-draggable: no-drag;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    #sidebar {
+      grid-area: sidebar;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 12px 12px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #project-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+
+    .project-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background .1s;
+      border-left: 3px solid transparent;
+    }
+    .project-item:hover { background: var(--card); }
+    .project-item.active {
+      background: var(--card);
+      border-left-color: var(--accent);
+    }
+
+    .project-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .project-item.active .project-dot { background: var(--accent); }
+
+    .project-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #add-project-btn {
+      margin: 8px 10px;
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 12px;
+      text-align: center;
+      transition: border-color .15s, color .15s;
+    }
+    #add-project-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── New project form (inline in sidebar) ──────────── */
+    #new-project-form {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 10px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    #new-project-form.visible { display: flex; }
+
+    #new-project-form input {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 5px 8px;
+      font-size: 12px;
+      width: 100%;
+    }
+    #new-project-form input:focus { outline: none; border-color: var(--accent); }
+
+    .form-row {
+      display: flex;
+      gap: 4px;
+    }
+
+    #new-project-form .pick-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    #new-project-form .pick-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .form-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .btn-primary {
+      flex: 1;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary:hover { filter: brightness(1.15); }
+
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-cancel:hover { color: var(--text); }
+
+    /* ── Main panel ───────────────────────────────────────── */
+    #main {
+      grid-area: main;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #project-header {
+      padding: 12px 20px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    #project-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    #project-path {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #commands-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── Command row ──────────────────────────────────────── */
+    .cmd-row {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .cmd-row.running {
+      border-color: var(--accent);
+    }
+
+    .cmd-row.done-ok  { border-color: var(--green); }
+    .cmd-row.done-err { border-color: var(--red); }
+
+    .cmd-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .chevron {
+      font-size: 10px;
+      color: var(--muted);
+      transition: transform .15s;
+      width: 12px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .cmd-row.expanded .chevron { transform: rotate(90deg); }
+
+    .cmd-label {
+      font-weight: 600;
+      font-size: 13px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cmd-snippet {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 340px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+
+    .line-hint {
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 1px 7px;
+      flex-shrink: 0;
+    }
+
+    .cmd-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .run-btn, .stop-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .run-btn {
+      background: var(--green);
+      color: #fff;
+    }
+    .run-btn:hover { filter: brightness(1.15); }
+    .run-btn:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+
+    .stop-btn {
+      background: var(--red);
+      color: #fff;
+      display: none;
+    }
+    .stop-btn:hover { filter: brightness(1.15); }
+
+    .cmd-row.running .run-btn  { display: none; }
+    .cmd-row.running .stop-btn { display: flex; }
+
+    /* ── Inline terminal ─────────────────────────────────── */
+    .cmd-terminal {
+      display: none;
+      border-top: 1px solid var(--border);
+      background: #010409;
+    }
+
+    .cmd-row.expanded .cmd-terminal { display: block; }
+
+    .terminal-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      border-bottom: 1px solid #ffffff0d;
+    }
+
+    .exit-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 10px;
+    }
+    .exit-ok  { background: #3fb95022; color: var(--green); border: 1px solid var(--green); }
+    .exit-err { background: #f8514922; color: var(--red);   border: 1px solid var(--red); }
+
+    .clear-btn {
+      font-size: 11px;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .clear-btn:hover { color: var(--text); background: var(--card); }
+
+    .terminal-output {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+      color: #c9d1d9;
+      padding: 8px 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* ── Add command form ─────────────────────────────────── */
+    #add-cmd-form {
+      border-top: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #add-cmd-form input {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    #add-cmd-form input:focus { outline: none; border-color: var(--accent); }
+
+    #add-cmd-label   { width: 160px; }
+    #add-cmd-command { flex: 1; min-width: 200px; font-family: var(--mono); font-size: 12px; }
+
+    #add-cmd-submit {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #add-cmd-submit:hover { filter: brightness(1.15); }
+
+    #no-project {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header id="header">
+  <h1>Nicosia</h1>
+</header>
+
+<nav id="sidebar">
+  <div id="sidebar-header">Projects</div>
+  <div id="project-list"></div>
+  <button id="add-project-btn">+ New Project</button>
+  <div id="new-project-form">
+    <input id="np-name" placeholder="Project name" />
+    <div class="form-row">
+      <input id="np-dir" placeholder="Folder path" style="flex:1" />
+      <button class="pick-btn" id="np-pick">Browse</button>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" id="np-save">Create</button>
+      <button class="btn-cancel" id="np-cancel">Cancel</button>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <div id="no-project">Select or create a project</div>
+</main>
+
+<script src="main.js"></script>
+</body>
+</html>

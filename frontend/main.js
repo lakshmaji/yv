@@ -1,0 +1,364 @@
+// Wails v2: window['go']['main']['App']['Method'](args) → Promise
+const go = window['go']['main']['App'];
+const runtime = window.runtime;
+
+// ── State ──────────────────────────────────────────────────────────────────
+let projects = [];
+let selectedId = null;
+
+// per cmdID: { lines: string[], collapsed: bool, exitCode: number|null }
+const cmdState = new Map();
+
+// track active Wails event unsubscribers to avoid duplicate listeners
+const listeners = new Map(); // cmdID → { offOutput, offDone }
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function uid() {
+  return crypto.randomUUID();
+}
+
+function selectedProject() {
+  return projects.find(p => p.id === selectedId) || null;
+}
+
+// ── Sidebar rendering ──────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('project-list');
+  list.innerHTML = '';
+  for (const p of projects) {
+    const item = document.createElement('div');
+    item.className = 'project-item' + (p.id === selectedId ? ' active' : '');
+    item.dataset.id = p.id;
+    item.innerHTML = `<span class="project-dot"></span><span class="project-name">${escHtml(p.name)}</span>`;
+    item.addEventListener('click', () => selectProject(p.id));
+    list.appendChild(item);
+  }
+}
+
+function selectProject(id) {
+  selectedId = id;
+  renderSidebar();
+  renderMain();
+}
+
+// ── Main panel rendering ───────────────────────────────────────────────────
+function renderMain() {
+  const main = document.getElementById('main');
+  const proj = selectedProject();
+
+  if (!proj) {
+    main.innerHTML = '<div id="no-project">Select or create a project</div>';
+    return;
+  }
+
+  main.innerHTML = `
+    <div id="project-header">
+      <span id="project-title">${escHtml(proj.name)}</span>
+      <span id="project-path">${escHtml(proj.workingDir)}</span>
+    </div>
+    <div id="commands-list"></div>
+    <form id="add-cmd-form" autocomplete="off">
+      <input id="add-cmd-label"   placeholder="Label" required />
+      <input id="add-cmd-command" placeholder="shell command…" required />
+      <button id="add-cmd-submit" type="submit">+ Add Command</button>
+    </form>
+  `;
+
+  const list = document.getElementById('commands-list');
+  for (const cmd of proj.commands) {
+    list.appendChild(buildCmdRow(cmd));
+  }
+
+  document.getElementById('add-cmd-form').addEventListener('submit', e => {
+    e.preventDefault();
+    addCommand();
+  });
+}
+
+// ── Command row DOM builder ────────────────────────────────────────────────
+function buildCmdRow(cmd) {
+  if (!cmdState.has(cmd.id)) {
+    cmdState.set(cmd.id, { lines: [], collapsed: true, exitCode: null });
+  }
+  const state = cmdState.get(cmd.id);
+
+  const row = document.createElement('div');
+  row.className = 'cmd-row' + (!state.collapsed && state.lines.length ? ' expanded' : '');
+  row.id = 'row-' + cmd.id;
+
+  row.innerHTML = `
+    <div class="cmd-header" data-cmdid="${escHtml(cmd.id)}">
+      <span class="chevron">▶</span>
+      <span class="cmd-label">${escHtml(cmd.label)}</span>
+      <span class="cmd-snippet" title="${escHtml(cmd.command)}">${escHtml(cmd.command)}</span>
+      <span class="line-hint" id="hint-${escHtml(cmd.id)}" style="display:none"></span>
+      <div class="cmd-actions">
+        <button class="run-btn"  id="run-${escHtml(cmd.id)}">▶ Run</button>
+        <button class="stop-btn" id="stop-${escHtml(cmd.id)}">■ Stop</button>
+      </div>
+    </div>
+    <div class="cmd-terminal" id="terminal-${escHtml(cmd.id)}">
+      <div class="terminal-toolbar">
+        <span class="exit-badge" id="exit-${escHtml(cmd.id)}" style="display:none"></span>
+        <button class="clear-btn" id="clear-${escHtml(cmd.id)}">Clear</button>
+      </div>
+      <div class="terminal-output" id="output-${escHtml(cmd.id)}">${escHtml(state.lines.join('\n'))}</div>
+    </div>
+  `;
+
+  // chevron / header click → toggle collapse
+  row.querySelector('.cmd-header').addEventListener('click', e => {
+    if (e.target.closest('.cmd-actions')) return;
+    toggleTerminal(cmd.id);
+  });
+
+  row.querySelector('.run-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    runCommand(cmd);
+  });
+
+  row.querySelector('.stop-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    go.StopCommand(cmd.id);
+  });
+
+  row.querySelector(`#clear-${cmd.id}`).addEventListener('click', e => {
+    e.stopPropagation();
+    clearTerminal(cmd.id);
+  });
+
+  return row;
+}
+
+// ── Terminal collapse/expand ───────────────────────────────────────────────
+function toggleTerminal(cmdId) {
+  const state = cmdState.get(cmdId);
+  if (!state) return;
+  state.collapsed = !state.collapsed;
+  applyTerminalState(cmdId);
+}
+
+function expandTerminal(cmdId) {
+  const state = cmdState.get(cmdId);
+  if (!state) return;
+  state.collapsed = false;
+  applyTerminalState(cmdId);
+}
+
+function applyTerminalState(cmdId) {
+  const row = document.getElementById('row-' + cmdId);
+  if (!row) return;
+  const state = cmdState.get(cmdId);
+  const hasContent = state.lines.length > 0;
+
+  if (!state.collapsed && hasContent) {
+    row.classList.add('expanded');
+  } else {
+    row.classList.remove('expanded');
+  }
+
+  const hint = document.getElementById('hint-' + cmdId);
+  if (hint) {
+    if (state.collapsed && hasContent) {
+      hint.textContent = state.lines.length + ' lines';
+      hint.style.display = '';
+    } else {
+      hint.style.display = 'none';
+    }
+  }
+}
+
+function clearTerminal(cmdId) {
+  const state = cmdState.get(cmdId);
+  if (state) {
+    state.lines = [];
+    state.exitCode = null;
+    state.collapsed = true;
+  }
+  const out = document.getElementById('output-' + cmdId);
+  if (out) out.textContent = '';
+  const badge = document.getElementById('exit-' + cmdId);
+  if (badge) { badge.style.display = 'none'; badge.textContent = ''; badge.className = 'exit-badge'; }
+  applyTerminalState(cmdId);
+}
+
+// ── Command execution ──────────────────────────────────────────────────────
+async function runCommand(cmd) {
+  const proj = selectedProject();
+  if (!proj) return;
+
+  // tear down prior listeners for this cmd
+  teardownListeners(cmd.id);
+
+  // reset terminal state but keep expanded
+  const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null };
+  state.lines = [];
+  state.collapsed = false;
+  state.exitCode = null;
+  cmdState.set(cmd.id, state);
+
+  const out = document.getElementById('output-' + cmd.id);
+  if (out) out.textContent = '';
+  const badge = document.getElementById('exit-' + cmd.id);
+  if (badge) { badge.style.display = 'none'; badge.className = 'exit-badge'; }
+
+  setRowRunning(cmd.id, true);
+  expandTerminal(cmd.id);
+
+  // wire up streaming events
+  const offOutput = runtime.EventsOn('output:' + cmd.id, line => {
+    appendLine(cmd.id, line);
+  });
+
+  const offDone = runtime.EventsOn('done:' + cmd.id, result => {
+    teardownListeners(cmd.id);
+    setRowRunning(cmd.id, false);
+    showExitBadge(cmd.id, result);
+    const row = document.getElementById('row-' + cmd.id);
+    if (row) {
+      row.classList.remove('running');
+      row.classList.add(result.exitCode === 0 ? 'done-ok' : 'done-err');
+    }
+  });
+
+  listeners.set(cmd.id, { offOutput, offDone });
+
+  try {
+    await go.ExecuteCommand(cmd, proj.workingDir);
+  } catch (err) {
+    appendLine(cmd.id, 'ERROR: ' + err);
+    setRowRunning(cmd.id, false);
+    teardownListeners(cmd.id);
+  }
+}
+
+function appendLine(cmdId, line) {
+  const state = cmdState.get(cmdId);
+  if (state) state.lines.push(line);
+
+  const out = document.getElementById('output-' + cmdId);
+  if (!out) return;
+  out.textContent += line + '\n';
+  out.scrollTop = out.scrollHeight;
+
+  // update line hint if collapsed
+  applyTerminalState(cmdId);
+}
+
+function showExitBadge(cmdId, result) {
+  const badge = document.getElementById('exit-' + cmdId);
+  if (!badge) return;
+  const ok = result.exitCode === 0 && !result.error;
+  badge.textContent = ok ? 'exited 0' : `exited ${result.exitCode}${result.error ? ': ' + result.error : ''}`;
+  badge.className = 'exit-badge ' + (ok ? 'exit-ok' : 'exit-err');
+  badge.style.display = '';
+}
+
+function setRowRunning(cmdId, running) {
+  const row = document.getElementById('row-' + cmdId);
+  if (!row) return;
+  if (running) {
+    row.classList.add('running');
+    row.classList.remove('done-ok', 'done-err');
+  } else {
+    row.classList.remove('running');
+  }
+}
+
+function teardownListeners(cmdId) {
+  const existing = listeners.get(cmdId);
+  if (existing) {
+    if (typeof existing.offOutput === 'function') existing.offOutput();
+    if (typeof existing.offDone === 'function') existing.offDone();
+    listeners.delete(cmdId);
+  }
+}
+
+// ── Add command ────────────────────────────────────────────────────────────
+async function addCommand() {
+  const proj = selectedProject();
+  if (!proj) return;
+
+  const labelEl   = document.getElementById('add-cmd-label');
+  const commandEl = document.getElementById('add-cmd-command');
+
+  const label   = labelEl.value.trim();
+  const command = commandEl.value.trim();
+  if (!label || !command) return;
+
+  const newCmd = { id: uid(), label, command };
+  proj.commands.push(newCmd);
+
+  const result = await go.SaveProjects(projects);
+  if (result !== 'ok') {
+    alert('Save failed: ' + result);
+    proj.commands.pop();
+    return;
+  }
+
+  labelEl.value = '';
+  commandEl.value = '';
+  renderMain();
+}
+
+// ── New project ────────────────────────────────────────────────────────────
+document.getElementById('add-project-btn').addEventListener('click', () => {
+  const form = document.getElementById('new-project-form');
+  form.classList.toggle('visible');
+  if (form.classList.contains('visible')) {
+    document.getElementById('np-name').focus();
+  }
+});
+
+document.getElementById('np-cancel').addEventListener('click', () => {
+  document.getElementById('new-project-form').classList.remove('visible');
+  document.getElementById('np-name').value = '';
+  document.getElementById('np-dir').value = '';
+});
+
+document.getElementById('np-pick').addEventListener('click', async () => {
+  const path = await go.PickFolder();
+  if (path) document.getElementById('np-dir').value = path;
+});
+
+document.getElementById('np-save').addEventListener('click', async () => {
+  const name = document.getElementById('np-name').value.trim();
+  const dir  = document.getElementById('np-dir').value.trim();
+  if (!name || !dir) return;
+
+  const proj = { id: uid(), name, workingDir: dir, commands: [] };
+  projects.push(proj);
+
+  const result = await go.SaveProjects(projects);
+  if (result !== 'ok') {
+    alert('Save failed: ' + result);
+    projects.pop();
+    return;
+  }
+
+  document.getElementById('new-project-form').classList.remove('visible');
+  document.getElementById('np-name').value = '';
+  document.getElementById('np-dir').value = '';
+
+  selectProject(proj.id);
+});
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    projects = await go.LoadProjects();
+  } catch (e) {
+    projects = [];
+  }
+  renderSidebar();
+  if (projects.length > 0) {
+    selectProject(projects[0].id);
+  }
+});
