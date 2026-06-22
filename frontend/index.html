@@ -47,7 +47,7 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      padding: 0 16px;
+      padding: 0 16px 0 80px;
       gap: 10px;
     }
 
@@ -450,6 +450,22 @@
 
     .cmd-row.running .run-btn  { display: none; }
     .cmd-row.running .stop-btn { display: flex; }
+
+    .dismiss-btn {
+      display: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      align-items: center;
+      gap: 4px;
+    }
+    .dismiss-btn:hover { border-color: var(--red); color: var(--red); }
+    .cmd-row.done-err .dismiss-btn { display: flex; }
 
     /* ── Inline terminal ─────────────────────────────────── */
     .cmd-terminal {

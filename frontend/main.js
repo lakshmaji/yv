@@ -138,7 +138,10 @@ function buildCmdRow(cmd) {
   const state = cmdState.get(cmd.id);
 
   const row = document.createElement('div');
-  row.className = 'cmd-row' + (!state.collapsed && state.lines.length ? ' expanded' : '');
+  let rowClass = 'cmd-row';
+  if (!state.collapsed && state.lines.length) rowClass += ' expanded';
+  if (state.exitCode !== null) rowClass += state.exitCode === 0 ? ' done-ok' : ' done-err';
+  row.className = rowClass;
   row.id = 'row-' + cmd.id;
 
   row.innerHTML = `
@@ -149,6 +152,7 @@ function buildCmdRow(cmd) {
       ${cmd.workingDir ? `<span class="cmd-dir" title="${escHtml(cmd.workingDir)}">${escHtml(cmd.workingDir)}</span>` : ''}
       <span class="line-hint" id="hint-${escHtml(cmd.id)}" style="display:none"></span>
       <div class="cmd-actions">
+        <button class="dismiss-btn" id="dismiss-${escHtml(cmd.id)}">✕ Dismiss</button>
         <button class="run-btn"  id="run-${escHtml(cmd.id)}">▶ Run</button>
         <button class="stop-btn" id="stop-${escHtml(cmd.id)}">■ Stop</button>
       </div>
@@ -166,6 +170,13 @@ function buildCmdRow(cmd) {
   row.querySelector('.cmd-header').addEventListener('click', e => {
     if (e.target.closest('.cmd-actions')) return;
     toggleTerminal(cmd.id);
+  });
+
+  row.querySelector('.dismiss-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    const s = cmdState.get(cmd.id);
+    if (s) s.collapsed = true;
+    row.classList.remove('done-err', 'expanded');
   });
 
   row.querySelector('.run-btn').addEventListener('click', e => {
@@ -235,6 +246,8 @@ function clearTerminal(cmdId) {
   if (out) out.textContent = '';
   const badge = document.getElementById('exit-' + cmdId);
   if (badge) { badge.style.display = 'none'; badge.textContent = ''; badge.className = 'exit-badge'; }
+  const row = document.getElementById('row-' + cmdId);
+  if (row) row.classList.remove('done-ok', 'done-err');
   applyTerminalState(cmdId);
 }
 
@@ -246,12 +259,14 @@ async function runCommand(cmd) {
   // tear down prior listeners for this cmd
   teardownListeners(cmd.id);
 
-  // reset terminal state but keep expanded
+  // reset terminal state and keep expanded
   const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null };
   state.lines = [];
   state.collapsed = false;
   state.exitCode = null;
   cmdState.set(cmd.id, state);
+  const row = document.getElementById('row-' + cmd.id);
+  if (row) row.classList.remove('done-ok', 'done-err');
 
   const out = document.getElementById('output-' + cmd.id);
   if (out) out.textContent = '';
@@ -270,10 +285,21 @@ async function runCommand(cmd) {
     teardownListeners(cmd.id);
     setRowRunning(cmd.id, false);
     showExitBadge(cmd.id, result);
+    const s = cmdState.get(cmd.id);
+    if (s) s.exitCode = result.exitCode;
     const row = document.getElementById('row-' + cmd.id);
     if (row) {
       row.classList.remove('running');
-      row.classList.add(result.exitCode === 0 ? 'done-ok' : 'done-err');
+      if (result.exitCode === 0) {
+        row.classList.add('done-ok');
+      } else {
+        row.classList.add('done-err');
+        // collapse so the error state is visible but not intrusive;
+        // user can re-expand by clicking the header or dismiss entirely
+        const st = cmdState.get(cmd.id);
+        if (st) st.collapsed = true;
+        row.classList.remove('expanded');
+      }
     }
   });
 
