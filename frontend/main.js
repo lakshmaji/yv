@@ -566,6 +566,30 @@ document.getElementById('ag-name').addEventListener('keydown', async e => {
   }
 });
 
+// ── Export / Import ────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', async () => {
+  try {
+    const path = await go.ExportProjects()
+    if (path) alert(`Exported to ${path}`)
+  } catch (err) {
+    alert('Export failed: ' + err)
+  }
+})
+
+document.getElementById('btn-import').addEventListener('click', async () => {
+  try {
+    const msg = await go.ImportProjects()
+    if (!msg) return // cancelled
+    projects = await go.LoadProjects()
+    renderSidebar()
+    renderGroups()
+    renderMain()
+    alert(msg)
+  } catch (err) {
+    alert('Import failed: ' + err)
+  }
+})
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('sidebar-toggle-btn').addEventListener('click', toggleSidebar);

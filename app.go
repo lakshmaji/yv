@@ -10,11 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"gopkg.in/yaml.v3"
 )
 
 type Project struct {
@@ -245,6 +247,112 @@ func writeProjects(path string, projects []Project) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
+}
+
+func marshalProjects(projects []Project, ext string) ([]byte, error) {
+	if ext == ".yaml" || ext == ".yml" {
+		return yaml.Marshal(projects)
+	}
+	return json.MarshalIndent(projects, "", "  ")
+}
+
+func unmarshalProjects(data []byte, ext string) ([]Project, error) {
+	var projects []Project
+	if ext == ".yaml" || ext == ".yml" {
+		err := yaml.Unmarshal(data, &projects)
+		return projects, err
+	}
+	err := json.Unmarshal(data, &projects)
+	return projects, err
+}
+
+// ExportProjects opens a save dialog and writes all projects to the chosen file (JSON or YAML).
+func (a *App) ExportProjects() (string, error) {
+	a.ctxMu.RLock()
+	ctx := a.ctx
+	a.ctxMu.RUnlock()
+
+	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "Export Projects",
+		DefaultFilename: "nicosia-projects.json",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
+			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	out, err := marshalProjects(a.LoadProjects(), ext)
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, out, 0o644)
+}
+
+// ImportProjects opens an open dialog, reads the chosen file, and merges new projects (by ID) into the config.
+func (a *App) ImportProjects() (string, error) {
+	a.ctxMu.RLock()
+	ctx := a.ctx
+	a.ctxMu.RUnlock()
+
+	path, err := wailsRuntime.OpenFileDialog(ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Import Projects",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "JSON / YAML (*.json;*.yaml;*.yml)", Pattern: "*.json;*.yaml;*.yml"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	incoming, err := unmarshalProjects(data, ext)
+	if err != nil {
+		return "", fmt.Errorf("parse: %w", err)
+	}
+
+	existing := a.LoadProjects()
+	seen := make(map[string]bool, len(existing))
+	for _, p := range existing {
+		seen[p.ID] = true
+	}
+
+	added, skipped := 0, 0
+	for _, p := range incoming {
+		if seen[p.ID] {
+			skipped++
+		} else {
+			existing = append(existing, p)
+			added++
+		}
+	}
+
+	configP, err := configPath()
+	if err != nil {
+		return "", err
+	}
+	if err := writeProjects(configP, existing); err != nil {
+		return "", err
+	}
+
+	if skipped > 0 {
+		return fmt.Sprintf("Imported %d project(s), skipped %d (already exist)", added, skipped), nil
+	}
+	return fmt.Sprintf("Imported %d project(s)", added), nil
 }
 
 func defaultProjects() []Project {
