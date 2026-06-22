@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nicosia</title>
+  <title>yv</title>
   <style>
     :root {
       --bg:       #0d1117;
@@ -49,13 +49,6 @@
       align-items: center;
       padding: 0 16px 0 80px;
       gap: 10px;
-    }
-
-    #header h1 {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: .3px;
-      --wails-draggable: no-drag;
     }
 
     /* ── Resize handles ──────────────────────────────────── */
@@ -467,6 +460,16 @@
     .dismiss-btn:hover { border-color: var(--red); color: var(--red); }
     .cmd-row.done-err .dismiss-btn { display: flex; }
 
+    .cmd-row.stopping .stop-btn {
+      opacity: .55;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .cmd-row.stopping .stop-btn::before {
+      content: '⏳ ';
+      font-size: 10px;
+    }
+
     /* ── Inline terminal ─────────────────────────────────── */
     .cmd-terminal {
       display: none;
@@ -608,9 +611,7 @@
 </head>
 <body>
 
-<header id="header">
-  <h1>Nicosia</h1>
-</header>
+<header id="header"></header>
 
 <nav id="sidebar">
   <div id="sidebar-header">Projects</div>

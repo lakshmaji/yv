@@ -186,6 +186,8 @@ function buildCmdRow(cmd) {
 
   row.querySelector('.stop-btn').addEventListener('click', async e => {
     e.stopPropagation();
+    const r = document.getElementById('row-' + cmd.id);
+    if (r) r.classList.add('stopping');
     const result = await go.StopCommand(cmd.id);
     if (result === 'not running') {
       // process already dead but done: event was missed — unstick the row
@@ -193,10 +195,9 @@ function buildCmdRow(cmd) {
       setRowRunning(cmd.id, false);
       const s = cmdState.get(cmd.id);
       if (s) { s.collapsed = true; s.exitCode = -1; }
-      const r = document.getElementById('row-' + cmd.id);
-      if (r) { r.classList.remove('running', 'expanded'); r.classList.add('done-err'); }
+      if (r) { r.classList.remove('running', 'stopping', 'expanded'); r.classList.add('done-err'); }
     }
-    // 'stopping' / 'killed': the done: event from Go will collapse normally
+    // 'stopping' / 'killed': the done: event from Go will handle the rest
   });
 
   row.querySelector(`#clear-${cmd.id}`).addEventListener('click', e => {
@@ -351,9 +352,9 @@ function setRowRunning(cmdId, running) {
   if (!row) return;
   if (running) {
     row.classList.add('running');
-    row.classList.remove('done-ok', 'done-err');
+    row.classList.remove('done-ok', 'done-err', 'stopping');
   } else {
-    row.classList.remove('running');
+    row.classList.remove('running', 'stopping');
   }
 }
 

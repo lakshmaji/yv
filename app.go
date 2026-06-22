@@ -124,6 +124,7 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 	a.processesMu.Unlock()
 
 	c := exec.Command("sh", "-c", cmd.Command)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group so we can kill the whole tree
 	if cmd.WorkingDir != "" {
 		c.Dir = cmd.WorkingDir
 	} else {
@@ -192,7 +193,8 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 	return "started"
 }
 
-// StopCommand sends SIGTERM to the running process; SIGKILL after 3s if still alive.
+// StopCommand kills the process group (SIGTERM → SIGKILL after 3s).
+// Using process group (-pgid) ensures child processes spawned by the shell are also terminated.
 func (a *App) StopCommand(cmdID string) string {
 	a.processesMu.RLock()
 	c, ok := a.processes[cmdID]
@@ -202,8 +204,9 @@ func (a *App) StopCommand(cmdID string) string {
 		return "not running"
 	}
 
-	if err := c.Process.Signal(syscall.SIGTERM); err != nil {
-		_ = c.Process.Kill()
+	pgid := c.Process.Pid // Setpgid:true guarantees pgid == pid
+	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		return "killed"
 	}
 
@@ -213,7 +216,7 @@ func (a *App) StopCommand(cmdID string) string {
 		_, stillRunning := a.processes[cmdID]
 		a.processesMu.RUnlock()
 		if stillRunning {
-			_ = c.Process.Kill()
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		}
 	}()
 
