@@ -119,7 +119,13 @@ func (a *App) SaveProjects(projects []Project) string {
 // held in the OS pipe buffer. It registers the process in a.processes[cmdID]
 // while running and removes it on exit.
 func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
-	c := exec.Command("sh", "-c", shellCmd)
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "zsh"
+	}
+	// -l (login) sources /etc/zprofile + ~/.zprofile so Homebrew PATH is available
+	// (direnv, nvm, volta, etc. are typically installed there on macOS).
+	c := exec.Command(shell, "-l", "-c", shellCmd)
 	c.Dir = workDir
 
 	ptmx, err := pty.Start(c)
