@@ -340,12 +340,15 @@ async function runCommand(cmd) {
   setRowRunning(cmd.id, true);
   expandTerminal(cmd.id);
 
-  // wire up streaming events
-  const offOutput = runtime.EventsOn('output:' + cmd.id, line => {
+  // Unique ID for this specific run — prevents stale done: events from a prior
+  // goroutine (e.g. after a wails dev reload or a re-run) from clearing the Stop button.
+  const runID = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+
+  const offOutput = runtime.EventsOn('output:' + cmd.id + ':' + runID, line => {
     appendLine(cmd.id, line);
   });
 
-  const offDone = runtime.EventsOn('done:' + cmd.id, result => {
+  const offDone = runtime.EventsOn('done:' + cmd.id + ':' + runID, result => {
     teardownListeners(cmd.id);
     setRowRunning(cmd.id, false);
     showExitBadge(cmd.id, result);
@@ -372,7 +375,7 @@ async function runCommand(cmd) {
   listeners.set(cmd.id, { offOutput, offDone });
 
   try {
-    await go.ExecuteCommand(cmd, proj.workingDir);
+    await go.ExecuteCommand(cmd, proj.workingDir, runID);
   } catch (err) {
     appendLine(cmd.id, 'ERROR: ' + err);
     setRowRunning(cmd.id, false);

@@ -162,11 +162,13 @@ func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)
 }
 
 // ExecuteCommand starts a command (after running any pre-hooks) and streams stdout+stderr as Wails events.
+// runID scopes all events to this specific invocation so stale events from a prior run can never
+// clear the Stop button while a new run is still active.
 // Events emitted:
 //
-//	"output:<cmdID>" string        — one line of output
-//	"done:<cmdID>"   CommandResult — process exit info
-func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
+//	"output:<cmdID>:<runID>" string        — one line of output
+//	"done:<cmdID>:<runID>"   CommandResult — process exit info
+func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string) string {
 	a.ctxMu.RLock()
 	ctx := a.ctx
 	a.ctxMu.RUnlock()
@@ -184,9 +186,12 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 		workDir = workingDir
 	}
 
+	outEvent := "output:" + cmd.ID + ":" + runID
+	doneEvent := "done:" + cmd.ID + ":" + runID
+
 	emit := func(line string) {
 		if ctx != nil {
-			wailsRuntime.EventsEmit(ctx, "output:"+cmd.ID, line)
+			wailsRuntime.EventsEmit(ctx, outEvent, line)
 		}
 	}
 
@@ -197,13 +202,13 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 			exitCode, err := a.runShellCommand(cmd.ID, preCmd, workDir, emit)
 			if err != nil {
 				if ctx != nil {
-					wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, CommandResult{ExitCode: -1, Error: "pre-hook error: " + err.Error()})
+					wailsRuntime.EventsEmit(ctx, doneEvent, CommandResult{ExitCode: -1, Error: "pre-hook error: " + err.Error()})
 				}
 				return
 			}
 			if exitCode != 0 {
 				if ctx != nil {
-					wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, CommandResult{
+					wailsRuntime.EventsEmit(ctx, doneEvent, CommandResult{
 						ExitCode: exitCode,
 						Error:    fmt.Sprintf("pre-hook %d/%d failed (exit %d)", i+1, len(cmd.PreCommands), exitCode),
 					})
@@ -222,7 +227,7 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 			result.ExitCode = exitCode
 		}
 		if ctx != nil {
-			wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, result)
+			wailsRuntime.EventsEmit(ctx, doneEvent, result)
 		}
 	}()
 
