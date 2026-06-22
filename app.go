@@ -38,13 +38,19 @@ type Project struct {
 	Shortcuts  []Shortcut      `json:"shortcuts,omitempty"`
 }
 
+type PostCommand struct {
+	Command string `json:"command"`
+	Timeout int    `json:"timeout,omitempty"` // seconds; 0 = default (120)
+}
+
 type CommandConfig struct {
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	Command     string   `json:"command"`
-	Group       string   `json:"group"`
-	WorkingDir  string   `json:"workingDir,omitempty"`
-	PreCommands []string `json:"preCommands,omitempty"`
+	ID           string        `json:"id"`
+	Label        string        `json:"label"`
+	Command      string        `json:"command"`
+	Group        string        `json:"group"`
+	WorkingDir   string        `json:"workingDir,omitempty"`
+	PreCommands  []string      `json:"preCommands,omitempty"`
+	PostCommands []PostCommand `json:"postCommands,omitempty"`
 }
 
 type CommandResult struct {
@@ -120,18 +126,15 @@ func (a *App) SaveProjects(projects []Project) string {
 	return "ok"
 }
 
-// runShellCommand runs one shell command synchronously, streaming output via emit.
-// It uses a PTY so the child process sees a terminal and stays line-buffered —
-// request logs and other incremental output appear immediately instead of being
-// held in the OS pipe buffer. It registers the process in a.processes[cmdID]
-// while running and removes it on exit.
-func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
+// runShellCommandCtx runs one shell command synchronously, streaming output via emit.
+// It uses a PTY so the child process sees a terminal and stays line-buffered.
+// Cancelling ctx sends SIGTERM to the process (used for post-hook timeouts).
+func (a *App) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "zsh"
 	}
-	// -l (login) sources /etc/zprofile + ~/.zprofile so Homebrew PATH is available
-	// (direnv, nvm, volta, etc. are typically installed there on macOS).
+	// -l (login) sources /etc/zprofile + ~/.zprofile so Homebrew PATH is available.
 	c := exec.Command(shell, "-l", "-c", shellCmd)
 	c.Dir = workDir
 
@@ -145,16 +148,26 @@ func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)
 	a.processes[cmdID] = c
 	a.processesMu.Unlock()
 
-	// PTY merges stdout+stderr into one stream.
-	// Strip \r (PTY line ending) and ANSI escape sequences (PTY-attached processes
-	// emit colors/cursor codes that would appear as garbage in the plain-text terminal).
+	// Kill process when ctx is cancelled (timeout or main-command failure).
+	killerCtx, stopKiller := context.WithCancel(context.Background())
+	defer stopKiller()
+	go func() {
+		select {
+		case <-ctx.Done():
+			pgid := c.Process.Pid
+			_ = syscall.Kill(-pgid, syscall.SIGTERM)
+		case <-killerCtx.Done():
+		}
+	}()
+
+	// PTY merges stdout+stderr; strip \r and ANSI escapes.
 	scanner := bufio.NewScanner(ptmx)
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r")
 		line = ansiRe.ReplaceAllString(line, "")
 		emit(line)
 	}
-	// scanner stops on EOF/EIO when the process exits — that is expected.
+	stopKiller() // process exited naturally; stop killer goroutine
 
 	err = c.Wait()
 
@@ -162,6 +175,9 @@ func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)
 	delete(a.processes, cmdID)
 	a.processesMu.Unlock()
 
+	if ctx.Err() != nil {
+		return -1, fmt.Errorf("timed out or cancelled")
+	}
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return exitErr.ExitCode(), nil
@@ -171,13 +187,18 @@ func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)
 	return 0, nil
 }
 
+func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
+	return a.runShellCommandCtx(context.Background(), cmdID, shellCmd, workDir, emit)
+}
+
 // ExecuteCommand starts a command (after running any pre-hooks) and streams stdout+stderr as Wails events.
 // runID scopes all events to this specific invocation so stale events from a prior run can never
 // clear the Stop button while a new run is still active.
 // Events emitted:
 //
-//	"output:<cmdID>:<runID>" string        — one line of output
-//	"done:<cmdID>:<runID>"   CommandResult — process exit info
+//	"output:<cmdID>:<runID>"    string        — one line of output
+//	"done:<cmdID>:<runID>"      CommandResult — main process exit info
+//	"post-done:<cmdID>:<runID>" CommandResult — post-hooks exit info (only if PostCommands set)
 func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string) string {
 	a.ctxMu.RLock()
 	ctx := a.ctx
@@ -196,8 +217,9 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 		workDir = workingDir
 	}
 
-	outEvent := "output:" + cmd.ID + ":" + runID
-	doneEvent := "done:" + cmd.ID + ":" + runID
+	outEvent      := "output:" + cmd.ID + ":" + runID
+	doneEvent     := "done:" + cmd.ID + ":" + runID
+	postDoneEvent := "post-done:" + cmd.ID + ":" + runID
 
 	emit := func(line string) {
 		if ctx != nil {
@@ -206,30 +228,137 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 	}
 
 	go func() {
-		// Build a single shell script for pre-hooks + main command so that
-		// environment changes in pre-hooks (eval, export, source, direnv) carry
-		// into subsequent hooks and the main command.
-		var script strings.Builder
-		script.WriteString("set -e\n")
-		for i, preCmd := range cmd.PreCommands {
-			// Echo the [PRE] label. Single-quote the command text so $(...) and
-			// special chars are printed literally, not expanded.
-			escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
-			fmt.Fprintf(&script, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
-			script.WriteString(preCmd + "\n")
-		}
-		script.WriteString(cmd.Command + "\n")
+		if len(cmd.PostCommands) == 0 {
+			// Original behaviour: pre-hooks + main command in one PTY session so that
+			// environment changes in pre-hooks (eval, export, source, direnv) carry
+			// into the main command.
+			var script strings.Builder
+			script.WriteString("set -e\n")
+			for i, preCmd := range cmd.PreCommands {
+				escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
+				fmt.Fprintf(&script, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
+				script.WriteString(preCmd + "\n")
+			}
+			script.WriteString(cmd.Command + "\n")
 
-		exitCode, err := a.runShellCommand(cmd.ID, script.String(), workDir, emit)
-		result := CommandResult{}
-		if err != nil {
-			result.ExitCode = -1
-			result.Error = err.Error()
-		} else {
-			result.ExitCode = exitCode
+			exitCode, err := a.runShellCommand(cmd.ID, script.String(), workDir, emit)
+			result := CommandResult{}
+			if err != nil {
+				result.ExitCode = -1
+				result.Error = err.Error()
+			} else {
+				result.ExitCode = exitCode
+			}
+			if ctx != nil {
+				wailsRuntime.EventsEmit(ctx, doneEvent, result)
+			}
+			return
 		}
+
+		// Has post-hooks: pre-hooks run first (separately), then main starts non-blocking,
+		// then post-hooks run concurrently with main (with per-hook timeout).
+		// Post-hooks are cancelled automatically if main exits with an error.
+
+		// 1. Pre-hooks (if any) — separate PTY session
+		if len(cmd.PreCommands) > 0 {
+			var preScript strings.Builder
+			preScript.WriteString("set -e\n")
+			for i, preCmd := range cmd.PreCommands {
+				escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
+				fmt.Fprintf(&preScript, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
+				preScript.WriteString(preCmd + "\n")
+			}
+			exitCode, err := a.runShellCommand(cmd.ID, preScript.String(), workDir, emit)
+			if err != nil || exitCode != 0 {
+				result := CommandResult{ExitCode: exitCode}
+				if err != nil {
+					result.ExitCode = -1
+					result.Error = err.Error()
+				}
+				if ctx != nil {
+					wailsRuntime.EventsEmit(ctx, doneEvent, result)
+					wailsRuntime.EventsEmit(ctx, postDoneEvent, result)
+				}
+				return
+			}
+		}
+
+		// 2. Start main command in a background goroutine (may run forever, e.g. emulator).
+		mainFailed := make(chan struct{}, 1)
+		go func() {
+			exitCode, err := a.runShellCommand(cmd.ID, cmd.Command, workDir, emit)
+			result := CommandResult{ExitCode: exitCode}
+			if err != nil {
+				result.ExitCode = -1
+				result.Error = err.Error()
+			}
+			if result.ExitCode != 0 {
+				select {
+				case mainFailed <- struct{}{}:
+				default:
+				}
+			}
+			if ctx != nil {
+				wailsRuntime.EventsEmit(ctx, doneEvent, result)
+			}
+		}()
+
+		// 3. Cancel post-hooks when main fails/stops.
+		postCtx, cancelPost := context.WithCancel(context.Background())
+		defer cancelPost()
+		go func() {
+			select {
+			case <-mainFailed:
+				cancelPost()
+			case <-postCtx.Done():
+			}
+		}()
+
+		// 4. Run post-hooks sequentially with timeout.
+		const defaultTimeoutSec = 120
+		postExitCode := 0
+		postErrStr := ""
+
+		for i, postCmd := range cmd.PostCommands {
+			if postCtx.Err() != nil {
+				postExitCode = -1
+				postErrStr = "main command failed or stopped"
+				break
+			}
+
+			timeoutSec := postCmd.Timeout
+			if timeoutSec <= 0 {
+				timeoutSec = defaultTimeoutSec
+			}
+
+			emit(fmt.Sprintf("[POST] %d/%d: %s", i+1, len(cmd.PostCommands), postCmd.Command))
+
+			tCtx, cancel := context.WithTimeout(postCtx, time.Duration(timeoutSec)*time.Second)
+			exitCode, err := a.runShellCommandCtx(tCtx, cmd.ID+":post", postCmd.Command, workDir, emit)
+			cancel()
+
+			if postCtx.Err() != nil {
+				postExitCode = -1
+				postErrStr = "main command failed or stopped"
+				break
+			}
+			if err != nil {
+				postExitCode = -1
+				postErrStr = err.Error()
+				break
+			}
+			if exitCode != 0 {
+				postExitCode = exitCode
+				break
+			}
+		}
+
 		if ctx != nil {
-			wailsRuntime.EventsEmit(ctx, doneEvent, result)
+			result := CommandResult{ExitCode: postExitCode}
+			if postErrStr != "" {
+				result.Error = postErrStr
+			}
+			wailsRuntime.EventsEmit(ctx, postDoneEvent, result)
 		}
 	}()
 

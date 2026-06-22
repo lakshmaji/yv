@@ -675,6 +675,7 @@
     .line-warn  { color: var(--yellow); }
     .line-stack { color: var(--muted); opacity: .65; }
     .line-pre   { color: var(--muted); font-style: italic; opacity: .75; }
+    .line-post  { color: #79c0ff; font-style: italic; opacity: .85; }
 
     /* ── Pre-count badge ─────────────────────────────────── */
     .pre-count-badge {
@@ -783,7 +784,7 @@
     }
     .pre-hook-del-btn:hover { border-color: var(--red); color: var(--red); }
 
-    #add-pre-hook-btn {
+    #add-pre-hook-btn, #add-post-hook-btn {
       background: transparent;
       border: 1px dashed var(--border);
       color: var(--muted);
@@ -794,7 +795,37 @@
       text-align: left;
       transition: border-color .15s, color .15s;
     }
-    #add-pre-hook-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #add-pre-hook-btn:hover, #add-post-hook-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .post-hook-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .post-hook-row .post-hook-input {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .post-hook-timeout {
+      width: 58px !important;
+      text-align: center;
+      font-size: 12px;
+      padding: 6px 6px !important;
+    }
+    .post-hook-timeout-label {
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .hook-hint {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+      margin-left: 4px;
+    }
 
     .modal-footer {
       display: flex;
@@ -999,6 +1030,11 @@
       <div class="pre-hooks-header">Pre-hook Commands</div>
       <div id="pre-hooks-list"></div>
       <button type="button" id="add-pre-hook-btn">+ Add pre-hook</button>
+    </div>
+    <div class="pre-hooks-section">
+      <div class="pre-hooks-header">Post-hook Commands <span class="hook-hint">run after main starts · default 120 s timeout</span></div>
+      <div id="post-hooks-list"></div>
+      <button type="button" id="add-post-hook-btn">+ Add post-hook</button>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="edit-cancel-btn">Cancel</button>

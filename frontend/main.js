@@ -33,6 +33,9 @@ function lineHtml(line) {
   if (/^\[PRE\] /.test(line)) {
     return `<span class="line-pre">${e}</span>\n`;
   }
+  if (/^\[POST\] /.test(line)) {
+    return `<span class="line-post">${e}</span>\n`;
+  }
   if (/\b(error|Error|ERROR|exception|Exception|EXCEPTION|fatal|Fatal|FATAL|failed|Failed|FAILED|ENOENT|EACCES|ECONNREFUSED)\b/.test(line)) {
     return `<span class="line-error">${e}</span>\n`;
   }
@@ -196,7 +199,16 @@ function buildCmdRow(cmd) {
   row.className = rowClass;
   row.id = 'row-' + cmd.id;
 
-  const hookCount = cmd.preCommands && cmd.preCommands.length;
+  const preCount  = cmd.preCommands  && cmd.preCommands.length;
+  const postCount = cmd.postCommands && cmd.postCommands.length;
+  let hookBadge = '';
+  if (preCount && postCount) {
+    hookBadge = `<span class="pre-count-badge">${preCount} pre · ${postCount} post</span>`;
+  } else if (preCount) {
+    hookBadge = `<span class="pre-count-badge">${preCount} pre hook${preCount > 1 ? 's' : ''}</span>`;
+  } else if (postCount) {
+    hookBadge = `<span class="pre-count-badge">${postCount} post hook${postCount > 1 ? 's' : ''}</span>`;
+  }
   row.innerHTML = `
     <div class="cmd-header" data-cmdid="${escHtml(cmd.id)}">
       <span class="chevron">▶</span>
@@ -204,7 +216,7 @@ function buildCmdRow(cmd) {
       <span class="cmd-label">${escHtml(cmd.label)}</span>
       <span class="cmd-snippet" title="${escHtml(cmd.command)}">${escHtml(cmd.command)}</span>
       ${cmd.workingDir ? `<span class="cmd-dir" title="${escHtml(cmd.workingDir)}">${escHtml(cmd.workingDir)}</span>` : ''}
-      ${hookCount ? `<span class="pre-count-badge">${hookCount} hook${hookCount > 1 ? 's' : ''}</span>` : ''}
+      ${hookBadge}
       <span class="line-hint" id="hint-${escHtml(cmd.id)}" style="display:none"></span>
       <div class="cmd-actions">
         <button class="edit-btn" id="editbtn-${escHtml(cmd.id)}" title="Edit command">✎</button>
@@ -355,6 +367,8 @@ async function runCommand(cmd) {
   // goroutine (e.g. after a wails dev reload or a re-run) from clearing the Stop button.
   const runID = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 
+  const hasPostHooks = !!(cmd.postCommands && cmd.postCommands.length);
+
   const offOutput = runtime.EventsOn('output:' + cmd.id + ':' + runID, line => {
     appendLine(cmd.id, line);
   });
@@ -362,7 +376,8 @@ async function runCommand(cmd) {
   let resolveDone;
   const donePromise = new Promise(resolve => { resolveDone = resolve; });
 
-  const offDone = runtime.EventsOn('done:' + cmd.id + ':' + runID, result => {
+  // Shared handler — used by offDone (no post-hooks) or offPostDone (post-hooks).
+  function applyFinalResult(result) {
     teardownListeners(cmd.id);
     setRowRunning(cmd.id, false);
     showExitBadge(cmd.id, result);
@@ -385,9 +400,24 @@ async function runCommand(cmd) {
       }
     }
     resolveDone(result.exitCode);
+  }
+
+  const offDone = runtime.EventsOn('done:' + cmd.id + ':' + runID, result => {
+    if (!hasPostHooks) {
+      applyFinalResult(result);
+    }
+    // With post-hooks: done fires when main exits but is not the final event.
+    // post-done is always emitted last and drives the final UI state.
   });
 
-  listeners.set(cmd.id, { offOutput, offDone });
+  let offPostDone = null;
+  if (hasPostHooks) {
+    offPostDone = runtime.EventsOn('post-done:' + cmd.id + ':' + runID, result => {
+      applyFinalResult(result);
+    });
+  }
+
+  listeners.set(cmd.id, { offOutput, offDone, offPostDone });
 
   try {
     await go.ExecuteCommand(cmd, proj.workingDir, runID);
@@ -439,6 +469,7 @@ function teardownListeners(cmdId) {
   if (existing) {
     if (typeof existing.offOutput === 'function') existing.offOutput();
     if (typeof existing.offDone === 'function') existing.offDone();
+    if (typeof existing.offPostDone === 'function') existing.offPostDone();
     listeners.delete(cmdId);
   }
 }
@@ -667,6 +698,21 @@ function addPreHookRow(value = '') {
   list.appendChild(row);
 }
 
+function addPostHookRow(command = '', timeout = '') {
+  const list = document.getElementById('post-hooks-list');
+  const row = document.createElement('div');
+  row.className = 'post-hook-row';
+  const timeoutVal = timeout ? escHtml(String(timeout)) : '';
+  row.innerHTML = `
+    <input class="post-hook-input" placeholder="shell command…" value="${escHtml(command)}" />
+    <input class="post-hook-timeout" type="number" placeholder="120" value="${timeoutVal}" min="1" max="3600" title="Timeout in seconds (default: 120)" />
+    <span class="post-hook-timeout-label">s</span>
+    <button class="pre-hook-del-btn" type="button">✕</button>
+  `;
+  row.querySelector('.pre-hook-del-btn').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
 function openEditModal(cmd) {
   currentEditCmdId = cmd.id;
   document.getElementById('edit-label').value   = cmd.label || '';
@@ -678,6 +724,12 @@ function openEditModal(cmd) {
   list.innerHTML = '';
   for (const pre of (cmd.preCommands || [])) {
     addPreHookRow(pre);
+  }
+
+  const postList = document.getElementById('post-hooks-list');
+  postList.innerHTML = '';
+  for (const post of (cmd.postCommands || [])) {
+    addPostHookRow(post.command, post.timeout || '');
   }
 
   document.getElementById('edit-cmd-modal').style.display = 'flex';
@@ -886,6 +938,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('add-pre-hook-btn').addEventListener('click', () => addPreHookRow());
+  document.getElementById('add-post-hook-btn').addEventListener('click', () => addPostHookRow());
 
   document.getElementById('edit-save-btn').addEventListener('click', async () => {
     if (!currentEditCmdId) return;
@@ -904,11 +957,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('#pre-hooks-list .pre-hook-input')
     ).map(i => i.value.trim()).filter(Boolean);
 
-    cmd.label       = label;
-    cmd.group       = group;
-    cmd.command     = command;
-    cmd.workingDir  = workingDir;
-    cmd.preCommands = preCommands;
+    const postCommands = Array.from(
+      document.querySelectorAll('#post-hooks-list .post-hook-row')
+    ).map(row => {
+      const command = row.querySelector('.post-hook-input').value.trim();
+      const t = row.querySelector('.post-hook-timeout').value.trim();
+      const timeout = t ? parseInt(t, 10) : 0;
+      return command ? { command, timeout: timeout > 0 ? timeout : 0 } : null;
+    }).filter(Boolean);
+
+    cmd.label        = label;
+    cmd.group        = group;
+    cmd.command      = command;
+    cmd.workingDir   = workingDir;
+    cmd.preCommands  = preCommands;
+    cmd.postCommands = postCommands;
 
     const result = await go.SaveProjects(projects);
     if (result !== 'ok') {
