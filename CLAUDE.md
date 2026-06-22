@@ -25,12 +25,19 @@ Config persisted at: `~/Library/Application Support/nicosia/projects.json`
 ### Current data model
 
 ```go
+type Shortcut struct {
+    ID         string   `json:"id"`
+    Name       string   `json:"name"`
+    CommandIDs []string `json:"commandIds"`
+}
+
 type Project struct {
     ID         string          `json:"id"`
     Name       string          `json:"name"`
     WorkingDir string          `json:"workingDir"`
     Groups     []string        `json:"groups"`
     Commands   []CommandConfig `json:"commands"`
+    Shortcuts  []Shortcut      `json:"shortcuts,omitempty"`
 }
 
 type CommandConfig struct {
@@ -170,3 +177,42 @@ A pencil `✎` button on each command row opens an edit modal with:
 | `app.go` | Added `PreCommands []string` to `CommandConfig`; extracted `runShellCommand` helper; `ExecuteCommand` runs pre-hooks sequentially before main command |
 | `frontend/index.html` | Added edit modal HTML; CSS for modal overlay, pre-hook rows, `.pre-count-badge`, `.edit-btn`, `.line-pre` |
 | `frontend/main.js` | `openEditModal` / `closeEditModal` / `addPreHookRow`; pencil button + badge in `buildCmdRow`; `[PRE]` prefix detection in `lineHtml` |
+
+---
+
+## Implemented: Shortcuts
+
+### Goal
+
+Allow users to create named shortcuts that run a selected set of commands sequentially (including each command's pre-hooks). If any command fails (non-zero exit), subsequent commands are skipped.
+
+### Behaviour
+
+- Shortcuts are per-project and persisted in `projects.json` via `Shortcuts []Shortcut` on `Project`
+- A **Shortcuts section** appears at the top of the main panel (above the command list) for the selected project
+- Each shortcut card shows: name, step pills (one per command), Edit `✎`, Delete `✕`, and `▶ Run` buttons
+- Step pills update live during execution: default → `running` (blue) → `ok` (green) / `failed` (red) / `skipped` (faded)
+- The shortcut card border changes colour: blue while running, green on full success, red on failure
+- The `▶ Run` button is disabled while the shortcut is executing to prevent double-trigger
+- Clicking Stop on the active command row halts the shortcut at that step (relies on the existing `StopCommand` flow)
+- Commands deleted after a shortcut was saved are silently skipped during execution (their pill shows "deleted" in red italic in the edit modal)
+
+### Create / Edit modal
+
+- `+ New Shortcut` button in the shortcuts section header opens the modal
+- Name field + scrollable list of all project commands as checkboxes
+- Commands can be **drag-reordered** via the `⠿` handle on the left of each row — drag only activates from the handle, so checkbox toggling is unaffected
+- When editing, checked commands render in their **saved execution order** first; unchecked commands appear below
+- Save reads command IDs in current **DOM order** (respecting any reordering), filtered to checked rows
+
+### `runCommand` change
+
+`runCommand(cmd)` now returns `Promise<number>` (exit code), resolving inside the `done:` event handler. Existing fire-and-forget callers (the per-row Run button) are unaffected. This allows `runShortcut` to `await` each step sequentially.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app.go` | Added `Shortcut` struct; added `Shortcuts []Shortcut` to `Project` (`omitempty` — no migration needed) |
+| `frontend/index.html` | Added shortcut section + card CSS; drag handle + dragging-state CSS; `#sc-modal` HTML |
+| `frontend/main.js` | `runCommand` returns `Promise<exitCode>`; added `runShortcut`, `setShortcutRunning`, `setShortcutStep`, `renderShortcuts`, `buildShortcutCard`, `openShortcutModal`, `closeShortcutModal`, `saveShortcut`, `deleteShortcut`, `initShortcutDrag`; `renderMain()` updated to include shortcuts section |
