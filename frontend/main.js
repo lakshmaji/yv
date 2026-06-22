@@ -81,16 +81,22 @@ function renderSidebar() {
       <span class="project-avatar">${initials}</span>
       <span class="project-dot"></span>
       <span class="project-name">${escHtml(p.name)}</span>
-      <button class="project-export-btn" title="Export project">↑</button>
+      <span class="project-export-btns">
+        <button class="project-export-btn" data-fmt="json" title="Export as JSON">↑ json</button>
+        <button class="project-export-btn" data-fmt="yaml" title="Export as YAML">↑ yaml</button>
+      </span>
     `;
-    item.querySelector('.project-export-btn').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      try {
-        const result = await go.ExportProject(p.id);
-        if (result) alert('Exported to ' + result);
-      } catch (err) {
-        alert('Export failed: ' + err);
-      }
+    item.querySelectorAll('.project-export-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const fmt = btn.dataset.fmt;
+        try {
+          const result = await go.ExportProject(p.id, fmt);
+          if (result) alert('Exported to ' + result);
+        } catch (err) {
+          alert('Export failed: ' + err);
+        }
+      });
     });
     item.addEventListener('click', () => selectProject(p.id));
     list.appendChild(item);

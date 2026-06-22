@@ -462,7 +462,10 @@ func unmarshalOneProject(data []byte, ext string) (Project, error) {
 }
 
 // ExportProject opens a save dialog and writes a single project to the chosen file (JSON or YAML).
-func (a *App) ExportProject(projectID string) (string, error) {
+// ExportProject opens a save dialog and writes a single project to a file.
+// format must be "json" or "yaml" — callers choose explicitly so no file-dialog
+// filter ambiguity exists on macOS.
+func (a *App) ExportProject(projectID, format string) (string, error) {
 	a.ctxMu.RLock()
 	ctx := a.ctx
 	a.ctxMu.RUnlock()
@@ -478,12 +481,16 @@ func (a *App) ExportProject(projectID string) (string, error) {
 		return "", fmt.Errorf("project not found")
 	}
 
+	ext := ".json"
+	if format == "yaml" {
+		ext = ".yaml"
+	}
+
 	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "Export Project",
-		DefaultFilename: p.Name + ".json",
+		DefaultFilename: p.Name + ext,
 		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
-			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},
+			{DisplayName: strings.ToUpper(format) + " (*" + ext + ")", Pattern: "*" + ext},
 		},
 	})
 	if err != nil {
@@ -493,9 +500,8 @@ func (a *App) ExportProject(projectID string) (string, error) {
 		return "", nil
 	}
 
-	ext := strings.ToLower(filepath.Ext(path))
 	var out []byte
-	if ext == ".yaml" || ext == ".yml" {
+	if format == "yaml" {
 		out, err = yaml.Marshal(p)
 	} else {
 		out, err = json.MarshalIndent(p, "", "  ")
