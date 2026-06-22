@@ -189,6 +189,7 @@ function buildCmdRow(cmd) {
   row.innerHTML = `
     <div class="cmd-header" data-cmdid="${escHtml(cmd.id)}">
       <span class="chevron">▶</span>
+      <span class="cmd-spinner"><span class="loader"></span></span>
       <span class="cmd-label">${escHtml(cmd.label)}</span>
       <span class="cmd-snippet" title="${escHtml(cmd.command)}">${escHtml(cmd.command)}</span>
       ${cmd.workingDir ? `<span class="cmd-dir" title="${escHtml(cmd.workingDir)}">${escHtml(cmd.workingDir)}</span>` : ''}
