@@ -17,6 +17,8 @@ const cmdState = new Map();
 // track active Wails event unsubscribers to avoid duplicate listeners
 const listeners = new Map(); // cmdID → { offOutput, offDone }
 
+let currentEditCmdId = null;
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s)
@@ -27,6 +29,9 @@ function escHtml(s) {
 
 function lineHtml(line) {
   const e = escHtml(line);
+  if (/^\[PRE\] /.test(line)) {
+    return `<span class="line-pre">${e}</span>\n`;
+  }
   if (/\b(error|Error|ERROR|exception|Exception|EXCEPTION|fatal|Fatal|FATAL|failed|Failed|FAILED|ENOENT|EACCES|ECONNREFUSED)\b/.test(line)) {
     return `<span class="line-error">${e}</span>\n`;
   }
@@ -180,14 +185,17 @@ function buildCmdRow(cmd) {
   row.className = rowClass;
   row.id = 'row-' + cmd.id;
 
+  const hookCount = cmd.preCommands && cmd.preCommands.length;
   row.innerHTML = `
     <div class="cmd-header" data-cmdid="${escHtml(cmd.id)}">
       <span class="chevron">▶</span>
       <span class="cmd-label">${escHtml(cmd.label)}</span>
       <span class="cmd-snippet" title="${escHtml(cmd.command)}">${escHtml(cmd.command)}</span>
       ${cmd.workingDir ? `<span class="cmd-dir" title="${escHtml(cmd.workingDir)}">${escHtml(cmd.workingDir)}</span>` : ''}
+      ${hookCount ? `<span class="pre-count-badge">${hookCount} hook${hookCount > 1 ? 's' : ''}</span>` : ''}
       <span class="line-hint" id="hint-${escHtml(cmd.id)}" style="display:none"></span>
       <div class="cmd-actions">
+        <button class="edit-btn" id="editbtn-${escHtml(cmd.id)}" title="Edit command">✎</button>
         <button class="dismiss-btn" id="dismiss-${escHtml(cmd.id)}">✕ Dismiss</button>
         <button class="run-btn"  id="run-${escHtml(cmd.id)}">▶ Run</button>
         <button class="stop-btn" id="stop-${escHtml(cmd.id)}">■ Stop</button>
@@ -206,6 +214,11 @@ function buildCmdRow(cmd) {
   row.querySelector('.cmd-header').addEventListener('click', e => {
     if (e.target.closest('.cmd-actions')) return;
     toggleTerminal(cmd.id);
+  });
+
+  row.querySelector('.edit-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    openEditModal(cmd);
   });
 
   row.querySelector('.dismiss-btn').addEventListener('click', e => {
@@ -408,6 +421,41 @@ function teardownListeners(cmdId) {
   }
 }
 
+// ── Edit command modal ─────────────────────────────────────────────────────
+function addPreHookRow(value = '') {
+  const list = document.getElementById('pre-hooks-list');
+  const row = document.createElement('div');
+  row.className = 'pre-hook-row';
+  row.innerHTML = `
+    <input class="pre-hook-input" placeholder="shell command…" value="${escHtml(value)}" />
+    <button class="pre-hook-del-btn" type="button">✕</button>
+  `;
+  row.querySelector('.pre-hook-del-btn').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
+function openEditModal(cmd) {
+  currentEditCmdId = cmd.id;
+  document.getElementById('edit-label').value   = cmd.label || '';
+  document.getElementById('edit-group').value   = cmd.group || '';
+  document.getElementById('edit-command').value = cmd.command || '';
+  document.getElementById('edit-dir').value     = cmd.workingDir || '';
+
+  const list = document.getElementById('pre-hooks-list');
+  list.innerHTML = '';
+  for (const pre of (cmd.preCommands || [])) {
+    addPreHookRow(pre);
+  }
+
+  document.getElementById('edit-cmd-modal').style.display = 'flex';
+  document.getElementById('edit-label').focus();
+}
+
+function closeEditModal() {
+  document.getElementById('edit-cmd-modal').style.display = 'none';
+  currentEditCmdId = null;
+}
+
 // ── Add command ────────────────────────────────────────────────────────────
 async function addCommand() {
   const proj = selectedProject();
@@ -592,6 +640,58 @@ document.getElementById('btn-import').addEventListener('click', async () => {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  // Edit modal wiring
+  document.getElementById('edit-cancel-btn').addEventListener('click', closeEditModal);
+
+  document.getElementById('edit-cmd-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-cmd-modal')) closeEditModal();
+  });
+
+  document.getElementById('edit-dir-pick').addEventListener('click', async () => {
+    const path = await go.PickFolder();
+    if (path) document.getElementById('edit-dir').value = path;
+  });
+
+  document.getElementById('add-pre-hook-btn').addEventListener('click', () => addPreHookRow());
+
+  document.getElementById('edit-save-btn').addEventListener('click', async () => {
+    if (!currentEditCmdId) return;
+    const proj = selectedProject();
+    if (!proj) return;
+    const cmd = proj.commands.find(c => c.id === currentEditCmdId);
+    if (!cmd) return;
+
+    const label      = document.getElementById('edit-label').value.trim();
+    const group      = document.getElementById('edit-group').value.trim();
+    const command    = document.getElementById('edit-command').value.trim();
+    const workingDir = document.getElementById('edit-dir').value.trim();
+    if (!label || !command) return;
+
+    const preCommands = Array.from(
+      document.querySelectorAll('#pre-hooks-list .pre-hook-input')
+    ).map(i => i.value.trim()).filter(Boolean);
+
+    cmd.label       = label;
+    cmd.group       = group;
+    cmd.command     = command;
+    cmd.workingDir  = workingDir;
+    cmd.preCommands = preCommands;
+
+    const result = await go.SaveProjects(projects);
+    if (result !== 'ok') {
+      alert('Save failed: ' + result);
+      return;
+    }
+
+    closeEditModal();
+    renderGroups();
+    renderMain();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeEditModal();
+  });
+
   document.getElementById('sidebar-toggle-btn').addEventListener('click', toggleSidebar);
 
   initResize('rh-sidebar',

@@ -28,11 +28,12 @@ type Project struct {
 }
 
 type CommandConfig struct {
-	ID         string `json:"id"`
-	Label      string `json:"label"`
-	Command    string `json:"command"`
-	Group      string `json:"group"`
-	WorkingDir string `json:"workingDir,omitempty"`
+	ID          string   `json:"id"`
+	Label       string   `json:"label"`
+	Command     string   `json:"command"`
+	Group       string   `json:"group"`
+	WorkingDir  string   `json:"workingDir,omitempty"`
+	PreCommands []string `json:"preCommands,omitempty"`
 }
 
 type CommandResult struct {
@@ -108,10 +109,63 @@ func (a *App) SaveProjects(projects []Project) string {
 	return "ok"
 }
 
-// ExecuteCommand starts a command and streams stdout+stderr as Wails events.
+// runShellCommand runs one shell command synchronously, streaming output via emit.
+// It registers the process in a.processes[cmdID] while running and removes it on exit.
+func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
+	c := exec.Command("sh", "-c", shellCmd)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Dir = workDir
+
+	stdoutPipe, err := c.StdoutPipe()
+	if err != nil {
+		return -1, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := c.StderrPipe()
+	if err != nil {
+		return -1, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := c.Start(); err != nil {
+		return -1, fmt.Errorf("start: %w", err)
+	}
+
+	a.processesMu.Lock()
+	a.processes[cmdID] = c
+	a.processesMu.Unlock()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stream := func(pipe io.ReadCloser) {
+		defer wg.Done()
+		scanner := bufio.NewScanner(pipe)
+		for scanner.Scan() {
+			emit(scanner.Text())
+		}
+	}
+	go stream(stdoutPipe)
+	go stream(stderrPipe)
+	wg.Wait()
+
+	err = c.Wait()
+
+	a.processesMu.Lock()
+	delete(a.processes, cmdID)
+	a.processesMu.Unlock()
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return exitErr.ExitCode(), nil
+		}
+		return -1, err
+	}
+	return 0, nil
+}
+
+// ExecuteCommand starts a command (after running any pre-hooks) and streams stdout+stderr as Wails events.
 // Events emitted:
-//   "output:<cmdID>" string  — one line of output
-//   "done:<cmdID>"   CommandResult — process exit info
+//
+//	"output:<cmdID>" string        — one line of output
+//	"done:<cmdID>"   CommandResult — process exit info
 func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 	a.ctxMu.RLock()
 	ctx := a.ctx
@@ -125,30 +179,10 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 	}
 	a.processesMu.Unlock()
 
-	c := exec.Command("sh", "-c", cmd.Command)
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group so we can kill the whole tree
-	if cmd.WorkingDir != "" {
-		c.Dir = cmd.WorkingDir
-	} else {
-		c.Dir = workingDir
+	workDir := cmd.WorkingDir
+	if workDir == "" {
+		workDir = workingDir
 	}
-
-	stdoutPipe, err := c.StdoutPipe()
-	if err != nil {
-		return "pipe error: " + err.Error()
-	}
-	stderrPipe, err := c.StderrPipe()
-	if err != nil {
-		return "pipe error: " + err.Error()
-	}
-
-	if err := c.Start(); err != nil {
-		return "start error: " + err.Error()
-	}
-
-	a.processesMu.Lock()
-	a.processes[cmd.ID] = c
-	a.processesMu.Unlock()
 
 	emit := func(line string) {
 		if ctx != nil {
@@ -156,36 +190,36 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 		}
 	}
 
-	// Stream stdout and stderr concurrently into the same event channel
-	var wg sync.WaitGroup
-	streamPipe := func(pipe io.ReadCloser) {
-		defer wg.Done()
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			emit(scanner.Text())
-		}
-	}
-
-	wg.Add(2)
-	go streamPipe(stdoutPipe)
-	go streamPipe(stderrPipe)
-
 	go func() {
-		wg.Wait()
-		err := c.Wait()
+		// Run pre-hook commands sequentially; abort on any failure
+		for i, preCmd := range cmd.PreCommands {
+			emit(fmt.Sprintf("[PRE] %d/%d: %s", i+1, len(cmd.PreCommands), preCmd))
+			exitCode, err := a.runShellCommand(cmd.ID, preCmd, workDir, emit)
+			if err != nil {
+				if ctx != nil {
+					wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, CommandResult{ExitCode: -1, Error: "pre-hook error: " + err.Error()})
+				}
+				return
+			}
+			if exitCode != 0 {
+				if ctx != nil {
+					wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, CommandResult{
+						ExitCode: exitCode,
+						Error:    fmt.Sprintf("pre-hook %d/%d failed (exit %d)", i+1, len(cmd.PreCommands), exitCode),
+					})
+				}
+				return
+			}
+		}
 
-		a.processesMu.Lock()
-		delete(a.processes, cmd.ID)
-		a.processesMu.Unlock()
-
+		// Run the main command
+		exitCode, err := a.runShellCommand(cmd.ID, cmd.Command, workDir, emit)
 		result := CommandResult{}
 		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				result.ExitCode = exitErr.ExitCode()
-			} else {
-				result.ExitCode = -1
-				result.Error = err.Error()
-			}
+			result.ExitCode = -1
+			result.Error = err.Error()
+		} else {
+			result.ExitCode = exitCode
 		}
 		if ctx != nil {
 			wailsRuntime.EventsEmit(ctx, "done:"+cmd.ID, result)

@@ -604,6 +604,135 @@
     .line-error { color: var(--red); }
     .line-warn  { color: var(--yellow); }
     .line-stack { color: var(--muted); opacity: .65; }
+    .line-pre   { color: var(--muted); font-style: italic; opacity: .75; }
+
+    /* ── Pre-count badge ─────────────────────────────────── */
+    .pre-count-badge {
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1px 7px;
+      flex-shrink: 0;
+    }
+
+    /* ── Edit button ─────────────────────────────────────── */
+    .edit-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 4px 7px;
+      font-size: 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Edit command modal ───────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      width: 480px;
+      max-width: 90vw;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .modal-box input {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 100%;
+    }
+    .modal-box input:focus { outline: none; border-color: var(--accent); }
+
+    .pre-hooks-section {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pre-hooks-header {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .7px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .pre-hook-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .pre-hook-row input {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .pre-hook-del-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .pre-hook-del-btn:hover { border-color: var(--red); color: var(--red); }
+
+    #add-pre-hook-btn {
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      text-align: left;
+      transition: border-color .15s, color .15s;
+    }
+    #add-pre-hook-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .modal-footer {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
 
     /* ── Add command form ─────────────────────────────────── */
     #add-cmd-form {
@@ -741,6 +870,28 @@
 <main id="main">
   <div id="no-project">Select or create a project</div>
 </main>
+
+<div id="edit-cmd-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">Edit Command</div>
+    <input id="edit-label"   placeholder="Label" />
+    <input id="edit-group"   placeholder="Group" />
+    <input id="edit-command" placeholder="shell command…" style="font-family:var(--mono);font-size:12px" />
+    <div class="add-cmd-dir-row">
+      <input id="edit-dir" placeholder="Working dir (optional, defaults to project path)" style="font-family:var(--mono);font-size:12px" />
+      <button class="add-cmd-dir-pick" type="button" id="edit-dir-pick">Browse</button>
+    </div>
+    <div class="pre-hooks-section">
+      <div class="pre-hooks-header">Pre-hook Commands</div>
+      <div id="pre-hooks-list"></div>
+      <button type="button" id="add-pre-hook-btn">+ Add pre-hook</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="edit-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="edit-save-btn">Save</button>
+    </div>
+  </div>
+</div>
 
 <script src="main.js"></script>
 </body>
