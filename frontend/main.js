@@ -184,9 +184,19 @@ function buildCmdRow(cmd) {
     runCommand(cmd);
   });
 
-  row.querySelector('.stop-btn').addEventListener('click', e => {
+  row.querySelector('.stop-btn').addEventListener('click', async e => {
     e.stopPropagation();
-    go.StopCommand(cmd.id);
+    const result = await go.StopCommand(cmd.id);
+    if (result === 'not running') {
+      // process already dead but done: event was missed — unstick the row
+      teardownListeners(cmd.id);
+      setRowRunning(cmd.id, false);
+      const s = cmdState.get(cmd.id);
+      if (s) { s.collapsed = true; s.exitCode = -1; }
+      const r = document.getElementById('row-' + cmd.id);
+      if (r) { r.classList.remove('running', 'expanded'); r.classList.add('done-err'); }
+    }
+    // 'stopping' / 'killed': the done: event from Go will collapse normally
   });
 
   row.querySelector(`#clear-${cmd.id}`).addEventListener('click', e => {
