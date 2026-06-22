@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,6 +19,9 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
 )
+
+// ansiRe matches ANSI/VT escape sequences emitted by PTY-attached processes.
+var ansiRe = regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`)
 
 type Project struct {
 	ID         string          `json:"id"`
@@ -128,10 +132,14 @@ func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)
 	a.processes[cmdID] = c
 	a.processesMu.Unlock()
 
-	// PTY merges stdout+stderr into one stream; strip the \r that PTY adds before \n.
+	// PTY merges stdout+stderr into one stream.
+	// Strip \r (PTY line ending) and ANSI escape sequences (PTY-attached processes
+	// emit colors/cursor codes that would appear as garbage in the plain-text terminal).
 	scanner := bufio.NewScanner(ptmx)
 	for scanner.Scan() {
-		emit(strings.TrimRight(scanner.Text(), "\r"))
+		line := strings.TrimRight(scanner.Text(), "\r")
+		line = ansiRe.ReplaceAllString(line, "")
+		emit(line)
 	}
 	// scanner stops on EOF/EIO when the process exits — that is expected.
 
