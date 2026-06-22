@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -15,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
 )
@@ -110,41 +110,30 @@ func (a *App) SaveProjects(projects []Project) string {
 }
 
 // runShellCommand runs one shell command synchronously, streaming output via emit.
-// It registers the process in a.processes[cmdID] while running and removes it on exit.
+// It uses a PTY so the child process sees a terminal and stays line-buffered —
+// request logs and other incremental output appear immediately instead of being
+// held in the OS pipe buffer. It registers the process in a.processes[cmdID]
+// while running and removes it on exit.
 func (a *App) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
 	c := exec.Command("sh", "-c", shellCmd)
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Dir = workDir
 
-	stdoutPipe, err := c.StdoutPipe()
+	ptmx, err := pty.Start(c)
 	if err != nil {
-		return -1, fmt.Errorf("stdout pipe: %w", err)
+		return -1, fmt.Errorf("pty start: %w", err)
 	}
-	stderrPipe, err := c.StderrPipe()
-	if err != nil {
-		return -1, fmt.Errorf("stderr pipe: %w", err)
-	}
-
-	if err := c.Start(); err != nil {
-		return -1, fmt.Errorf("start: %w", err)
-	}
+	defer ptmx.Close()
 
 	a.processesMu.Lock()
 	a.processes[cmdID] = c
 	a.processesMu.Unlock()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	stream := func(pipe io.ReadCloser) {
-		defer wg.Done()
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			emit(scanner.Text())
-		}
+	// PTY merges stdout+stderr into one stream; strip the \r that PTY adds before \n.
+	scanner := bufio.NewScanner(ptmx)
+	for scanner.Scan() {
+		emit(strings.TrimRight(scanner.Text(), "\r"))
 	}
-	go stream(stdoutPipe)
-	go stream(stderrPipe)
-	wg.Wait()
+	// scanner stops on EOF/EIO when the process exits — that is expected.
 
 	err = c.Wait()
 
@@ -245,7 +234,7 @@ func (a *App) StopCommand(cmdID string) string {
 		return "not running"
 	}
 
-	pgid := c.Process.Pid // Setpgid:true guarantees pgid == pid
+	pgid := c.Process.Pid // PTY Setsid guarantees pgid == pid
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		return "killed"
