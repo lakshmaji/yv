@@ -151,14 +151,18 @@ function renderMain() {
 // ── Command row DOM builder ────────────────────────────────────────────────
 function buildCmdRow(cmd) {
   if (!cmdState.has(cmd.id)) {
-    cmdState.set(cmd.id, { lines: [], collapsed: true, exitCode: null });
+    cmdState.set(cmd.id, { lines: [], collapsed: true, exitCode: null, stopped: false });
   }
   const state = cmdState.get(cmd.id);
 
   const row = document.createElement('div');
   let rowClass = 'cmd-row';
   if (!state.collapsed && state.lines.length) rowClass += ' expanded';
-  if (state.exitCode !== null) rowClass += state.exitCode === 0 ? ' done-ok' : ' done-err';
+  if (state.exitCode !== null) {
+    if (state.exitCode === 0)  rowClass += ' done-ok';
+    else if (state.stopped)    rowClass += ' done-stopped';
+    else                       rowClass += ' done-err';
+  }
   row.className = rowClass;
   row.id = 'row-' + cmd.id;
 
@@ -206,14 +210,15 @@ function buildCmdRow(cmd) {
     e.stopPropagation();
     const r = document.getElementById('row-' + cmd.id);
     if (r) r.classList.add('stopping');
+    const s = cmdState.get(cmd.id);
+    if (s) s.stopped = true; // mark as user-initiated so offDone uses done-stopped
     const result = await go.StopCommand(cmd.id);
     if (result === 'not running') {
       // process already dead but done: event was missed — unstick the row
       teardownListeners(cmd.id);
       setRowRunning(cmd.id, false);
-      const s = cmdState.get(cmd.id);
       if (s) { s.collapsed = true; s.exitCode = -1; }
-      if (r) { r.classList.remove('running', 'stopping', 'expanded'); r.classList.add('done-err'); }
+      if (r) { r.classList.remove('running', 'stopping', 'expanded'); r.classList.add('done-stopped'); }
     }
     // 'stopping' / 'killed': the done: event from Go will handle the rest
   });
@@ -270,13 +275,14 @@ function clearTerminal(cmdId) {
     state.lines = [];
     state.exitCode = null;
     state.collapsed = true;
+    state.stopped = false;
   }
   const out = document.getElementById('output-' + cmdId);
   if (out) out.textContent = '';
   const badge = document.getElementById('exit-' + cmdId);
   if (badge) { badge.style.display = 'none'; badge.textContent = ''; badge.className = 'exit-badge'; }
   const row = document.getElementById('row-' + cmdId);
-  if (row) row.classList.remove('done-ok', 'done-err');
+  if (row) row.classList.remove('done-ok', 'done-err', 'done-stopped');
   applyTerminalState(cmdId);
 }
 
@@ -289,13 +295,14 @@ async function runCommand(cmd) {
   teardownListeners(cmd.id);
 
   // reset terminal state and keep expanded
-  const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null };
+  const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null, stopped: false };
   state.lines = [];
   state.collapsed = false;
   state.exitCode = null;
+  state.stopped = false;
   cmdState.set(cmd.id, state);
   const row = document.getElementById('row-' + cmd.id);
-  if (row) row.classList.remove('done-ok', 'done-err');
+  if (row) row.classList.remove('done-ok', 'done-err', 'done-stopped');
 
   const out = document.getElementById('output-' + cmd.id);
   if (out) out.textContent = '';
@@ -315,18 +322,20 @@ async function runCommand(cmd) {
     setRowRunning(cmd.id, false);
     showExitBadge(cmd.id, result);
     const s = cmdState.get(cmd.id);
+    const wasStopped = s && s.stopped;
     if (s) s.exitCode = result.exitCode;
     const row = document.getElementById('row-' + cmd.id);
     if (row) {
       row.classList.remove('running');
       if (result.exitCode === 0) {
         row.classList.add('done-ok');
+      } else if (wasStopped) {
+        row.classList.add('done-stopped');
+        if (s) s.collapsed = true;
+        row.classList.remove('expanded');
       } else {
         row.classList.add('done-err');
-        // collapse so the error state is visible but not intrusive;
-        // user can re-expand by clicking the header or dismiss entirely
-        const st = cmdState.get(cmd.id);
-        if (st) st.collapsed = true;
+        if (s) s.collapsed = true;
         row.classList.remove('expanded');
       }
     }
@@ -370,7 +379,7 @@ function setRowRunning(cmdId, running) {
   if (!row) return;
   if (running) {
     row.classList.add('running');
-    row.classList.remove('done-ok', 'done-err', 'stopping');
+    row.classList.remove('done-ok', 'done-err', 'done-stopped', 'stopping');
   } else {
     row.classList.remove('running', 'stopping');
   }
