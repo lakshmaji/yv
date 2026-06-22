@@ -139,7 +139,7 @@
       border-left: 3px solid transparent;
     }
     .project-item:hover { background: var(--card); }
-    .project-item:hover .project-export-btns { display: flex; }
+    .project-item:hover .project-settings-btn { display: flex; }
     .project-item.active {
       background: var(--card);
       border-left-color: var(--accent);
@@ -162,25 +162,63 @@
       flex: 1;
     }
 
-    .project-export-btns {
+    .project-settings-btn {
       display: none;
       align-items: center;
-      gap: 2px;
+      justify-content: center;
       margin-left: auto;
       flex-shrink: 0;
-    }
-    .project-export-btn {
       background: transparent;
-      border: 1px solid var(--border);
+      border: none;
       color: var(--muted);
       cursor: pointer;
-      font-size: 10px;
-      padding: 1px 5px;
+      font-size: 14px;
+      padding: 2px 4px;
       border-radius: 3px;
-      transition: color .15s, border-color .15s;
-      line-height: 1.4;
+      line-height: 1;
+      transition: color .15s;
     }
-    .project-export-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .project-settings-btn:hover { color: var(--text); }
+
+    .project-settings-export {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .project-settings-export-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+    }
+    .project-settings-export-btns {
+      display: flex;
+      gap: 8px;
+    }
+    .project-settings-export-btns button {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: border-color .15s, color .15s;
+    }
+    .project-settings-export-btns button:hover { border-color: var(--accent); color: var(--accent); }
+
+    .modal-field-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin-bottom: -4px;
+    }
 
     .project-avatar {
       width: 26px;
@@ -1094,6 +1132,30 @@
     <div class="modal-footer">
       <button class="btn-cancel" id="sc-cancel-btn">Cancel</button>
       <button class="btn-primary" id="sc-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="project-settings-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">Project Settings</div>
+    <div class="modal-field-label">Name</div>
+    <input id="ps-name" placeholder="Project name" />
+    <div class="modal-field-label">Folder Path</div>
+    <div class="add-cmd-dir-row">
+      <input id="ps-dir" placeholder="Folder path" style="font-family:var(--mono);font-size:12px" />
+      <button class="add-cmd-dir-pick" type="button" id="ps-dir-pick">Browse</button>
+    </div>
+    <div class="project-settings-export">
+      <div class="project-settings-export-label">Export Project</div>
+      <div class="project-settings-export-btns">
+        <button id="ps-export-json">↑ Export as JSON</button>
+        <button id="ps-export-yaml">↑ Export as YAML</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="ps-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="ps-save-btn">Save</button>
     </div>
   </div>
 </div>

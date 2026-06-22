@@ -126,6 +126,19 @@ func (a *App) SaveProjects(projects []Project) string {
 	return "ok"
 }
 
+// UpdateProject updates the name and working directory of a single project by ID.
+func (a *App) UpdateProject(projectID, name, workingDir string) string {
+	projects := a.LoadProjects()
+	for i, p := range projects {
+		if p.ID == projectID {
+			projects[i].Name = name
+			projects[i].WorkingDir = workingDir
+			return a.SaveProjects(projects)
+		}
+	}
+	return "error: project not found"
+}
+
 // runShellCommandCtx runs one shell command synchronously, streaming output via emit.
 // It uses a PTY so the child process sees a terminal and stays line-buffered.
 // Cancelling ctx sends SIGTERM to the process (used for post-hook timeouts).

@@ -81,22 +81,11 @@ function renderSidebar() {
       <span class="project-avatar">${initials}</span>
       <span class="project-dot"></span>
       <span class="project-name">${escHtml(p.name)}</span>
-      <span class="project-export-btns">
-        <button class="project-export-btn" data-fmt="json" title="Export as JSON">↑ json</button>
-        <button class="project-export-btn" data-fmt="yaml" title="Export as YAML">↑ yaml</button>
-      </span>
+      <button class="project-settings-btn" title="Project settings">⚙</button>
     `;
-    item.querySelectorAll('.project-export-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const fmt = btn.dataset.fmt;
-        try {
-          const result = await go.ExportProject(p.id, fmt);
-          if (result) alert('Exported to ' + result);
-        } catch (err) {
-          alert('Export failed: ' + err);
-        }
-      });
+    item.querySelector('.project-settings-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProjectSettings(p.id);
     });
     item.addEventListener('click', () => selectProject(p.id));
     list.appendChild(item);
@@ -757,6 +746,24 @@ function closeEditModal() {
   currentEditCmdId = null;
 }
 
+// ── Project settings modal ─────────────────────────────────────────────────
+let currentSettingsProjectId = null;
+
+function openProjectSettings(projectId) {
+  const p = projects.find(x => x.id === projectId);
+  if (!p) return;
+  currentSettingsProjectId = projectId;
+  document.getElementById('ps-name').value = p.name || '';
+  document.getElementById('ps-dir').value  = p.workingDir || '';
+  document.getElementById('project-settings-modal').style.display = 'flex';
+  document.getElementById('ps-name').focus();
+}
+
+function closeProjectSettings() {
+  document.getElementById('project-settings-modal').style.display = 'none';
+  currentSettingsProjectId = null;
+}
+
 // ── Add command ────────────────────────────────────────────────────────────
 async function addCommand() {
   const proj = selectedProject();
@@ -1020,8 +1027,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === document.getElementById('sc-modal')) closeShortcutModal();
   });
 
+  // Project settings modal
+  document.getElementById('ps-cancel-btn').addEventListener('click', closeProjectSettings);
+  document.getElementById('project-settings-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('project-settings-modal')) closeProjectSettings();
+  });
+  document.getElementById('ps-dir-pick').addEventListener('click', async () => {
+    const picked = await go.PickFolder();
+    if (picked) document.getElementById('ps-dir').value = picked;
+  });
+  document.getElementById('ps-save-btn').addEventListener('click', async () => {
+    if (!currentSettingsProjectId) return;
+    const name = document.getElementById('ps-name').value.trim();
+    const dir  = document.getElementById('ps-dir').value.trim();
+    if (!name) return;
+    const result = await go.UpdateProject(currentSettingsProjectId, name, dir);
+    if (result !== 'ok') { alert('Save failed: ' + result); return; }
+    projects = await go.LoadProjects();
+    closeProjectSettings();
+    renderSidebar();
+    renderGroups();
+    renderMain();
+  });
+  document.getElementById('ps-export-json').addEventListener('click', async () => {
+    if (!currentSettingsProjectId) return;
+    try {
+      const path = await go.ExportProject(currentSettingsProjectId, 'json');
+      if (path) alert('Exported to ' + path);
+    } catch (err) { alert('Export failed: ' + err); }
+  });
+  document.getElementById('ps-export-yaml').addEventListener('click', async () => {
+    if (!currentSettingsProjectId) return;
+    try {
+      const path = await go.ExportProject(currentSettingsProjectId, 'yaml');
+      if (path) alert('Exported to ' + path);
+    } catch (err) { alert('Export failed: ' + err); }
+  });
+
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeEditModal(); closeShortcutModal(); }
+    if (e.key === 'Escape') { closeEditModal(); closeShortcutModal(); closeProjectSettings(); }
   });
 
   document.getElementById('sidebar-toggle-btn').addEventListener('click', toggleSidebar);
