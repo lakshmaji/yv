@@ -475,10 +475,23 @@
       border-bottom: 1px solid var(--border);
       background: var(--bg);
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 8px;
       flex-shrink: 0;
     }
+
+    #change-path-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #change-path-btn:hover { border-color: var(--accent); color: var(--accent); }
 
     #project-title {
       font-size: 15px;

@@ -30,12 +30,13 @@ type Shortcut struct {
 }
 
 type Project struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	WorkingDir string          `json:"workingDir"`
-	Groups     []string        `json:"groups"`
-	Commands   []CommandConfig `json:"commands"`
-	Shortcuts  []Shortcut      `json:"shortcuts,omitempty"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	WorkingDir string            `json:"workingDir"`
+	Groups     []string          `json:"groups"`
+	GroupPaths map[string]string `json:"groupPaths,omitempty"`
+	Commands   []CommandConfig   `json:"commands"`
+	Shortcuts  []Shortcut        `json:"shortcuts,omitempty"`
 }
 
 type PostCommand struct {

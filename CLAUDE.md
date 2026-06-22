@@ -35,9 +35,10 @@ type Project struct {
     ID         string          `json:"id"`
     Name       string          `json:"name"`
     WorkingDir string          `json:"workingDir"`
-    Groups     []string        `json:"groups"`
-    Commands   []CommandConfig `json:"commands"`
-    Shortcuts  []Shortcut      `json:"shortcuts,omitempty"`
+    Groups     []string          `json:"groups"`
+    GroupPaths map[string]string `json:"groupPaths,omitempty"`
+    Commands   []CommandConfig   `json:"commands"`
+    Shortcuts  []Shortcut        `json:"shortcuts,omitempty"`
 }
 
 type CommandConfig struct {
@@ -216,3 +217,49 @@ Allow users to create named shortcuts that run a selected set of commands sequen
 | `app.go` | Added `Shortcut` struct; added `Shortcuts []Shortcut` to `Project` (`omitempty` — no migration needed) |
 | `frontend/index.html` | Added shortcut section + card CSS; drag handle + dragging-state CSS; `#sc-modal` HTML |
 | `frontend/main.js` | `runCommand` returns `Promise<exitCode>`; added `runShortcut`, `setShortcutRunning`, `setShortcutStep`, `renderShortcuts`, `buildShortcutCard`, `openShortcutModal`, `closeShortcutModal`, `saveShortcut`, `deleteShortcut`, `initShortcutDrag`; `renderMain()` updated to include shortcuts section |
+
+---
+
+## Implemented: Change Path (project header)
+
+### Goal
+
+Move the working directory control out of the add-command form and into the project header as a "Change Path" button. The button is group-aware: each group can have an optional path override, and "All" simply displays the project path with no button.
+
+### Layout
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  POS  /path/to/project                         Change Path   │  ← specific group selected
+│  POS  /path/to/project                                       │  ← "All" selected (no button)
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Behaviour
+
+- When **"All"** is selected: project `workingDir` is shown, no "Change Path" button
+- When a **specific group** is selected: the group's path override is shown (falls back to project `workingDir` if none set); "Change Path" button is visible
+- Clicking "Change Path" opens the native folder picker; chosen path is saved to `proj.groupPaths[groupName]`
+- The add-command form is now a single row (Label + Group + Command + Add Command); the per-command working dir is still editable via the edit (pencil) modal
+
+### Data model change
+
+Added `GroupPaths` to `Project`:
+
+```go
+type Project struct {
+    ...
+    GroupPaths map[string]string `json:"groupPaths,omitempty"`
+    ...
+}
+```
+
+`GroupPaths` is a map from group name → working dir override. `omitempty` means no migration needed for existing data.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app.go` | Added `GroupPaths map[string]string` to `Project` (`omitempty`) |
+| `frontend/index.html` | Added `#change-path-btn` CSS; changed `#project-header` to `align-items: center` |
+| `frontend/main.js` | `renderMain()` computes `displayPath` (group override or project path) and conditionally renders button; Change Path handler saves to `proj.groupPaths[selectedGroup]`; add-command form removed working dir row; `addCommand()` no longer reads a dir input |

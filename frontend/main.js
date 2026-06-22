@@ -137,11 +137,14 @@ function renderMain() {
   }
 
   const groupDefault = selectedGroup !== 'All' ? selectedGroup : '';
+  const isAllGroups = selectedGroup === 'All';
+  const displayPath = (!isAllGroups && proj.groupPaths?.[selectedGroup]) || proj.workingDir;
 
   main.innerHTML = `
     <div id="project-header">
       <span id="project-title">${escHtml(proj.name)}</span>
-      <span id="project-path">${escHtml(proj.workingDir)}</span>
+      <span id="project-path">${escHtml(displayPath)}</span>
+      ${!isAllGroups ? `<button id="change-path-btn" type="button">Change Path</button>` : ''}
     </div>
     <div id="shortcuts-section">
       <div class="shortcuts-header">
@@ -156,10 +159,6 @@ function renderMain() {
       <input id="add-cmd-group"   placeholder="Group" value="${escHtml(groupDefault)}" />
       <input id="add-cmd-command" placeholder="shell command…" required />
       <button id="add-cmd-submit" type="submit">+ Add Command</button>
-      <div class="add-cmd-dir-row">
-        <input id="add-cmd-dir" placeholder="Working dir (optional, defaults to project path)" />
-        <button class="add-cmd-dir-pick" type="button" id="add-cmd-dir-pick">Browse</button>
-      </div>
     </form>
   `;
 
@@ -180,10 +179,19 @@ function renderMain() {
     addCommand();
   });
 
-  document.getElementById('add-cmd-dir-pick').addEventListener('click', async () => {
-    const path = await go.PickFolder();
-    if (path) document.getElementById('add-cmd-dir').value = path;
-  });
+  if (!isAllGroups) {
+    document.getElementById('change-path-btn').addEventListener('click', async () => {
+      const proj = selectedProject();
+      if (!proj) return;
+      const path = await go.PickFolder();
+      if (!path) return;
+      if (!proj.groupPaths) proj.groupPaths = {};
+      proj.groupPaths[selectedGroup] = path;
+      const result = await go.SaveProjects(projects);
+      if (result !== 'ok') { alert('Save failed: ' + result); return; }
+      document.getElementById('project-path').textContent = path;
+    });
+  }
 }
 
 // ── Command row DOM builder ────────────────────────────────────────────────
@@ -772,15 +780,13 @@ async function addCommand() {
   const labelEl   = document.getElementById('add-cmd-label');
   const groupEl   = document.getElementById('add-cmd-group');
   const commandEl = document.getElementById('add-cmd-command');
-  const dirEl     = document.getElementById('add-cmd-dir');
 
   const label   = labelEl.value.trim();
   const group   = groupEl.value.trim();
   const command = commandEl.value.trim();
-  const workingDir = dirEl ? dirEl.value.trim() : '';
   if (!label || !command) return;
 
-  const newCmd = { id: uid(), label, command, group, workingDir };
+  const newCmd = { id: uid(), label, command, group, workingDir: '' };
   proj.commands.push(newCmd);
 
   const result = await go.SaveProjects(projects);
@@ -792,7 +798,6 @@ async function addCommand() {
 
   labelEl.value = '';
   commandEl.value = '';
-  if (dirEl) dirEl.value = '';
   renderGroups();
   renderMain();
 }
