@@ -25,6 +25,20 @@ function escHtml(s) {
     .replace(/>/g, '&gt;');
 }
 
+function lineHtml(line) {
+  const e = escHtml(line);
+  if (/\b(error|Error|ERROR|exception|Exception|EXCEPTION|fatal|Fatal|FATAL|failed|Failed|FAILED|ENOENT|EACCES|ECONNREFUSED)\b/.test(line)) {
+    return `<span class="line-error">${e}</span>\n`;
+  }
+  if (/\b(warning|Warning|WARNING|warn|Warn|WARN|deprecated|Deprecated)\b/.test(line)) {
+    return `<span class="line-warn">${e}</span>\n`;
+  }
+  if (/^\s+at /.test(line)) {
+    return `<span class="line-stack">${e}</span>\n`;
+  }
+  return e + '\n';
+}
+
 function uid() {
   return crypto.randomUUID();
 }
@@ -184,7 +198,7 @@ function buildCmdRow(cmd) {
         <span class="exit-badge" id="exit-${escHtml(cmd.id)}" style="display:none"></span>
         <button class="clear-btn" id="clear-${escHtml(cmd.id)}">Clear</button>
       </div>
-      <div class="terminal-output" id="output-${escHtml(cmd.id)}">${escHtml(state.lines.join('\n'))}</div>
+      <div class="terminal-output" id="output-${escHtml(cmd.id)}">${state.lines.map(lineHtml).join('')}</div>
     </div>
   `;
 
@@ -358,7 +372,7 @@ function appendLine(cmdId, line) {
 
   const out = document.getElementById('output-' + cmdId);
   if (!out) return;
-  out.textContent += line + '\n';
+  out.insertAdjacentHTML('beforeend', lineHtml(line));
   out.scrollTop = out.scrollHeight;
 
   // update line hint if collapsed
