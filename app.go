@@ -23,12 +23,19 @@ import (
 // ansiRe matches ANSI/VT escape sequences emitted by PTY-attached processes.
 var ansiRe = regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`)
 
+type Shortcut struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	CommandIDs []string `json:"commandIds"`
+}
+
 type Project struct {
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	WorkingDir string          `json:"workingDir"`
 	Groups     []string        `json:"groups"`
 	Commands   []CommandConfig `json:"commands"`
+	Shortcuts  []Shortcut      `json:"shortcuts,omitempty"`
 }
 
 type CommandConfig struct {

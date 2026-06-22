@@ -892,6 +892,50 @@
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Shortcuts section ───────────────────────────────── */
+    #shortcuts-section { border-bottom: 1px solid var(--border); padding: 8px 20px 10px; flex-shrink: 0; }
+    .shortcuts-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .shortcuts-title { font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+    #add-shortcut-btn { background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: var(--radius); padding: 3px 9px; cursor: pointer; font-size: 11px; }
+    #add-shortcut-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #shortcuts-list { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Shortcut card */
+    .shortcut-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px 12px; }
+    .shortcut-card.sc-running { border-color: var(--accent); }
+    .shortcut-card.sc-ok      { border-color: var(--green); }
+    .shortcut-card.sc-failed  { border-color: var(--red); }
+    .shortcut-row { display: flex; align-items: center; gap: 10px; }
+    .sc-name { font-weight: 600; font-size: 13px; flex-shrink: 0; min-width: 80px; }
+    .sc-steps { display: flex; align-items: center; gap: 4px; flex: 1; flex-wrap: wrap; overflow: hidden; }
+    .sc-step { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+    .sc-step-running { border-color: var(--accent); color: var(--accent); background: #58a6ff18; }
+    .sc-step-ok      { border-color: var(--green);  color: var(--green);  background: #3fb95018; }
+    .sc-step-failed  { border-color: var(--red);    color: var(--red);    background: #f8514918; }
+    .sc-step-skipped { opacity: .4; }
+    .sc-arrow { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+    .sc-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .sc-run-btn { background: var(--green); color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .sc-run-btn:hover { filter: brightness(1.15); }
+    .sc-run-btn:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+    .sc-edit-btn, .sc-delete-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 4px 7px; font-size: 12px; cursor: pointer; }
+    .sc-edit-btn:hover  { border-color: var(--accent); color: var(--accent); }
+    .sc-delete-btn:hover { border-color: var(--red); color: var(--red); }
+    .sc-missing { color: var(--red); font-style: italic; font-size: 11px; }
+
+    /* Shortcut modal extras */
+    .sc-cmd-list-header { font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--muted); padding-top: 4px; }
+    .sc-cmd-checkboxes { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; }
+    .sc-cmd-checkbox-row { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 4px; }
+    .sc-cmd-checkbox-row:hover { background: var(--card); }
+    .sc-cmd-checkbox-row.sc-dragging { opacity: 0.4; }
+    .sc-drag-handle { color: var(--muted); cursor: grab; font-size: 15px; padding: 0 2px; flex-shrink: 0; user-select: none; line-height: 1; }
+    .sc-drag-handle:active { cursor: grabbing; }
+    .sc-cmd-cb-label-wrap { display: flex; align-items: center; gap: 6px; cursor: pointer; flex-shrink: 0; }
+    .sc-cmd-cb-label-wrap input[type="checkbox"] { width: auto; cursor: pointer; }
+    .sc-cmd-cb-label { font-size: 13px; font-weight: 500; min-width: 80px; }
+    .sc-cmd-cb-snippet { font-family: var(--mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -959,6 +1003,19 @@
     <div class="modal-footer">
       <button class="btn-cancel" id="edit-cancel-btn">Cancel</button>
       <button class="btn-primary" id="edit-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="sc-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title" id="sc-modal-title">New Shortcut</div>
+    <input id="sc-name-input" placeholder="Shortcut name (e.g. Build &amp; Deploy)" />
+    <div class="sc-cmd-list-header">Commands to run in order</div>
+    <div id="sc-cmd-checkboxes" class="sc-cmd-checkboxes"></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="sc-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="sc-save-btn">Save</button>
     </div>
   </div>
 </div>
