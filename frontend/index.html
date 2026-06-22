@@ -19,6 +19,7 @@
       --mono:     'SF Mono', 'Menlo', 'Consolas', monospace;
       --radius:   6px;
       --sidebar:  220px;
+      --sidebar-collapsed: 48px;
       --groups:   140px;
     }
 
@@ -94,7 +95,32 @@
       text-transform: uppercase;
       color: var(--muted);
       border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      flex-shrink: 0;
+      overflow: hidden;
     }
+
+    .sidebar-label {
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .sidebar-toggle {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 13px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color .15s, background .15s;
+    }
+    .sidebar-toggle:hover { color: var(--text); background: var(--card); }
 
     #project-list {
       flex: 1;
@@ -132,6 +158,40 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .project-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+    .project-item.active .project-avatar {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ── Collapsed sidebar ───────────────────────────────── */
+    #sidebar.collapsed .sidebar-label { display: none; }
+    #sidebar.collapsed .project-dot   { display: none; }
+    #sidebar.collapsed .project-name  { display: none; }
+    #sidebar.collapsed .project-avatar { display: flex; }
+    #sidebar.collapsed #add-project-btn { display: none; }
+    #sidebar.collapsed #new-project-form { display: none !important; }
+    #sidebar.collapsed .resize-handle { display: none; }
+    #sidebar.collapsed .project-item {
+      padding: 7px 8px;
+      justify-content: center;
     }
 
     #add-project-btn {
@@ -614,7 +674,10 @@
 <header id="header"></header>
 
 <nav id="sidebar">
-  <div id="sidebar-header">Projects</div>
+  <div id="sidebar-header">
+    <span class="sidebar-label">Projects</span>
+    <button class="sidebar-toggle" id="sidebar-toggle-btn" title="Collapse sidebar">‹</button>
+  </div>
   <div id="project-list"></div>
   <button id="add-project-btn">+ New Project</button>
   <div id="new-project-form">

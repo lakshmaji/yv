@@ -9,6 +9,7 @@ let selectedGroup = 'All';
 
 let sidebarWidth = 220;
 let groupsWidth  = 140;
+let sidebarCollapsed = false;
 
 // per cmdID: { lines: string[], collapsed: bool, exitCode: number|null }
 const cmdState = new Map();
@@ -32,6 +33,17 @@ function selectedProject() {
   return projects.find(p => p.id === selectedId) || null;
 }
 
+// ── Sidebar collapse ───────────────────────────────────────────────────────
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  sidebar.classList.toggle('collapsed', sidebarCollapsed);
+  btn.textContent = sidebarCollapsed ? '›' : '‹';
+  btn.title = sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  applyColumnWidths();
+}
+
 // ── Sidebar rendering ──────────────────────────────────────────────────────
 function renderSidebar() {
   const list = document.getElementById('project-list');
@@ -40,7 +52,13 @@ function renderSidebar() {
     const item = document.createElement('div');
     item.className = 'project-item' + (p.id === selectedId ? ' active' : '');
     item.dataset.id = p.id;
-    item.innerHTML = `<span class="project-dot"></span><span class="project-name">${escHtml(p.name)}</span>`;
+    item.title = p.name;
+    const initials = escHtml(p.name.slice(0, 2).toUpperCase());
+    item.innerHTML = `
+      <span class="project-avatar">${initials}</span>
+      <span class="project-dot"></span>
+      <span class="project-name">${escHtml(p.name)}</span>
+    `;
     item.addEventListener('click', () => selectProject(p.id));
     list.appendChild(item);
   }
@@ -422,7 +440,8 @@ async function addGroup(name) {
 
 // ── Resize panels ─────────────────────────────────────────────────────────
 function applyColumnWidths() {
-  document.body.style.gridTemplateColumns = `${sidebarWidth}px ${groupsWidth}px 1fr`;
+  const sw = sidebarCollapsed ? 48 : sidebarWidth;
+  document.body.style.gridTemplateColumns = `${sw}px ${groupsWidth}px 1fr`;
 }
 
 function initResize(handleId, getWidth, setWidth) {
@@ -526,6 +545,8 @@ document.getElementById('ag-name').addEventListener('keydown', async e => {
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('sidebar-toggle-btn').addEventListener('click', toggleSidebar);
+
   initResize('rh-sidebar',
     () => sidebarWidth,
     w  => { sidebarWidth = w; }
