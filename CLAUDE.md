@@ -34,11 +34,12 @@ type Project struct {
 }
 
 type CommandConfig struct {
-    ID         string `json:"id"`
-    Label      string `json:"label"`
-    Command    string `json:"command"`
-    Group      string `json:"group"`
-    WorkingDir string `json:"workingDir,omitempty"`
+    ID          string   `json:"id"`
+    Label       string   `json:"label"`
+    Command     string   `json:"command"`
+    Group       string   `json:"group"`
+    WorkingDir  string   `json:"workingDir,omitempty"`
+    PreCommands []string `json:"preCommands,omitempty"`
 }
 ```
 
@@ -138,3 +139,34 @@ Format is determined by the file extension chosen in the save/open dialog. No se
 | `app.go` | Added `marshalProjects`, `unmarshalProjects` helpers; `ExportProjects()` and `ImportProjects()` methods |
 | `frontend/index.html` | Added `#data-actions` div with `↑ Export` / `↓ Import` buttons at sidebar bottom; hidden when sidebar is collapsed |
 | `frontend/main.js` | Wired click handlers for both buttons; `ImportProjects` reloads and re-renders the full project list on success |
+
+---
+
+## Implemented: Pre-hook commands per command
+
+### Goal
+
+Each command can have an ordered list of shell commands that run and complete before the main command starts. Useful for environment setup steps like `nvm use 18` or `source .env`.
+
+### Behaviour
+
+- Pre-hooks run sequentially in the same working directory as the main command
+- If any pre-hook exits non-zero, the main command is **not** started; the row goes red
+- Pre-hook output streams into the same inline terminal, prefixed with `[PRE] N/M: <cmd>` (dim italic styling)
+- Stop during a pre-hook kills the current pre-hook process; row goes `done-stopped` grey
+- A `"N hooks"` badge appears on the command row header when pre-hooks are configured
+
+### Edit modal
+
+A pencil `✎` button on each command row opens an edit modal with:
+- Editable label, group, shell command, working dir
+- Dynamic pre-hooks list: add rows with `+ Add pre-hook`, delete with `✕`, reorder by drag (not yet)
+- Save persists all changes; Cancel / Escape / backdrop click discards
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app.go` | Added `PreCommands []string` to `CommandConfig`; extracted `runShellCommand` helper; `ExecuteCommand` runs pre-hooks sequentially before main command |
+| `frontend/index.html` | Added edit modal HTML; CSS for modal overlay, pre-hook rows, `.pre-count-badge`, `.edit-btn`, `.line-pre` |
+| `frontend/main.js` | `openEditModal` / `closeEditModal` / `addPreHookRow`; pencil button + badge in `buildCmdRow`; `[PRE]` prefix detection in `lineHtml` |
