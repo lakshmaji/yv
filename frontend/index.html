@@ -526,6 +526,43 @@
     #add-cmd-group   { width: 110px; }
     #add-cmd-command { flex: 1; min-width: 200px; font-family: var(--mono); font-size: 12px; }
 
+    .add-cmd-dir-row {
+      width: 100%;
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    #add-cmd-dir {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .add-cmd-dir-pick {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .add-cmd-dir-pick:hover { color: var(--text); border-color: var(--muted); }
+
+    .cmd-dir {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      opacity: .75;
+    }
+
     #add-cmd-submit {
       background: var(--accent);
       color: #fff;

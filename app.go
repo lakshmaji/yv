@@ -26,10 +26,11 @@ type Project struct {
 }
 
 type CommandConfig struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Command string `json:"command"`
-	Group   string `json:"group"`
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	Command    string `json:"command"`
+	Group      string `json:"group"`
+	WorkingDir string `json:"workingDir,omitempty"`
 }
 
 type CommandResult struct {
@@ -123,7 +124,11 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string) string {
 	a.processesMu.Unlock()
 
 	c := exec.Command("sh", "-c", cmd.Command)
-	c.Dir = workingDir
+	if cmd.WorkingDir != "" {
+		c.Dir = cmd.WorkingDir
+	} else {
+		c.Dir = workingDir
+	}
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {

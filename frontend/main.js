@@ -103,6 +103,10 @@ function renderMain() {
       <input id="add-cmd-group"   placeholder="Group" value="${escHtml(groupDefault)}" />
       <input id="add-cmd-command" placeholder="shell command…" required />
       <button id="add-cmd-submit" type="submit">+ Add Command</button>
+      <div class="add-cmd-dir-row">
+        <input id="add-cmd-dir" placeholder="Working dir (optional, defaults to project path)" />
+        <button class="add-cmd-dir-pick" type="button" id="add-cmd-dir-pick">Browse</button>
+      </div>
     </form>
   `;
 
@@ -118,6 +122,11 @@ function renderMain() {
   document.getElementById('add-cmd-form').addEventListener('submit', e => {
     e.preventDefault();
     addCommand();
+  });
+
+  document.getElementById('add-cmd-dir-pick').addEventListener('click', async () => {
+    const path = await go.PickFolder();
+    if (path) document.getElementById('add-cmd-dir').value = path;
   });
 }
 
@@ -137,6 +146,7 @@ function buildCmdRow(cmd) {
       <span class="chevron">▶</span>
       <span class="cmd-label">${escHtml(cmd.label)}</span>
       <span class="cmd-snippet" title="${escHtml(cmd.command)}">${escHtml(cmd.command)}</span>
+      ${cmd.workingDir ? `<span class="cmd-dir" title="${escHtml(cmd.workingDir)}">${escHtml(cmd.workingDir)}</span>` : ''}
       <span class="line-hint" id="hint-${escHtml(cmd.id)}" style="display:none"></span>
       <div class="cmd-actions">
         <button class="run-btn"  id="run-${escHtml(cmd.id)}">▶ Run</button>
@@ -328,13 +338,15 @@ async function addCommand() {
   const labelEl   = document.getElementById('add-cmd-label');
   const groupEl   = document.getElementById('add-cmd-group');
   const commandEl = document.getElementById('add-cmd-command');
+  const dirEl     = document.getElementById('add-cmd-dir');
 
   const label   = labelEl.value.trim();
   const group   = groupEl.value.trim();
   const command = commandEl.value.trim();
+  const workingDir = dirEl ? dirEl.value.trim() : '';
   if (!label || !command) return;
 
-  const newCmd = { id: uid(), label, command, group };
+  const newCmd = { id: uid(), label, command, group, workingDir };
   proj.commands.push(newCmd);
 
   const result = await go.SaveProjects(projects);
@@ -346,6 +358,7 @@ async function addCommand() {
 
   labelEl.value = '';
   commandEl.value = '';
+  if (dirEl) dirEl.value = '';
   renderGroups();
   renderMain();
 }
