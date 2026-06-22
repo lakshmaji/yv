@@ -7,6 +7,9 @@ let projects = [];
 let selectedId = null;
 let selectedGroup = 'All';
 
+let sidebarWidth = 220;
+let groupsWidth  = 140;
+
 // per cmdID: { lines: string[], collapsed: bool, exitCode: number|null }
 const cmdState = new Map();
 
@@ -59,8 +62,10 @@ function renderGroups() {
   const proj = selectedProject();
   if (!proj) return;
 
-  const groups = [...new Set(proj.commands.map(c => c.group).filter(Boolean))].sort();
-  const items = ['All', ...groups];
+  const stored  = proj.groups || [];
+  const derived = proj.commands.map(c => c.group).filter(Boolean);
+  const groups  = [...new Set([...stored, ...derived])].sort();
+  const items   = ['All', ...groups];
 
   for (const g of items) {
     const item = document.createElement('div');
@@ -345,6 +350,53 @@ async function addCommand() {
   renderMain();
 }
 
+// ── Add group ─────────────────────────────────────────────────────────────
+async function addGroup(name) {
+  const proj = selectedProject();
+  if (!proj) return;
+
+  if (!proj.groups) proj.groups = [];
+  if (proj.groups.includes(name)) return;
+
+  proj.groups.push(name);
+
+  const result = await go.SaveProjects(projects);
+  if (result !== 'ok') {
+    alert('Save failed: ' + result);
+    proj.groups.pop();
+    return;
+  }
+
+  renderGroups();
+}
+
+// ── Resize panels ─────────────────────────────────────────────────────────
+function applyColumnWidths() {
+  document.body.style.gridTemplateColumns = `${sidebarWidth}px ${groupsWidth}px 1fr`;
+}
+
+function initResize(handleId, getWidth, setWidth) {
+  const handle = document.getElementById(handleId);
+  if (!handle) return;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = getWidth();
+    handle.classList.add('dragging');
+    const onMove = e => {
+      setWidth(Math.max(80, startW + (e.clientX - startX)));
+      applyColumnWidths();
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 // ── New project ────────────────────────────────────────────────────────────
 document.getElementById('add-project-btn').addEventListener('click', () => {
   const form = document.getElementById('new-project-form');
@@ -387,8 +439,52 @@ document.getElementById('np-save').addEventListener('click', async () => {
   selectProject(proj.id);
 });
 
+// ── Add group form wiring ──────────────────────────────────────────────────
+document.getElementById('add-group-btn').addEventListener('click', () => {
+  const form = document.getElementById('add-group-form');
+  form.classList.toggle('visible');
+  if (form.classList.contains('visible')) {
+    document.getElementById('ag-name').focus();
+  }
+});
+
+document.getElementById('ag-cancel').addEventListener('click', () => {
+  document.getElementById('add-group-form').classList.remove('visible');
+  document.getElementById('ag-name').value = '';
+});
+
+document.getElementById('ag-save').addEventListener('click', async () => {
+  const name = document.getElementById('ag-name').value.trim();
+  if (!name) return;
+  await addGroup(name);
+  document.getElementById('add-group-form').classList.remove('visible');
+  document.getElementById('ag-name').value = '';
+});
+
+document.getElementById('ag-name').addEventListener('keydown', async e => {
+  if (e.key === 'Enter') {
+    const name = e.target.value.trim();
+    if (!name) return;
+    await addGroup(name);
+    document.getElementById('add-group-form').classList.remove('visible');
+    e.target.value = '';
+  } else if (e.key === 'Escape') {
+    document.getElementById('add-group-form').classList.remove('visible');
+    e.target.value = '';
+  }
+});
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  initResize('rh-sidebar',
+    () => sidebarWidth,
+    w  => { sidebarWidth = w; }
+  );
+  initResize('rh-groups',
+    () => groupsWidth,
+    w  => { groupsWidth = w; }
+  );
+
   try {
     projects = await go.LoadProjects();
   } catch (e) {

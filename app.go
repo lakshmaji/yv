@@ -21,6 +21,7 @@ type Project struct {
 	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	WorkingDir string          `json:"workingDir"`
+	Groups     []string        `json:"groups"`
 	Commands   []CommandConfig `json:"commands"`
 }
 
@@ -244,6 +245,7 @@ func defaultProjects() []Project {
 			ID:         "pos",
 			Name:       "POS",
 			WorkingDir: "/Users/lakshmaji/conductor/workspaces/pos-redeem-gf-v1/hot-updater-integration/pos-app/android",
+			Groups:     []string{"Android"},
 			Commands: []CommandConfig{
 				{
 					ID:      "pos-1",
