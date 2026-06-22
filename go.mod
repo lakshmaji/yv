@@ -3,13 +3,13 @@ module nicosia
 go 1.24.5
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/wailsapp/wails/v2 v2.10.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
