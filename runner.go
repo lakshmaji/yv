@@ -126,6 +126,7 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 				escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
 				fmt.Fprintf(&script, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
 				script.WriteString(preCmd + "\n")
+				script.WriteString("wait\n")
 			}
 			script.WriteString(cmd.Command + "\n")
 
@@ -155,6 +156,7 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 				escaped := strings.ReplaceAll(preCmd, "'", `'\''`)
 				fmt.Fprintf(&preScript, "echo '[PRE] %d/%d: %s'\n", i+1, len(cmd.PreCommands), escaped)
 				preScript.WriteString(preCmd + "\n")
+				preScript.WriteString("wait\n")
 			}
 			exitCode, err := a.runShellCommand(cmd.ID, preScript.String(), workDir, emit)
 			if err != nil || exitCode != 0 {
