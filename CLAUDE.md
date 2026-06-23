@@ -4,20 +4,33 @@
 
 Wails v2 desktop app (macOS ARM64) — a local dev command runner. Users create projects, each with a folder path and a list of shell commands. Commands stream stdout/stderr into per-row collapsible inline terminals with Run/Stop buttons.
 
-## Current state (branch: wails-desktop-command-runner)
+## Current state (branch: main)
 
 All files are committed. The app compiles and runs with `make run` from the project root.
 
 ```
 nicosia/
 ├── main.go          — Wails bootstrap
-├── app.go           — Go backend: LoadProjects, SaveProjects, ExecuteCommand, StopCommand, PickFolder, ExportProjects, ImportProjects
+├── app.go           — lifecycle only: NewApp, startup, PickFolder
+├── models.go        — all struct types + ansiRe regex
+├── config.go        — persistence: LoadProjects, SaveProjects, UpdateProject, Export*, Import*, defaultProjects
+├── runner.go        — PTY execution: runShellCommandCtx, ExecuteCommand, StopCommand
 ├── go.mod / go.sum  — Wails v2.10.1
 ├── wails.json       — macOS ARM64 config
 ├── Makefile         — `make run` installs wails CLI if needed then runs `wails dev`
 └── frontend/
-    ├── index.html   — layout + styles
-    └── main.js      — project/command rendering, run/stop/stream/collapse logic
+    ├── index.html   — layout + styles (loads src/main.js as ES module)
+    ├── main.js      — legacy file, no longer loaded
+    └── src/
+        ├── main.js      — bootstrap entry point: DOMContentLoaded wiring, initial load
+        ├── state.js     — all shared mutable state + setter functions
+        ├── utils.js     — escHtml, lineHtml, uid, selectedProject
+        ├── terminal.js  — per-command terminal DOM ops (toggle, append, clear, badges)
+        ├── commands.js  — runCommand, runShortcut, shortcut step tracking
+        ├── modals.js    — edit-command modal, project-settings modal
+        ├── shortcuts.js — shortcut cards, shortcut editor modal
+        ├── resize.js    — applyColumnWidths, toggleSidebar, initResize
+        └── render.js    — renderSidebar, renderGroups, renderMain, buildCmdRow, addCommand, addGroup
 ```
 
 Config persisted at: `~/Library/Application Support/nicosia/projects.json`
@@ -41,13 +54,19 @@ type Project struct {
     Shortcuts  []Shortcut        `json:"shortcuts,omitempty"`
 }
 
+type PostCommand struct {
+    Command string `json:"command"`
+    Timeout int    `json:"timeout,omitempty"` // seconds; 0 = default (120)
+}
+
 type CommandConfig struct {
-    ID          string   `json:"id"`
-    Label       string   `json:"label"`
-    Command     string   `json:"command"`
-    Group       string   `json:"group"`
-    WorkingDir  string   `json:"workingDir,omitempty"`
-    PreCommands []string `json:"preCommands,omitempty"`
+    ID           string        `json:"id"`
+    Label        string        `json:"label"`
+    Command      string        `json:"command"`
+    Group        string        `json:"group"`
+    WorkingDir   string        `json:"workingDir,omitempty"`
+    PreCommands  []string      `json:"preCommands,omitempty"`
+    PostCommands []PostCommand `json:"postCommands,omitempty"`
 }
 ```
 
@@ -263,3 +282,73 @@ type Project struct {
 | `app.go` | Added `GroupPaths map[string]string` to `Project` (`omitempty`) |
 | `frontend/index.html` | Added `#change-path-btn` CSS; changed `#project-header` to `align-items: center` |
 | `frontend/main.js` | `renderMain()` computes `displayPath` (group override or project path) and conditionally renders button; Change Path handler saves to `proj.groupPaths[selectedGroup]`; add-command form removed working dir row; `addCommand()` no longer reads a dir input |
+
+---
+
+## Implemented: Code reorganization for maintainability
+
+### Goal
+
+Split the two large monolithic files (`app.go` at 716 lines, `frontend/main.js` at 1,098 lines) into single-responsibility modules with no behavior change.
+
+### Go backend split
+
+`app.go` → 4 files, all in `package main`:
+
+| File | Responsibility |
+|---|---|
+| `models.go` | All struct types (`Shortcut`, `Project`, `PostCommand`, `CommandConfig`, `CommandResult`, `App`) + `ansiRe` |
+| `app.go` | Wails lifecycle only: `NewApp`, `startup`, `PickFolder` |
+| `config.go` | All persistence: `LoadProjects`, `SaveProjects`, `UpdateProject`, Export/Import methods, `configPath`, `writeProjects`, marshal/unmarshal helpers, `defaultProjects` |
+| `runner.go` | PTY execution engine: `runShellCommandCtx`, `runShellCommand`, `ExecuteCommand`, `StopCommand` |
+
+### Frontend split
+
+`frontend/main.js` → 9 ES modules under `frontend/src/`. The script tag in `index.html` changed to `<script type="module" src="src/main.js">`.
+
+Key design points:
+- `state.js` exports all mutable state as `let` with paired setter functions — necessary because ES module importers can't reassign exported bindings directly.
+- `shortcuts.js` imports `renderMain` from `render.js` (circular), which is safe because the import is only called inside async event handlers, never at module init time.
+- `render.js` contains `buildCmdRow` (not `commands.js`) to keep the import graph acyclic on the render side.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app.go` | Reduced to lifecycle + PickFolder (~37 lines) |
+| `models.go` | New — all type definitions |
+| `config.go` | New — all persistence logic |
+| `runner.go` | New — all PTY/execution logic |
+| `frontend/index.html` | Script tag: `src="main.js"` → `type="module" src="src/main.js"` |
+| `frontend/src/` | New directory with 9 ES modules (state, utils, terminal, commands, modals, shortcuts, resize, render, main) |
+
+---
+
+## Fixed: Group path not respected when running commands
+
+### Problem
+
+When a group had a `groupPaths` override set via "Change Path", commands in that group still ran in `proj.workingDir` (the project root) instead of the group-specific path. The group path was stored and displayed correctly in the header, but not forwarded to `ExecuteCommand`.
+
+### Root cause
+
+`runCommand()` in `frontend/src/commands.js` passed `proj.workingDir` unconditionally as the fallback working directory to `go.ExecuteCommand(cmd, proj.workingDir, runID)`.
+
+### Fix
+
+`runCommand` now resolves the effective working directory before calling Go:
+
+```js
+const workingDir = (selectedGroup !== 'All' && proj.groupPaths?.[selectedGroup])
+  ? proj.groupPaths[selectedGroup]
+  : proj.workingDir;
+await go.ExecuteCommand(cmd, workingDir, runID);
+```
+
+The Go side (`ExecuteCommand`) uses this as the fallback when `cmd.WorkingDir` is empty, so per-command working dir overrides still take priority.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/commands.js` | Import `selectedGroup` from `state.js`; resolve group path override before calling `ExecuteCommand` |
