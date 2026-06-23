@@ -14,7 +14,7 @@ nicosia/
 ├── app.go           — lifecycle only: NewApp, startup, PickFolder
 ├── models.go        — all struct types + ansiRe regex
 ├── config.go        — persistence: LoadProjects, SaveProjects, UpdateProject, Export*, Import*, defaultProjects
-├── runner.go        — PTY execution: runShellCommandCtx, ExecuteCommand, StopCommand
+├── runner.go        — PTY execution: runShellCommandCtx, ExecuteCommand, StopCommand, GetRunningCommands
 ├── go.mod / go.sum  — Wails v2.10.1
 ├── wails.json       — macOS ARM64 config
 ├── Makefile         — `make run` installs wails CLI if needed then runs `wails dev`
@@ -25,7 +25,7 @@ nicosia/
         ├── main.js      — bootstrap entry point: DOMContentLoaded wiring, initial load
         ├── state.js     — all shared mutable state + setter functions
         ├── utils.js     — escHtml, lineHtml, uid, selectedProject
-        ├── terminal.js  — per-command terminal DOM ops (toggle, append, clear, badges)
+        ├── terminal.js  — per-command terminal DOM ops (toggle, append, clear, badges, running state tracking)
         ├── commands.js  — runCommand, runShortcut, shortcut step tracking
         ├── modals.js    — edit-command modal, project-settings modal
         ├── shortcuts.js — shortcut cards, shortcut editor modal
@@ -352,3 +352,40 @@ The Go side (`ExecuteCommand`) uses this as the fallback when `cmd.WorkingDir` i
 | File | Change |
 |---|---|
 | `frontend/src/commands.js` | Import `selectedGroup` from `state.js`; resolve group path override before calling `ExecuteCommand` |
+
+---
+
+## Fixed: Running terminal state lost on project switch
+
+### Problem
+
+When a user started a long-running command (e.g., emulator, dev server) in Project A, then switched to Project B and back, the command row showed "Run" instead of "Stop" even though the command was still running in the Go backend. Running counts were also not visible anywhere.
+
+### Root cause
+
+The "running" state was tracked **only** as a CSS class (`.running`) on the DOM element. `cmdState` had no `running` field. When switching projects, `renderMain()` rebuilds the entire DOM via `buildCmdRow()`, which only sets classes based on `exitCode` (done-ok, done-err, done-stopped) — never `.running`. The CSS class was silently lost.
+
+### Fix
+
+1. **Track running in data, not just CSS**: `setRowRunning()` in `terminal.js` now writes `state.running` to `cmdState` alongside the DOM class toggle. This is the single chokepoint for all running-state transitions.
+2. **Restore on DOM rebuild**: `buildCmdRow()` in `render.js` reads `state.running` and applies the `.running` class when building rows.
+3. **Go-side safety net**: New `GetRunningCommands()` method in `runner.go` exposes the `a.processes` map keys (filtering `:post` suffixed entries). `renderMain()` calls it asynchronously after rendering to re-sync state after hot-reload.
+4. **Global running count**: `updateRunningCount()` in `terminal.js` updates the sidebar header text to "Projects (N)" and sets per-project count badges + green dots on sidebar project items.
+
+### Frontend state shape change
+
+```
+cmdState per entry: { lines, collapsed, exitCode, stopped, running }
+//                                                         ^^^^^^^ NEW
+```
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `runner.go` | New `GetRunningCommands()` method — returns IDs of running processes (excludes `:post` suffixed post-hook entries) |
+| `frontend/src/terminal.js` | `setRowRunning()` writes `cmdState.running`; new `updateRunningCount()` updates sidebar header total, per-project count badges, and green dots |
+| `frontend/src/render.js` | `buildCmdRow()` applies `.running` from state; `renderMain()` calls `GetRunningCommands()` for re-sync; default state includes `running: false` |
+| `frontend/src/commands.js` | Default state in `runCommand()` includes `running: false` |
+| `frontend/src/main.js` | Calls `updateRunningCount()` on initial load |
+| `frontend/index.html` | CSS for `.project-running-count` badge, `.has-running` green dot, collapsed sidebar hiding |
