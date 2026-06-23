@@ -152,6 +152,20 @@
       flex-shrink: 0;
     }
     .project-item.active .project-dot { background: var(--accent); }
+    .project-item.has-running .project-dot { background: var(--green); }
+
+    .project-running-count {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--green);
+      background: #3fb95018;
+      border: 1px solid var(--green);
+      border-radius: 10px;
+      padding: 0 6px;
+      line-height: 16px;
+      flex-shrink: 0;
+      display: none;
+    }
 
     .project-name {
       font-size: 13px;
@@ -245,6 +259,7 @@
     #sidebar.collapsed .sidebar-label { display: none; }
     #sidebar.collapsed .project-dot   { display: none; }
     #sidebar.collapsed .project-name  { display: none; }
+    #sidebar.collapsed .project-running-count { display: none !important; }
     #sidebar.collapsed .project-avatar { display: flex; }
     #sidebar.collapsed #add-project-btn { display: none; }
     #sidebar.collapsed #new-project-form { display: none !important; }

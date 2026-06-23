@@ -253,6 +253,19 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 	return "started"
 }
 
+// GetRunningCommands returns the IDs of all currently running command processes.
+func (a *App) GetRunningCommands() []string {
+	a.processesMu.RLock()
+	defer a.processesMu.RUnlock()
+	ids := make([]string, 0, len(a.processes))
+	for id := range a.processes {
+		if !strings.HasSuffix(id, ":post") {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // StopCommand kills the process group (SIGTERM → SIGKILL after 3s).
 // Using process group (-pgid) ensures child processes spawned by the shell are also terminated.
 func (a *App) StopCommand(cmdID string) string {

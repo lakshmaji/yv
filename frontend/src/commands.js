@@ -10,7 +10,7 @@ export async function runCommand(cmd) {
 
   teardownListeners(cmd.id);
 
-  const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null, stopped: false };
+  const state = cmdState.get(cmd.id) || { lines: [], collapsed: false, exitCode: null, stopped: false, running: false };
   state.lines = [];
   state.collapsed = false;
   state.exitCode = null;

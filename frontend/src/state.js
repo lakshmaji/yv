@@ -19,7 +19,7 @@ export function setGroupsWidth(w) { groupsWidth = w; }
 export let sidebarCollapsed = false;
 export function setSidebarCollapsed(v) { sidebarCollapsed = v; }
 
-// per cmdID: { lines: string[], collapsed: bool, exitCode: number|null, stopped: bool }
+// per cmdID: { lines: string[], collapsed: bool, exitCode: number|null, stopped: bool, running: bool }
 export const cmdState = new Map();
 
 // tracks active Wails event unsubscribers to avoid duplicate listeners

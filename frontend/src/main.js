@@ -6,6 +6,7 @@ import {
 } from './state.js';
 import { uid, selectedProject } from './utils.js';
 import { renderSidebar, renderGroups, renderMain, selectProject, addGroup } from './render.js';
+import { updateRunningCount } from './terminal.js';
 import { toggleSidebar, initResize } from './resize.js';
 import { closeEditModal, addPreHookRow, addPostHookRow, closeProjectSettings } from './modals.js';
 import { closeShortcutModal, saveShortcut } from './shortcuts.js';
@@ -258,4 +259,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (projects.length > 0) {
     selectProject(projects[0].id);
   }
+  updateRunningCount();
 });

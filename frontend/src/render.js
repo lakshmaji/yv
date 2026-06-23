@@ -5,7 +5,7 @@ import {
   cmdState,
 } from './state.js';
 import { escHtml, lineHtml, uid, selectedProject } from './utils.js';
-import { toggleTerminal, clearTerminal, teardownListeners, setRowRunning } from './terminal.js';
+import { toggleTerminal, clearTerminal, teardownListeners, setRowRunning, updateRunningCount } from './terminal.js';
 import { runCommand } from './commands.js';
 import { openEditModal, openProjectSettings } from './modals.js';
 import { renderShortcuts, openShortcutModal } from './shortcuts.js';
@@ -26,6 +26,7 @@ export function renderSidebar() {
       <span class="project-avatar">${initials}</span>
       <span class="project-dot"></span>
       <span class="project-name">${escHtml(p.name)}</span>
+      <span class="project-running-count"></span>
       <button class="project-settings-btn" title="Project settings">⚙</button>
     `;
     item.querySelector('.project-settings-btn').addEventListener('click', (e) => {
@@ -126,6 +127,20 @@ export function renderMain() {
     addCommand();
   });
 
+  // Re-sync running state from Go backend (safety net for hot-reload)
+  go.GetRunningCommands().then(runningIds => {
+    const runningSet = new Set(runningIds || []);
+    for (const cmd of cmds) {
+      const s = cmdState.get(cmd.id);
+      if (s && runningSet.has(cmd.id) && !s.running) {
+        s.running = true;
+        const r = document.getElementById('row-' + cmd.id);
+        if (r) r.classList.add('running');
+      }
+    }
+    updateRunningCount();
+  });
+
   if (!isAllGroups) {
     document.getElementById('change-path-btn').addEventListener('click', async () => {
       const proj = selectedProject();
@@ -145,7 +160,7 @@ export function renderMain() {
 
 export function buildCmdRow(cmd) {
   if (!cmdState.has(cmd.id)) {
-    cmdState.set(cmd.id, { lines: [], collapsed: true, exitCode: null, stopped: false });
+    cmdState.set(cmd.id, { lines: [], collapsed: true, exitCode: null, stopped: false, running: false });
   }
   const state = cmdState.get(cmd.id);
 
@@ -157,6 +172,7 @@ export function buildCmdRow(cmd) {
     else if (state.stopped)    rowClass += ' done-stopped';
     else                       rowClass += ' done-err';
   }
+  if (state.running) rowClass += ' running';
   row.className = rowClass;
   row.id = 'row-' + cmd.id;
 

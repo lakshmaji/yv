@@ -1,4 +1,4 @@
-import { cmdState, listeners } from './state.js';
+import { cmdState, listeners, projects } from './state.js';
 import { lineHtml } from './utils.js';
 
 export function toggleTerminal(cmdId) {
@@ -77,13 +77,48 @@ export function showExitBadge(cmdId, result) {
 }
 
 export function setRowRunning(cmdId, running) {
+  const state = cmdState.get(cmdId);
+  if (state) state.running = running;
+
   const row = document.getElementById('row-' + cmdId);
-  if (!row) return;
-  if (running) {
-    row.classList.add('running');
-    row.classList.remove('done-ok', 'done-err', 'done-stopped', 'stopping');
-  } else {
-    row.classList.remove('running', 'stopping');
+  if (row) {
+    if (running) {
+      row.classList.add('running');
+      row.classList.remove('done-ok', 'done-err', 'done-stopped', 'stopping');
+    } else {
+      row.classList.remove('running', 'stopping');
+    }
+  }
+
+  updateRunningCount();
+}
+
+export function updateRunningCount() {
+  let count = 0;
+  for (const [, state] of cmdState) {
+    if (state.running) count++;
+  }
+
+  const label = document.querySelector('.sidebar-label');
+  if (label) {
+    label.textContent = count > 0 ? `Projects (${count})` : 'Projects';
+  }
+
+  // Update sidebar project dots and per-project counts
+  const runningCmds = new Set();
+  for (const [cmdId, s] of cmdState) {
+    if (s.running) runningCmds.add(cmdId);
+  }
+  for (const p of projects) {
+    const item = document.querySelector(`.project-item[data-id="${p.id}"]`);
+    if (!item) continue;
+    const projCount = p.commands ? p.commands.filter(c => runningCmds.has(c.id)).length : 0;
+    item.classList.toggle('has-running', projCount > 0);
+    const badge = item.querySelector('.project-running-count');
+    if (badge) {
+      badge.textContent = projCount > 0 ? projCount : '';
+      badge.style.display = projCount > 0 ? 'inline-block' : 'none';
+    }
   }
 }
 
