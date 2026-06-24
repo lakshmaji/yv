@@ -589,6 +589,28 @@ Window title and HTML `<title>` changed from "yv" to "Nicosia". The `Header.tsx`
 
 ---
 
+## Fixed: Per-command memory/CPU badge in command row
+
+### Problem
+
+The command row header used to show live resource usage (e.g. `31 MB · 0.1%`) while a command was running. After the SolidJS migration the placeholder `<span class="cmd-resource-badge">` existed in `CommandRow.tsx` but was statically hidden (`display: 'none'`) and never populated. The backend was already emitting `resource-stats` events with per-command stats — the data was available but not consumed.
+
+### How it works
+
+- `internal/monitor/monitor.go` polls every 3 seconds, collects `ps -o pid=,rss=,pcpu=` for all running processes, and emits a `resource-stats` Wails event with a `ResourceStats` struct containing `Commands []ProcessStats` (each entry has `CmdID`, `RSS` in bytes, `CPU` percent).
+- The badge shows `"31 MB · 0.1%"` format using the existing `formatBytes()` utility.
+- Badge is visible only when the command is running and stats are present; it disappears on stop/finish.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/store.ts` | Added `resourceStats` signal (`Map<string, ProcessStats>`) and exported it with its setter |
+| `frontend/src/App.tsx` | Added `resource-stats` Wails event listener (alongside `fullscreen-changed`) that rebuilds the map on each tick and calls `setResourceStats`; cleaned up in `onCleanup` |
+| `frontend/src/components/CommandRow.tsx` | Replaced static hidden span with reactive `<Show when={state().running && cmdStats()}>` that renders `formatBytes(rss) · cpu.toFixed(1)%` |
+
+---
+
 ## Notes: direnv + AWS SSO in pre-hooks
 
 Relevant when configuring pre-hook commands that need to load environment variables from `.envrc` before running a main command (e.g. `tilt up`).
