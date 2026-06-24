@@ -67,6 +67,7 @@ type CommandConfig struct {
     WorkingDir   string        `json:"workingDir,omitempty"`
     PreCommands  []string      `json:"preCommands,omitempty"`
     PostCommands []PostCommand `json:"postCommands,omitempty"`
+    Interactive  bool          `json:"interactive,omitempty"`
 }
 ```
 
@@ -389,3 +390,53 @@ cmdState per entry: { lines, collapsed, exitCode, stopped, running }
 | `frontend/src/commands.js` | Default state in `runCommand()` includes `running: false` |
 | `frontend/src/main.js` | Calls `updateRunningCount()` on initial load |
 | `frontend/index.html` | CSS for `.project-running-count` badge, `.has-running` green dot, collapsed sidebar hiding |
+
+---
+
+## Implemented: Interactive command mode
+
+### Goal
+
+Allow commands that prompt for user input (e.g. CLIs with `[y/N]` prompts, REPLs, password prompts) to receive stdin from the UI while they are running.
+
+### Behaviour
+
+- Commands can be marked **Interactive** via a checkbox in the edit modal; the setting is persisted in `projects.json`
+- When an interactive command is running, a **stdin input field** appears below the terminal output with placeholder `Enter to send · Ctrl+C to interrupt · Ctrl+D for EOF`
+- Pressing **Enter** in the field sends the typed text + newline to the process via `go.SendInput(cmdID, text + '\n')`
+- Pressing **Ctrl+C** in the field sends ASCII `\x03` (SIGINT) to the process
+- Pressing **Ctrl+D** in the field sends ASCII `\x04` (EOF) to the process
+- The input field is hidden when the command is not running
+- **Stop button** for interactive commands first sends Ctrl+C (`\x03`) to give the process a chance to clean up, then proceeds with SIGTERM/SIGKILL if needed
+- PTY reader switched from `bufio.Scanner` to raw byte reads so prompts without a trailing newline (e.g. `Password: `) stream to the terminal immediately
+
+### Data model change
+
+Added `Interactive bool` to `CommandConfig`:
+
+```go
+type CommandConfig struct {
+    ...
+    Interactive  bool  `json:"interactive,omitempty"`
+}
+```
+
+`omitempty` means no migration needed for existing commands (they default to non-interactive).
+
+### New backend API
+
+`App.SendInput(cmdID, text string) string` — writes `text` directly to the PTY stdin of the running command. Returns `"ok"`, `"not running"`, or `"error: <reason>"`.
+
+Internal: `App.ptmxWriters map[string]*os.File` stores the open PTY file descriptor per running command ID, protected by `App.ptmxMu sync.RWMutex`.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `models.go` | Added `Interactive bool` to `CommandConfig` |
+| `app.go` | `NewApp()` initializes `ptmxWriters` map; `App` struct gains `ptmxWriters map[string]*os.File` and `ptmxMu sync.RWMutex` |
+| `runner.go` | PTY reader switched from `bufio.Scanner` to raw reads; registers/deregisters PTY writer in `ptmxWriters`; new `SendInput()` exported method |
+| `frontend/index.html` | `.terminal-stdin` input field (visible only when row is `.running`); `edit-interactive` checkbox in edit modal |
+| `frontend/src/render.js` | `buildCmdRow()` attaches keydown handler on stdin input (Enter / Ctrl+C / Ctrl+D); Stop button sends Ctrl+C first for interactive commands |
+| `frontend/src/modals.js` | `openEditModal()` populates `edit-interactive` checkbox from `cmd.interactive` |
+| `frontend/src/main.js` | Save handler reads `edit-interactive` and writes to `cmd.interactive` |
