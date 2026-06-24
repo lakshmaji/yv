@@ -36,7 +36,9 @@ func (a *App) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir s
 	a.ptmxMu.Unlock()
 	defer func() {
 		a.ptmxMu.Lock()
-		delete(a.ptmxWriters, cmdID)
+		if a.ptmxWriters[cmdID] == ptmx {
+			delete(a.ptmxWriters, cmdID)
+		}
 		a.ptmxMu.Unlock()
 	}()
 
@@ -82,7 +84,9 @@ func (a *App) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir s
 	err = c.Wait()
 
 	a.processesMu.Lock()
-	delete(a.processes, cmdID)
+	if a.processes[cmdID] == c {
+		delete(a.processes, cmdID)
+	}
 	a.processesMu.Unlock()
 
 	if ctx.Err() != nil {
@@ -114,11 +118,16 @@ func (a *App) ExecuteCommand(cmd CommandConfig, workingDir string, runID string)
 	ctx := a.ctx
 	a.ctxMu.RUnlock()
 
-	// Kill any prior run of this command
+	a.storeCmdLabel(cmd.ID, cmd.Label)
+
+	// Kill any prior run of this command (process-group kill to include children).
+	// Don't delete from the map — the old goroutine's conditional cleanup handles
+	// removal once the process actually exits; the new goroutine overwrites the
+	// entry in runShellCommandCtx.
 	a.processesMu.Lock()
 	if prior, ok := a.processes[cmd.ID]; ok {
-		_ = prior.Process.Signal(syscall.SIGTERM)
-		delete(a.processes, cmd.ID)
+		pgid := prior.Process.Pid
+		_ = syscall.Kill(-pgid, syscall.SIGTERM)
 	}
 	a.processesMu.Unlock()
 

@@ -48,6 +48,21 @@ type CommandResult struct {
 	Error    string `json:"error,omitempty"`
 }
 
+type ProcessStats struct {
+	CmdID string  `json:"cmdId"`
+	Label string  `json:"label"`
+	RSS   int64   `json:"rss"`
+	CPU   float64 `json:"cpu"`
+}
+
+type ResourceStats struct {
+	AppRSS      int64          `json:"appRss"`
+	AppCPU      float64        `json:"appCpu"`
+	TotalCmdRSS int64          `json:"totalCmdRss"`
+	TotalCmdCPU float64        `json:"totalCmdCpu"`
+	Commands    []ProcessStats `json:"commands"`
+}
+
 type App struct {
 	ctx         context.Context
 	ctxMu       sync.RWMutex
@@ -55,4 +70,6 @@ type App struct {
 	processesMu sync.RWMutex
 	ptmxWriters map[string]*os.File
 	ptmxMu      sync.RWMutex
+	cmdLabels   map[string]string
+	cmdLabelsMu sync.RWMutex
 }

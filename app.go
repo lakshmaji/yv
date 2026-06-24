@@ -15,6 +15,7 @@ func NewApp() *App {
 	return &App{
 		processes:   make(map[string]*exec.Cmd),
 		ptmxWriters: make(map[string]*os.File),
+		cmdLabels:   make(map[string]string),
 	}
 }
 
@@ -22,6 +23,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctxMu.Lock()
 	a.ctx = ctx
 	a.ctxMu.Unlock()
+	a.startResourceMonitor()
 }
 
 func (a *App) StopAllCommands() {

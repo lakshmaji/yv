@@ -4,6 +4,10 @@
   "outputfilename": "yv",
   "version": "2",
   "frontend:dir": "frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:serverUrl": "auto",
+  "frontend:dev:watcher": "npm run dev",
   "author": {
     "name": "lakshmaji",
     "email": "lakshmaji.mutyala@oolio.com"
@@ -16,7 +20,7 @@
     "comments": "Run dev commands per project"
   },
   "mac": {
-    "identifier": "com.lakshmaji.nicosia",
+    "identifier": "com.lakshmaji.yv",
     "category": "public.app-category.developer-tools"
   }
 }

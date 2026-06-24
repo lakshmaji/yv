@@ -21,6 +21,14 @@ frontend/wailsjs/
 *.swp
 *.swo
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/package-lock.json
+frontend/package.json.md5
+
 # Binary
 nicosia
 nicosia.exe
+yv
+yv.exe

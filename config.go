@@ -181,7 +181,7 @@ func (a *App) ExportProjects() (string, error) {
 
 	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "Export Projects",
-		DefaultFilename: "nicosia-projects.json",
+		DefaultFilename: "yv-projects.json",
 		Filters: []wailsRuntime.FileFilter{
 			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
 			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},

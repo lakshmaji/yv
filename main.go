@@ -20,7 +20,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "Nicosia",
+		Title:     "yv",
 		Width:     1200,
 		Height:    800,
 		MinWidth:  900,
@@ -44,7 +44,7 @@ func main() {
 
 			result, err := wailsRuntime.MessageDialog(ctx, wailsRuntime.MessageDialogOptions{
 				Type:          wailsRuntime.QuestionDialog,
-				Title:         "Quit Nicosia?",
+				Title:         "Quit yv?",
 				Message:       fmt.Sprintf("%d command(s) are still running. Kill all and quit?", len(running)),
 				Buttons:       []string{"Quit", "Cancel"},
 				DefaultButton: "Cancel",
