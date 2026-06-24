@@ -356,6 +356,37 @@ The Go side (`ExecuteCommand`) uses this as the fallback when `cmd.WorkingDir` i
 
 ---
 
+## Fixed: Group path override ignored when viewing "All" group
+
+### Problem
+
+When `selectedGroup` was `'All'`, commands that belonged to a group with a `groupPaths` override still ran in `proj.workingDir` (the project root). The fix above only applied when the user had explicitly selected the group — switching back to "All" lost the path context.
+
+### Root cause
+
+The working directory resolution in `runCommand()` short-circuited to `proj.workingDir` any time `selectedGroup === 'All'`, without checking whether the command's own `cmd.group` had a path override.
+
+### Fix
+
+Resolve the effective group from the command itself when in "All" view:
+
+```js
+const effectiveGroup = selectedGroup !== 'All' ? selectedGroup : cmd.group;
+const workingDir = (effectiveGroup && proj.groupPaths?.[effectiveGroup])
+  ? proj.groupPaths[effectiveGroup]
+  : proj.workingDir;
+```
+
+Commands now use their group's path override regardless of which view they are triggered from. Per-command `WorkingDir` overrides still take priority (handled on the Go side).
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/commands.js` | Derive `effectiveGroup` from `cmd.group` when `selectedGroup === 'All'`; use it for path resolution |
+
+---
+
 ## Fixed: Running terminal state lost on project switch
 
 ### Problem
