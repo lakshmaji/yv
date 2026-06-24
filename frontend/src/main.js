@@ -177,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cmd.group        = group;
     cmd.command      = command;
     cmd.workingDir   = workingDir;
+    cmd.interactive  = document.getElementById('edit-interactive').checked;
     cmd.preCommands  = preCommands;
     cmd.postCommands = postCommands;
 

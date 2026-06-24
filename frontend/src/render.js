@@ -208,8 +208,22 @@ export function buildCmdRow(cmd) {
         <button class="clear-btn" id="clear-${escHtml(cmd.id)}">Clear</button>
       </div>
       <div class="terminal-output" id="output-${escHtml(cmd.id)}">${state.lines.map(lineHtml).join('')}</div>
+      ${cmd.interactive ? `<div class="terminal-stdin" id="stdin-${escHtml(cmd.id)}">
+        <span class="terminal-stdin-label">stdin →</span>
+        <input type="text" class="terminal-input-field" placeholder="Type and press Enter to send input…" />
+      </div>` : ''}
     </div>
   `;
+
+  if (cmd.interactive) {
+    const stdinInput = row.querySelector('.terminal-input-field');
+    stdinInput.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const text = stdinInput.value;
+      stdinInput.value = '';
+      go.SendInput(cmd.id, text + '\n');
+    });
+  }
 
   row.querySelector('.cmd-header').addEventListener('click', e => {
     if (e.target.closest('.cmd-actions')) return;

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -12,7 +13,8 @@ import (
 
 func NewApp() *App {
 	return &App{
-		processes: make(map[string]*exec.Cmd),
+		processes:   make(map[string]*exec.Cmd),
+		ptmxWriters: make(map[string]*os.File),
 	}
 }
 

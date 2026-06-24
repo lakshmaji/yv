@@ -34,10 +34,11 @@ export function addPostHookRow(command = '', timeout = '') {
 
 export function openEditModal(cmd) {
   setCurrentEditCmdId(cmd.id);
-  document.getElementById('edit-label').value   = cmd.label || '';
-  document.getElementById('edit-group').value   = cmd.group || '';
-  document.getElementById('edit-command').value = cmd.command || '';
-  document.getElementById('edit-dir').value     = cmd.workingDir || '';
+  document.getElementById('edit-label').value       = cmd.label || '';
+  document.getElementById('edit-group').value       = cmd.group || '';
+  document.getElementById('edit-command').value     = cmd.command || '';
+  document.getElementById('edit-dir').value         = cmd.workingDir || '';
+  document.getElementById('edit-interactive').checked = cmd.interactive || false;
 
   const list = document.getElementById('pre-hooks-list');
   list.innerHTML = '';

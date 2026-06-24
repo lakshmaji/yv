@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -32,6 +31,15 @@ func (a *App) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir s
 	}
 	defer ptmx.Close()
 
+	a.ptmxMu.Lock()
+	a.ptmxWriters[cmdID] = ptmx
+	a.ptmxMu.Unlock()
+	defer func() {
+		a.ptmxMu.Lock()
+		delete(a.ptmxWriters, cmdID)
+		a.ptmxMu.Unlock()
+	}()
+
 	a.processesMu.Lock()
 	a.processes[cmdID] = c
 	a.processesMu.Unlock()
@@ -48,12 +56,26 @@ func (a *App) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir s
 		}
 	}()
 
-	// PTY merges stdout+stderr; strip \r and ANSI escapes.
-	scanner := bufio.NewScanner(ptmx)
-	for scanner.Scan() {
-		line := strings.TrimRight(scanner.Text(), "\r")
-		line = ansiRe.ReplaceAllString(line, "")
-		emit(line)
+	// PTY merges stdout+stderr; read raw bytes so prompts without a trailing
+	// newline (e.g. "[y/N] ") are emitted immediately instead of blocking.
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := ptmx.Read(buf)
+		if n > 0 {
+			text := strings.ReplaceAll(string(buf[:n]), "\r", "")
+			text = ansiRe.ReplaceAllString(text, "")
+			parts := strings.Split(text, "\n")
+			for i, part := range parts {
+				if i < len(parts)-1 {
+					emit(part) // complete line
+				} else if part != "" {
+					emit(part) // partial line / prompt (no trailing \n)
+				}
+			}
+		}
+		if readErr != nil {
+			break
+		}
 	}
 	stopKiller() // process exited naturally; stop killer goroutine
 
@@ -266,6 +288,21 @@ func (a *App) GetRunningCommands() []string {
 		}
 	}
 	return ids
+}
+
+// SendInput writes text to the stdin of a running interactive command.
+func (a *App) SendInput(cmdID string, text string) string {
+	a.ptmxMu.RLock()
+	ptmx, ok := a.ptmxWriters[cmdID]
+	a.ptmxMu.RUnlock()
+	if !ok {
+		return "not running"
+	}
+	_, err := ptmx.Write([]byte(text))
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
 }
 
 // StopCommand kills the process group (SIGTERM → SIGKILL after 3s).

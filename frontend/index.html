@@ -783,6 +783,44 @@
     .line-pre   { color: var(--muted); font-style: italic; opacity: .75; }
     .line-post  { color: #79c0ff; font-style: italic; opacity: .85; }
 
+    /* ── Terminal stdin input ────────────────────────────────── */
+    .terminal-stdin {
+      display: none;
+      padding: 4px 8px;
+      gap: 6px;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+    .cmd-row.running .terminal-stdin { display: flex; }
+    .terminal-input-field {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--fg);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 3px 6px;
+    }
+    .terminal-input-field:focus { outline: none; border-color: var(--accent); }
+    .terminal-stdin-label {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* ── Interactive toggle in edit modal ────────────────────── */
+    .interactive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--fg);
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .interactive-toggle input[type="checkbox"] { width: auto; cursor: pointer; }
+
     /* ── Pre-count badge ─────────────────────────────────── */
     .pre-count-badge {
       font-size: 10px;
@@ -1134,6 +1172,10 @@
       <input id="edit-dir" placeholder="Working dir (optional, defaults to project path)" style="font-family:var(--mono);font-size:12px" />
       <button class="add-cmd-dir-pick" type="button" id="edit-dir-pick">Browse</button>
     </div>
+    <label class="interactive-toggle">
+      <input type="checkbox" id="edit-interactive" />
+      Interactive — accepts stdin input while running
+    </label>
     <div class="pre-hooks-section">
       <div class="pre-hooks-header">Pre-hook Commands</div>
       <div id="pre-hooks-list"></div>

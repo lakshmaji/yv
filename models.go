@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"regexp"
 	"sync"
@@ -37,6 +38,7 @@ type CommandConfig struct {
 	Command      string        `json:"command"`
 	Group        string        `json:"group"`
 	WorkingDir   string        `json:"workingDir,omitempty"`
+	Interactive  bool          `json:"interactive,omitempty"`
 	PreCommands  []string      `json:"preCommands,omitempty"`
 	PostCommands []PostCommand `json:"postCommands,omitempty"`
 }
@@ -51,4 +53,6 @@ type App struct {
 	ctxMu       sync.RWMutex
 	processes   map[string]*exec.Cmd
 	processesMu sync.RWMutex
+	ptmxWriters map[string]*os.File
+	ptmxMu      sync.RWMutex
 }
