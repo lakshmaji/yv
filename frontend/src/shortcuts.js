@@ -90,7 +90,10 @@ export function openShortcutModal(sc) {
 
   initShortcutDrag(container);
   document.getElementById('sc-modal').style.display = 'flex';
-  document.getElementById('sc-name-input').focus();
+  const nameInput = document.getElementById('sc-name-input');
+  nameInput.classList.remove('input-error');
+  nameInput.addEventListener('input', () => nameInput.classList.remove('input-error'));
+  nameInput.focus();
 }
 
 export function initShortcutDrag(container) {
@@ -133,8 +136,14 @@ export function closeShortcutModal() {
 export async function saveShortcut() {
   const proj = selectedProject();
   if (!proj) return;
-  const name = document.getElementById('sc-name-input').value.trim();
-  if (!name) return;
+  const nameInput = document.getElementById('sc-name-input');
+  const name = nameInput.value.trim();
+  if (!name) {
+    nameInput.classList.add('input-error');
+    nameInput.focus();
+    return;
+  }
+  nameInput.classList.remove('input-error');
   // Read in current DOM order so drag-reordering is respected
   const commandIds = Array.from(
     document.querySelectorAll('#sc-cmd-checkboxes .sc-cmd-checkbox-row')
