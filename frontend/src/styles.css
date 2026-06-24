@@ -26,33 +26,12 @@
       font-size: 13px;
       height: 100vh;
       display: grid;
-      grid-template-rows: 44px 1fr 24px;
+      grid-template-rows: 1fr 24px;
       grid-template-columns: var(--sidebar) var(--groups) 1fr;
       grid-template-areas:
-        "header header header"
         "sidebar groups main"
         "statusbar statusbar statusbar";
       overflow: hidden;
-    }
-
-    /* ── Header ─────────────────────────────────────────── */
-    #header {
-      grid-area: header;
-      --wails-draggable: drag;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 16px 0 80px;
-      gap: 10px;
-    }
-    #header .app-title {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: var(--fg);
-      text-transform: lowercase;
     }
 
     /* ── Resize handles ──────────────────────────────────── */
@@ -91,7 +70,7 @@
     }
 
     #sidebar-header {
-      padding: 12px 12px 8px;
+      padding: 32px 12px 8px;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: .8px;
@@ -105,6 +84,10 @@
       flex-shrink: 0;
       overflow: hidden;
     }
+
+    body.fullscreen #sidebar-header,
+    body.fullscreen #groups-header { padding-top: 12px; }
+    body.fullscreen #project-header { padding-top: 12px; }
 
     .sidebar-label {
       white-space: nowrap;
@@ -262,6 +245,7 @@
     #sidebar.collapsed .project-dot   { display: none; }
     #sidebar.collapsed .project-name  { display: none; }
     #sidebar.collapsed .project-running-count { display: none !important; }
+    #sidebar.collapsed .project-settings-btn { display: none; }
     #sidebar.collapsed .project-avatar { display: flex; }
     #sidebar.collapsed #add-project-btn { display: none; }
     #sidebar.collapsed #new-project-form { display: none !important; }
@@ -403,7 +387,7 @@
     }
 
     #groups-header {
-      padding: 12px 12px 8px;
+      padding: 32px 12px 8px;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: .8px;
@@ -488,7 +472,7 @@
     }
 
     #project-header {
-      padding: 12px 20px 10px;
+      padding: 32px 20px 10px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
       display: flex;

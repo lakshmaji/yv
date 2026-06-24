@@ -24,6 +24,27 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.ctxMu.Unlock()
 	a.startResourceMonitor()
+	a.startFullscreenMonitor()
+}
+
+func (a *App) startFullscreenMonitor() {
+	go func() {
+		wasFullscreen := false
+		for {
+			time.Sleep(300 * time.Millisecond)
+			a.ctxMu.RLock()
+			ctx := a.ctx
+			a.ctxMu.RUnlock()
+			if ctx == nil {
+				continue
+			}
+			isFs := wailsRuntime.WindowIsFullscreen(ctx)
+			if isFs != wasFullscreen {
+				wasFullscreen = isFs
+				wailsRuntime.EventsEmit(ctx, "fullscreen-changed", isFs)
+			}
+		}
+	}()
 }
 
 func (a *App) StopAllCommands() {

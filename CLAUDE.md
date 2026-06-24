@@ -10,27 +10,41 @@ All files are committed. The app compiles and runs with `make run` from the proj
 
 ```
 nicosia/
-├── main.go          — Wails bootstrap
-├── app.go           — lifecycle only: NewApp, startup, PickFolder
+├── main.go          — Wails bootstrap, mac title bar config, quit dialog
+├── app.go           — lifecycle: NewApp, startup, PickFolder, startFullscreenMonitor
 ├── models.go        — all struct types + ansiRe regex
 ├── config.go        — persistence: LoadProjects, SaveProjects, UpdateProject, Export*, Import*, defaultProjects
 ├── runner.go        — PTY execution: runShellCommandCtx, ExecuteCommand, StopCommand, GetRunningCommands
+├── monitor.go       — resource stats monitor (CPU, memory)
 ├── go.mod / go.sum  — Wails v2.10.1
 ├── wails.json       — macOS ARM64 config
 ├── Makefile         — `make run` installs wails CLI if needed then runs `wails dev`
 └── frontend/
-    ├── index.html   — layout + styles (loads src/main.js as ES module)
-    ├── main.js      — legacy file, no longer loaded
+    ├── index.html   — HTML shell (loads src/index.tsx)
     └── src/
-        ├── main.js      — bootstrap entry point: DOMContentLoaded wiring, initial load
-        ├── state.js     — all shared mutable state + setter functions
-        ├── utils.js     — escHtml, lineHtml, uid, selectedProject
-        ├── terminal.js  — per-command terminal DOM ops (toggle, append, clear, badges, running state tracking)
-        ├── commands.js  — runCommand, runShortcut, shortcut step tracking
-        ├── modals.js    — edit-command modal, project-settings modal
-        ├── shortcuts.js — shortcut cards, shortcut editor modal
-        ├── resize.js    — applyColumnWidths, toggleSidebar, initResize
-        └── render.js    — renderSidebar, renderGroups, renderMain, buildCmdRow, addCommand, addGroup
+        ├── index.tsx    — SolidJS render entry point
+        ├── App.tsx      — root component: project loading, keydown, column resize, fullscreen event listener
+        ├── store.ts     — SolidJS signals: projects, selectedId, selectedGroup, cmdState, sidebarWidth, etc.
+        ├── types.ts     — TypeScript interfaces (Project, CommandConfig, Shortcut, etc.)
+        ├── wails.ts     — typed Go bindings (GoApp interface) + runtime re-export
+        ├── styles.css   — all app styles (CSS variables, grid layout, components)
+        ├── lib/
+        │   ├── commands.ts  — runCommand, runShortcut, shortcut step tracking
+        │   └── utils.ts     — escHtml, lineHtml, uid helpers
+        └── components/
+            ├── Sidebar.tsx          — project list, new project form, export/import
+            ├── GroupsPanel.tsx       — group list, add group form
+            ├── MainPanel.tsx         — project header, command list, add command form
+            ├── CommandRow.tsx        — single command row with terminal, run/stop, stdin
+            ├── Terminal.tsx          — terminal output rendering
+            ├── ShortcutsSection.tsx  — shortcuts header + card list
+            ├── ShortcutCard.tsx      — individual shortcut with step pills
+            ├── StatusBar.tsx         — resource stats (CPU, memory, command count)
+            ├── ResizeHandle.tsx      — draggable column resize
+            └── modals/
+                ├── EditCommandModal.tsx     — edit command, pre-hooks, post-commands
+                ├── ShortcutModal.tsx        — create/edit shortcut, drag-reorder
+                └── ProjectSettingsModal.tsx — project name, working dir, delete
 ```
 
 Config persisted at: `~/Library/Application Support/nicosia/projects.json`
@@ -471,3 +485,86 @@ Internal: `App.ptmxWriters map[string]*os.File` stores the open PTY file descrip
 | `frontend/src/render.js` | `buildCmdRow()` attaches keydown handler on stdin input (Enter / Ctrl+C / Ctrl+D); Stop button sends Ctrl+C first for interactive commands |
 | `frontend/src/modals.js` | `openEditModal()` populates `edit-interactive` checkbox from `cmd.interactive` |
 | `frontend/src/main.js` | Save handler reads `edit-interactive` and writes to `cmd.interactive` |
+
+---
+
+## Implemented: Frontend migration to SolidJS + TypeScript
+
+### Goal
+
+Replace the vanilla JS frontend with SolidJS + TypeScript for type safety, reactive state management, and component-based architecture.
+
+### Key changes
+
+- All `.js` files under `frontend/src/` replaced with `.tsx`/`.ts` SolidJS components
+- State management moved from manual setter functions to SolidJS signals (`store.ts`)
+- DOM manipulation replaced with SolidJS reactive JSX
+- Entry point changed from `main.js` → `index.tsx` (renders `<App />` into `#root`)
+- Wails Go bindings typed via `GoApp` interface in `wails.ts`
+- All types defined in `types.ts`
+
+---
+
+## Implemented: Native transparent title bar with fullscreen detection
+
+### Goal
+
+Remove the hard-coded "yv" title from the window header and eliminate wasted vertical space. In windowed mode, the macOS traffic light buttons (close/minimize/maximize) need clearance. In fullscreen, traffic lights auto-hide so no clearance is needed.
+
+### Approach
+
+Uses a native macOS transparent title bar (not `TitleBarHiddenInset`) combined with a Go-side fullscreen monitor that pushes state changes to the frontend via events.
+
+### macOS title bar config (`main.go`)
+
+```go
+Mac: &mac.Options{
+    TitleBar: &mac.TitleBar{
+        TitlebarAppearsTransparent: true,
+        HideTitle:                 true,
+        HideTitleBar:              false,
+        FullSizeContent:           false,
+        UseToolbar:                false,
+        HideToolbarSeparator:      true,
+    },
+    WebviewIsTransparent: true,
+}
+```
+
+- `TitlebarAppearsTransparent: true` — title bar blends with the app background
+- `HideTitle: true` — no title text shown in the native title bar
+- `FullSizeContent: false` — web content stays below the title bar (but Wails webview still extends into it, so padding is needed)
+
+### Fullscreen detection
+
+**Go side** (`app.go`): `startFullscreenMonitor()` — a goroutine that polls `wailsRuntime.WindowIsFullscreen(ctx)` every 300ms and emits a `fullscreen-changed` event (via `wailsRuntime.EventsEmit`) only when the state actually changes.
+
+**Frontend** (`App.tsx`): listens for `fullscreen-changed` events via `runtime.EventsOn` and toggles `body.fullscreen` CSS class.
+
+### CSS behaviour (`styles.css`)
+
+Two states controlled by `body.fullscreen`:
+
+- **Windowed** (default): `padding-top: 24px` on `#sidebar-header`, `#groups-header`, `#project-header` — clears the traffic light buttons
+- **Fullscreen** (`body.fullscreen`): `padding-top: 12px` — no traffic lights visible, reclaims the space
+
+### Collapsed sidebar
+
+When the sidebar is collapsed, the following are hidden via CSS:
+- `.project-running-count` (running count badge)
+- `.project-settings-btn` (settings gear icon)
+
+### App renamed
+
+Window title and HTML `<title>` changed from "yv" to "Nicosia". The `Header.tsx` component (which rendered the old full-width "yv" title bar) was deleted; its grid row removed from the body layout.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `main.go` | Title `"yv"` → `"Nicosia"`; quit dialog title updated; `TitleBarHiddenInset()` → custom `TitleBar{}` with transparent + hidden title |
+| `app.go` | New `startFullscreenMonitor()` goroutine; called from `startup()` |
+| `frontend/src/App.tsx` | Removed `Header` import; added `fullscreen-changed` event listener toggling `body.fullscreen` class |
+| `frontend/src/styles.css` | Removed header grid row (was `44px`); body grid now 2-row (`1fr 24px`); removed `#header` CSS; header padding-top 24px (windowed) / 12px (fullscreen); collapsed sidebar hides settings btn |
+| `frontend/src/components/Header.tsx` | Deleted |
+| `frontend/index.html` | `<title>yv</title>` → `<title>Nicosia</title>` |

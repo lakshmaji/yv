@@ -6,8 +6,7 @@ import {
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState,
 } from './store';
-import { go } from './wails';
-import Header from './components/Header';
+import { go, runtime } from './wails';
 import Sidebar from './components/Sidebar';
 import GroupsPanel from './components/GroupsPanel';
 import MainPanel from './components/MainPanel';
@@ -62,11 +61,17 @@ export default function App() {
     }
   }
 
+  let unsubFullscreen: (() => void) | undefined;
+
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
+    unsubFullscreen = runtime.EventsOn('fullscreen-changed', (isFs: boolean) => {
+      document.body.classList.toggle('fullscreen', isFs);
+    });
   });
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeydown);
+    unsubFullscreen?.();
   });
 
   function handleSidebarResize() {
@@ -79,7 +84,6 @@ export default function App() {
 
   return (
     <>
-      <Header />
       <Sidebar onResize={handleSidebarResize} />
       <GroupsPanel onResize={handleGroupsResize} />
       <MainPanel />

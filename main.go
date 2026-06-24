@@ -20,7 +20,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "yv",
+		Title:     "Nicosia",
 		Width:     1200,
 		Height:    800,
 		MinWidth:  900,
@@ -44,7 +44,7 @@ func main() {
 
 			result, err := wailsRuntime.MessageDialog(ctx, wailsRuntime.MessageDialogOptions{
 				Type:          wailsRuntime.QuestionDialog,
-				Title:         "Quit yv?",
+				Title:         "Quit Nicosia?",
 				Message:       fmt.Sprintf("%d command(s) are still running. Kill all and quit?", len(running)),
 				Buttons:       []string{"Quit", "Cancel"},
 				DefaultButton: "Cancel",
@@ -63,9 +63,16 @@ func main() {
 		},
 
 		Mac: &mac.Options{
-			TitleBar:             mac.TitleBarHiddenInset(),
+			TitleBar: &mac.TitleBar{
+				TitlebarAppearsTransparent: true,
+				HideTitle:                 true,
+				HideTitleBar:              false,
+				FullSizeContent:           false,
+				UseToolbar:                false,
+				HideToolbarSeparator:      true,
+			},
 			Appearance:           mac.DefaultAppearance,
-			WebviewIsTransparent: false,
+			WebviewIsTransparent: true,
 			WindowIsTranslucent:  false,
 		},
 	})
