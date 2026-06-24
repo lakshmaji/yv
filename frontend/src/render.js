@@ -210,7 +210,7 @@ export function buildCmdRow(cmd) {
       <div class="terminal-output" id="output-${escHtml(cmd.id)}">${state.lines.map(lineHtml).join('')}</div>
       ${cmd.interactive ? `<div class="terminal-stdin" id="stdin-${escHtml(cmd.id)}">
         <span class="terminal-stdin-label">stdin →</span>
-        <input type="text" class="terminal-input-field" placeholder="Type and press Enter to send input…" />
+        <input type="text" class="terminal-input-field" placeholder="Enter to send · Ctrl+C to interrupt · Ctrl+D for EOF" />
       </div>` : ''}
     </div>
   `;
@@ -218,10 +218,17 @@ export function buildCmdRow(cmd) {
   if (cmd.interactive) {
     const stdinInput = row.querySelector('.terminal-input-field');
     stdinInput.addEventListener('keydown', e => {
-      if (e.key !== 'Enter') return;
-      const text = stdinInput.value;
-      stdinInput.value = '';
-      go.SendInput(cmd.id, text + '\n');
+      if (e.key === 'Enter') {
+        const text = stdinInput.value;
+        stdinInput.value = '';
+        go.SendInput(cmd.id, text + '\n');
+      } else if (e.ctrlKey && e.key === 'c') {
+        e.preventDefault();
+        go.SendInput(cmd.id, '\x03');
+      } else if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        go.SendInput(cmd.id, '\x04');
+      }
     });
   }
 
