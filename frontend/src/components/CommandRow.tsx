@@ -17,8 +17,10 @@ export default function CommandRow(props: CommandRowProps) {
     const s = state();
     let cls = 'cmd-row';
     if (!s.collapsed && s.lines.length) cls += ' expanded';
-    if (s.running) cls += ' running';
-    else if (s.exitCode !== null) {
+    if (s.running) {
+      cls += ' running';
+      if (s.stopped) cls += ' stopping';
+    } else if (s.exitCode !== null) {
       if (s.exitCode === 0) cls += ' done-ok';
       else if (s.stopped) cls += ' done-stopped';
       else cls += ' done-err';
@@ -105,7 +107,11 @@ export default function CommandRow(props: CommandRowProps) {
           <button class="edit-btn" title="Edit command" onClick={handleEdit}>✎</button>
           <button class="dismiss-btn" onClick={handleDismiss}>✕ Dismiss</button>
           <button class="run-btn" onClick={handleRun}>▶ Run</button>
-          <button class="stop-btn" onClick={handleStop}>■ Stop</button>
+          <button class="stop-btn" onClick={handleStop}>
+            <Show when={state().running && state().stopped} fallback={<>■ Stop</>}>
+              <span class="stop-spin"></span>Stopping…
+            </Show>
+          </button>
         </div>
       </div>
       <Terminal cmd={props.cmd} />

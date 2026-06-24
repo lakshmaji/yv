@@ -705,14 +705,26 @@
     .dismiss-btn:hover { border-color: var(--red); color: var(--red); }
     .cmd-row.done-err .dismiss-btn { display: flex; }
 
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .stop-spin {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      flex-shrink: 0;
+    }
+
     .cmd-row.stopping .stop-btn {
-      opacity: .55;
+      opacity: 0.75;
       cursor: not-allowed;
       pointer-events: none;
-    }
-    .cmd-row.stopping .stop-btn::before {
-      content: '⏳ ';
-      font-size: 10px;
+      gap: 6px;
     }
 
     /* ── Inline terminal ─────────────────────────────────── */
