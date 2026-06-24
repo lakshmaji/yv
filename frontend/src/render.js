@@ -260,6 +260,7 @@ export function buildCmdRow(cmd) {
     if (r) r.classList.add('stopping');
     const s = cmdState.get(cmd.id);
     if (s) s.stopped = true; // mark as user-initiated so offDone uses done-stopped
+    if (cmd.interactive) go.SendInput(cmd.id, '\x03'); // let the process handle Ctrl+C before SIGTERM
     const result = await go.StopCommand(cmd.id);
     if (result === 'not running') {
       // process already dead but done: event was missed — unstick the row
