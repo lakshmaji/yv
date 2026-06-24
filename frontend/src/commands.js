@@ -84,8 +84,9 @@ export async function runCommand(cmd) {
   listeners.set(cmd.id, { offOutput, offDone, offPostDone });
 
   try {
-    const workingDir = (selectedGroup !== 'All' && proj.groupPaths?.[selectedGroup])
-      ? proj.groupPaths[selectedGroup]
+    const effectiveGroup = selectedGroup !== 'All' ? selectedGroup : cmd.group;
+    const workingDir = (effectiveGroup && proj.groupPaths?.[effectiveGroup])
+      ? proj.groupPaths[effectiveGroup]
       : proj.workingDir;
     await go.ExecuteCommand(cmd, workingDir, runID);
   } catch (err) {
