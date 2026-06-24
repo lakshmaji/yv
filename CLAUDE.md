@@ -11,14 +11,26 @@ All files are committed. The app compiles and runs with `make run` from the proj
 ```
 nicosia/
 ├── main.go          — Wails bootstrap, mac title bar config, quit dialog
-├── app.go           — lifecycle: NewApp, startup, PickFolder, startFullscreenMonitor
-├── models.go        — all struct types + ansiRe regex
-├── config.go        — persistence: LoadProjects, SaveProjects, UpdateProject, Export*, Import*, defaultProjects
-├── runner.go        — PTY execution: runShellCommandCtx, ExecuteCommand, StopCommand, GetRunningCommands
-├── monitor.go       — resource stats monitor (CPU, memory)
+├── app.go           — App facade: NewApp, startup, PickFolder, startFullscreenMonitor,
+│                      thin delegating wrappers for all Wails-bound methods
+├── models.go        — type aliases re-exporting internal/models under package main
+│                      (keeps Wails TypeScript namespace as "main.*")
 ├── go.mod / go.sum  — Wails v2.10.1
 ├── wails.json       — macOS ARM64 config
-├── Makefile         — `make run` installs wails CLI if needed then runs `wails dev`
+├── Makefile         — make run / make fmt / make test
+├── internal/
+│   ├── models/
+│   │   └── models.go   — all struct types: Project, CommandConfig, Shortcut, PostCommand,
+│   │                      CommandResult, ProcessStats, ResourceStats, ProcessEntry
+│   ├── runner/
+│   │   └── runner.go   — Runner struct: PTY execution, ExecuteCommand, StopCommand,
+│   │                      SendInput, GetRunningCommands, StopAll, GetProcessSnapshot
+│   ├── config/
+│   │   └── config.go   — Store struct (stateless): LoadProjects, SaveProjects, UpdateProject,
+│   │                      ExportProject(s), ImportProject(s), defaultProjects
+│   └── monitor/
+│       └── monitor.go  — Monitor struct: resource stats polling (CPU, memory),
+│                          GetResourceStats, parsePsOutput
 └── frontend/
     ├── index.html   — HTML shell (loads src/index.tsx)
     └── src/
@@ -302,22 +314,7 @@ type Project struct {
 
 ## Implemented: Code reorganization for maintainability
 
-### Goal
-
-Split the two large monolithic files (`app.go` at 716 lines, `frontend/main.js` at 1,098 lines) into single-responsibility modules with no behavior change.
-
-### Go backend split
-
-`app.go` → 4 files, all in `package main`:
-
-| File | Responsibility |
-|---|---|
-| `models.go` | All struct types (`Shortcut`, `Project`, `PostCommand`, `CommandConfig`, `CommandResult`, `App`) + `ansiRe` |
-| `app.go` | Wails lifecycle only: `NewApp`, `startup`, `PickFolder` |
-| `config.go` | All persistence: `LoadProjects`, `SaveProjects`, `UpdateProject`, Export/Import methods, `configPath`, `writeProjects`, marshal/unmarshal helpers, `defaultProjects` |
-| `runner.go` | PTY execution engine: `runShellCommandCtx`, `runShellCommand`, `ExecuteCommand`, `StopCommand` |
-
-### Frontend split
+### Phase 1 — frontend split
 
 `frontend/main.js` → 9 ES modules under `frontend/src/`. The script tag in `index.html` changed to `<script type="module" src="src/main.js">`.
 
@@ -326,16 +323,37 @@ Key design points:
 - `shortcuts.js` imports `renderMain` from `render.js` (circular), which is safe because the import is only called inside async event handlers, never at module init time.
 - `render.js` contains `buildCmdRow` (not `commands.js`) to keep the import graph acyclic on the render side.
 
-### Files changed
+### Phase 2 — Go backend split into `internal/` packages
 
-| File | Change |
+The flat `package main` layout was replaced with proper Go internal packages. `app.go` is now a thin Wails-bound facade; all business logic lives in `internal/`.
+
+| Package | Owner | Key types/funcs |
+|---|---|---|
+| `internal/models` | Data types only | `Project`, `CommandConfig`, `Shortcut`, `PostCommand`, `CommandResult`, `ProcessStats`, `ResourceStats`, `ProcessEntry` |
+| `internal/runner` | PTY execution | `Runner` struct, `ExecuteCommand`, `StopCommand`, `SendInput`, `GetRunningCommands`, `StopAll`, `GetProcessSnapshot` |
+| `internal/config` | Persistence | `Store` struct (stateless), `LoadProjects`, `SaveProjects`, `UpdateProject`, `ExportProject(s)`, `ImportProject(s)` |
+| `internal/monitor` | Resource stats | `Monitor` struct, `Start(ctx)`, `GetResourceStats`, `parsePsOutput` |
+
+**Import graph** (no cycles): `models` ← `runner`, `config`, `monitor`; `monitor` also imports `runner`.
+
+**Wails namespace preservation:** Root `models.go` keeps Go type aliases (`type Project = models.Project` etc.) so Wails generates TypeScript bindings in the `main` namespace — zero frontend changes required.
+
+**Memory/GC improvements made during this refactor:**
+- `sync.Pool` for the 32 KB PTY read buffer — avoids a heap allocation per read loop iteration
+- `cmdLabels` map pruned on process exit — was unbounded before
+- Background goroutines (resource monitor + fullscreen monitor) now exit via `ctx.Done()` on shutdown
+- `Runner.StopAll` uses a `sync.WaitGroup` and waits for all `ExecuteCommand` goroutines after SIGKILL
+- `startFullscreenMonitor` replaced its `time.Sleep(300ms)` poll with a ticker + select
+
+**Table-driven unit tests** added for all four internal packages (`*_test.go` alongside each package). Run with `make test`.
+
+### Makefile commands
+
+| Command | Action |
 |---|---|
-| `app.go` | Reduced to lifecycle + PickFolder (~37 lines) |
-| `models.go` | New — all type definitions |
-| `config.go` | New — all persistence logic |
-| `runner.go` | New — all PTY/execution logic |
-| `frontend/index.html` | Script tag: `src="main.js"` → `type="module" src="src/main.js"` |
-| `frontend/src/` | New directory with 9 ES modules (state, utils, terminal, commands, modals, shortcuts, resize, render, main) |
+| `make run` | Install wails CLI if needed, then `wails dev` |
+| `make fmt` | `gofmt -w` all `.go` files (skips `wailsjs/` generated files) |
+| `make test` | `go test ./internal/... -v` — runs all 25 table-driven tests |
 
 ---
 
@@ -429,11 +447,11 @@ cmdState per entry: { lines, collapsed, exitCode, stopped, running }
 
 | File | Change |
 |---|---|
-| `runner.go` | New `GetRunningCommands()` method — returns IDs of running processes (excludes `:post` suffixed post-hook entries) |
-| `frontend/src/terminal.js` | `setRowRunning()` writes `cmdState.running`; new `updateRunningCount()` updates sidebar header total, per-project count badges, and green dots |
-| `frontend/src/render.js` | `buildCmdRow()` applies `.running` from state; `renderMain()` calls `GetRunningCommands()` for re-sync; default state includes `running: false` |
-| `frontend/src/commands.js` | Default state in `runCommand()` includes `running: false` |
-| `frontend/src/main.js` | Calls `updateRunningCount()` on initial load |
+| `internal/runner/runner.go` | New `GetRunningCommands()` method — returns IDs of running processes (excludes `:post` suffixed post-hook entries) |
+| `frontend/src/components/Terminal.tsx` | `setRowRunning()` writes `cmdState.running`; new `updateRunningCount()` updates sidebar header total, per-project count badges, and green dots |
+| `frontend/src/components/CommandRow.tsx` | `buildCmdRow()` applies `.running` from state; `renderMain()` calls `GetRunningCommands()` for re-sync; default state includes `running: false` |
+| `frontend/src/lib/commands.ts` | Default state in `runCommand()` includes `running: false` |
+| `frontend/src/App.tsx` | Calls `updateRunningCount()` on initial load |
 | `frontend/index.html` | CSS for `.project-running-count` badge, `.has-running` green dot, collapsed sidebar hiding |
 
 ---
@@ -478,13 +496,13 @@ Internal: `App.ptmxWriters map[string]*os.File` stores the open PTY file descrip
 
 | File | Change |
 |---|---|
-| `models.go` | Added `Interactive bool` to `CommandConfig` |
+| `internal/models/models.go` | Added `Interactive bool` to `CommandConfig` |
 | `app.go` | `NewApp()` initializes `ptmxWriters` map; `App` struct gains `ptmxWriters map[string]*os.File` and `ptmxMu sync.RWMutex` |
-| `runner.go` | PTY reader switched from `bufio.Scanner` to raw reads; registers/deregisters PTY writer in `ptmxWriters`; new `SendInput()` exported method |
+| `internal/runner/runner.go` | PTY reader switched from `bufio.Scanner` to raw reads; registers/deregisters PTY writer in `ptmxWriters`; new `SendInput()` exported method |
 | `frontend/index.html` | `.terminal-stdin` input field (visible only when row is `.running`); `edit-interactive` checkbox in edit modal |
-| `frontend/src/render.js` | `buildCmdRow()` attaches keydown handler on stdin input (Enter / Ctrl+C / Ctrl+D); Stop button sends Ctrl+C first for interactive commands |
-| `frontend/src/modals.js` | `openEditModal()` populates `edit-interactive` checkbox from `cmd.interactive` |
-| `frontend/src/main.js` | Save handler reads `edit-interactive` and writes to `cmd.interactive` |
+| `frontend/src/components/CommandRow.tsx` | `buildCmdRow()` attaches keydown handler on stdin input (Enter / Ctrl+C / Ctrl+D); Stop button sends Ctrl+C first for interactive commands |
+| `frontend/src/components/modals/EditCommandModal.tsx` | `openEditModal()` populates `edit-interactive` checkbox from `cmd.interactive` |
+| `frontend/src/App.tsx` | Save handler reads `edit-interactive` and writes to `cmd.interactive` |
 
 ---
 
