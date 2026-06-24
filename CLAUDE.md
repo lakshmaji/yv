@@ -586,3 +586,37 @@ Window title and HTML `<title>` changed from "yv" to "Nicosia". The `Header.tsx`
 | `frontend/src/styles.css` | Removed header grid row (was `44px`); body grid now 2-row (`1fr 24px`); removed `#header` CSS; header padding-top 24px (windowed) / 12px (fullscreen); collapsed sidebar hides settings btn |
 | `frontend/src/components/Header.tsx` | Deleted |
 | `frontend/index.html` | `<title>yv</title>` → `<title>Nicosia</title>` |
+
+---
+
+## Notes: direnv + AWS SSO in pre-hooks
+
+Relevant when configuring pre-hook commands that need to load environment variables from `.envrc` before running a main command (e.g. `tilt up`).
+
+### Commands that do NOT trigger SSO / load env
+
+- `direnv allow .` — only writes a hash to `~/.config/direnv/allow/`. Does not evaluate `.envrc`. Exits immediately.
+- `eval "$(direnv hook zsh)"` — installs `_direnv_hook` into `precmd_functions`. In a non-interactive shell (`zsh -l -c ...`, which is how Nicosia runs all commands), `precmd_functions` are never called. The hook is defined but never fires. No SSO, no env vars loaded.
+
+### Commands that DO trigger SSO / load env
+
+- `eval "$(direnv export zsh)"` — evaluates `.envrc`. If `.envrc` triggers `aws sso login`, this blocks until browser auth completes. Env vars are applied to the current shell via `eval`. Downside: stdout is captured by `$()`, so the SSO URL won't be visible in the terminal (browser still opens via `open`).
+- `direnv exec . <cmd>` — evaluates `.envrc` with full visible output, triggers SSO with URL shown, waits for completion, then runs `<cmd>` with the loaded env. Cleanest approach.
+
+### PTY / browser note
+
+The `open` command works in any Mac process regardless of PTY context, so the browser will open correctly from within Nicosia's PTY-attached shell.
+
+### Recommended pattern
+
+Use `direnv exec .` as the main command wrapper instead of pre-hooks:
+
+Pre-hooks:
+1. `direnv allow .` ← only needed if `.envrc` might not be trusted yet
+
+Main command:
+```
+direnv exec . tilt up
+```
+
+Remove `eval "$(direnv hook zsh)"` from pre-hooks — it does nothing in a non-interactive shell and is misleading.
