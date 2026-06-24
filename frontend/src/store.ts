@@ -1,6 +1,6 @@
 import { createSignal, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { Project, CmdState, ShortcutState } from './types';
+import type { Project, CmdState, ShortcutState, ProcessStats } from './types';
 
 const DEFAULT_CMD_STATE: CmdState = {
   lines: [], collapsed: true, exitCode: null, stopped: false, running: false, trimmedCount: 0,
@@ -30,6 +30,9 @@ const listeners = new Map<string, { offOutput: () => void; offDone: () => void; 
 const [sidebarWidth, setSidebarWidth] = createSignal(220);
 const [groupsWidth, setGroupsWidth] = createSignal(140);
 const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+
+// Per-command resource stats (updated by resource-stats event)
+const [resourceStats, setResourceStats] = createSignal<Map<string, ProcessStats>>(new Map(), { equals: false });
 
 // Modal state
 const [editingCmd, setEditingCmd] = createSignal<string | null>(null);
@@ -116,4 +119,5 @@ export {
   settingsProjectId, setSettingsProjectId,
   selectedProject, visibleGroups, filteredCommands,
   runningCount, projectRunningCount,
+  resourceStats, setResourceStats,
 };

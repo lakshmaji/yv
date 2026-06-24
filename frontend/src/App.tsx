@@ -16,8 +16,9 @@ import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import {
-  setSidebarWidth, setGroupsWidth,
+  setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
+import type { ResourceStats, ProcessStats } from './types';
 
 function applyColumnWidths(collapsed: boolean, sw: number, gw: number) {
   const effectiveSw = collapsed ? 48 : sw;
@@ -62,16 +63,25 @@ export default function App() {
   }
 
   let unsubFullscreen: (() => void) | undefined;
+  let unsubResources: (() => void) | undefined;
 
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
     unsubFullscreen = runtime.EventsOn('fullscreen-changed', (isFs: boolean) => {
       document.body.classList.toggle('fullscreen', isFs);
     });
+    unsubResources = runtime.EventsOn('resource-stats', (stats: ResourceStats) => {
+      const map = new Map<string, ProcessStats>();
+      for (const p of (stats.commands || [])) {
+        map.set(p.cmdId, p);
+      }
+      setResourceStats(map);
+    });
   });
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeydown);
     unsubFullscreen?.();
+    unsubResources?.();
   });
 
   function handleSidebarResize() {

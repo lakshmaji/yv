@@ -1,7 +1,7 @@
 import { Show, createMemo } from 'solid-js';
-import { getCmdState, updateCmdState, setEditingCmd } from '../store';
+import { getCmdState, updateCmdState, setEditingCmd, resourceStats } from '../store';
 import { go } from '../wails';
-import { escHtml } from '../lib/utils';
+import { escHtml, formatBytes } from '../lib/utils';
 import { runCommand } from '../lib/commands';
 import Terminal from './Terminal';
 import type { CommandConfig } from '../types';
@@ -62,6 +62,8 @@ export default function CommandRow(props: CommandRowProps) {
     setEditingCmd(props.cmd.id);
   }
 
+  const cmdStats = createMemo(() => resourceStats().get(props.cmd.id));
+
   const preCount = () => props.cmd.preCommands?.length || 0;
   const postCount = () => props.cmd.postCommands?.length || 0;
 
@@ -87,7 +89,13 @@ export default function CommandRow(props: CommandRowProps) {
         <Show when={hookBadge()}>
           <span class="pre-count-badge">{hookBadge()}</span>
         </Show>
-        <span class="cmd-resource-badge" id={`res-${props.cmd.id}`} style={{ display: 'none' }}></span>
+        <Show when={state().running && cmdStats()}>
+          {(s) => (
+            <span class="cmd-resource-badge">
+              {formatBytes(s().rss)} · {s().cpu.toFixed(1)}%
+            </span>
+          )}
+        </Show>
         <Show when={state().collapsed && state().lines.length > 0}>
           <span class="line-hint">
             {(state().lines.length + state().trimmedCount).toLocaleString()} lines
