@@ -1,6 +1,6 @@
 import { Show, For, createSignal } from 'solid-js';
 import {
-  projects, selectedProject, selectedGroup,
+  projects, setProjects, selectedProject, selectedGroup,
   filteredCommands, setSelectedGroup,
 } from '../store';
 import { go } from '../wails';
@@ -45,11 +45,12 @@ export default function MainPanel() {
     if (!label || !command) return;
 
     const newCmd = { id: uid(), label, command, group, workingDir: '' };
-    p.commands.push(newCmd);
+    const projIdx = projects.findIndex(pr => pr.id === p.id);
+    setProjects(projIdx, 'commands', (cmds: any[]) => [...cmds, newCmd]);
     const result = await go.SaveProjects(projects as any);
     if (result !== 'ok') {
       alert('Save failed: ' + result);
-      p.commands.pop();
+      setProjects(projIdx, 'commands', (cmds: any[]) => cmds.filter((c: any) => c.id !== newCmd.id));
       return;
     }
     labelRef!.value = '';

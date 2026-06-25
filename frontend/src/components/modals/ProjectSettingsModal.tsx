@@ -1,10 +1,11 @@
 import { Show, createSignal, createEffect } from 'solid-js';
-import { projects, setProjects, settingsProjectId, setSettingsProjectId } from '../../store';
+import { projects, setProjects, settingsProjectId, setSettingsProjectId, setSelectedId } from '../../store';
 import { go } from '../../wails';
 
 export default function ProjectSettingsModal() {
   const [name, setName] = createSignal('');
   const [dir, setDir] = createSignal('');
+  const [confirmingDelete, setConfirmingDelete] = createSignal(false);
 
   const project = () => {
     const id = settingsProjectId();
@@ -20,6 +21,7 @@ export default function ProjectSettingsModal() {
   });
 
   function close() {
+    setConfirmingDelete(false);
     setSettingsProjectId(null);
   }
 
@@ -42,6 +44,17 @@ export default function ProjectSettingsModal() {
   async function handleBrowse() {
     const picked = await go.PickFolder();
     if (picked) setDir(picked);
+  }
+
+  async function handleDelete() {
+    const p = project();
+    if (!p) return;
+    const id = p.id;
+    const filtered = projects.filter(pr => pr.id !== id);
+    setProjects(filtered as any);
+    await go.SaveProjects(filtered as any);
+    close();
+    setSelectedId(filtered[0]?.id ?? null);
   }
 
   async function handleExport(format: string) {
@@ -80,6 +93,18 @@ export default function ProjectSettingsModal() {
               <button onClick={() => handleExport('json')}>↑ Export as JSON</button>
               <button onClick={() => handleExport('yaml')}>↑ Export as YAML</button>
             </div>
+          </div>
+          <div class="danger-zone">
+            <Show when={!confirmingDelete()}>
+              <button class="btn-danger" onClick={() => setConfirmingDelete(true)}>Delete Project</button>
+            </Show>
+            <Show when={confirmingDelete()}>
+              <div class="delete-confirm-row">
+                <span class="delete-confirm-label">Delete project "{project()?.name}"?</span>
+                <button class="btn-cancel" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+                <button class="btn-danger" onClick={handleDelete}>Yes, delete</button>
+              </div>
+            </Show>
           </div>
           <div class="modal-footer">
             <button class="btn-cancel" onClick={close}>Cancel</button>

@@ -1,10 +1,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import type { Project } from '../types';
 import {
-  projects,
+  projects, setProjects,
   selectedGroup, setSelectedGroup,
   visibleGroups,
   selectedProject,
+  selectedId,
 } from '../store';
 import { go } from '../wails';
 import ResizeHandle from './ResizeHandle';
@@ -23,17 +24,33 @@ export default function GroupsPanel(props: GroupsPanelProps) {
   async function addGroup(name: string): Promise<void> {
     const proj = selectedProject();
     if (!proj) return;
-
-    if (!proj.groups) proj.groups = [];
-    if (proj.groups.includes(name)) return;
-
-    proj.groups.push(name);
-
+    if ((proj.groups || []).includes(name)) return;
+    const projIdx = projects.findIndex(p => p.id === proj.id);
+    setProjects(projIdx, 'groups', (groups: string[]) => [...(groups || []), name]);
     const result = await go.SaveProjects(projects as Project[]);
     if (result !== 'ok') {
       alert('Save failed: ' + result);
-      proj.groups.pop();
+      setProjects(projIdx, 'groups', (groups: string[]) => groups.filter(g => g !== name));
     }
+  }
+
+  async function handleDeleteGroup(groupName: string): Promise<void> {
+    const proj = selectedProject();
+    if (!proj) return;
+    const projIdx = projects.findIndex(pr => pr.id === selectedId());
+    if (projIdx === -1) return;
+    setProjects(projIdx, 'groups', (groups: string[]) => (groups || []).filter(g => g !== groupName));
+    setProjects(projIdx, 'commands', (cmds: any[]) =>
+      cmds.map((c: any) => c.group === groupName ? { ...c, group: '' } : c)
+    );
+    if (projects[projIdx].groupPaths) {
+      const newPaths = { ...projects[projIdx].groupPaths };
+      delete newPaths[groupName];
+      setProjects(projIdx, 'groupPaths', newPaths);
+    }
+    const result = await go.SaveProjects(projects as Project[]);
+    if (result !== 'ok') { alert('Save failed: ' + result); return; }
+    if (selectedGroup() === groupName) setSelectedGroup('All');
   }
 
   async function handleAddGroup(): Promise<void> {
@@ -70,7 +87,15 @@ export default function GroupsPanel(props: GroupsPanelProps) {
               }}
               onClick={() => setSelectedGroup(g)}
             >
+              <span class="group-dot" />
               {g}
+              <Show when={g !== 'All'}>
+                <button
+                  class="group-delete-btn"
+                  title={`Delete group "${g}"`}
+                  onClick={e => { e.stopPropagation(); handleDeleteGroup(g); }}
+                >✕</button>
+              </Show>
             </div>
           )}
         </For>

@@ -1,5 +1,5 @@
 import { Show, For, createSignal, createEffect } from 'solid-js';
-import { projects, selectedProject, editingCmd, setEditingCmd } from '../../store';
+import { projects, setProjects, selectedProject, selectedId, editingCmd, setEditingCmd } from '../../store';
 import { go } from '../../wails';
 import type { CommandConfig, PostCommand } from '../../types';
 
@@ -11,6 +11,7 @@ export default function EditCommandModal() {
   const [interactive, setInteractive] = createSignal(false);
   const [preHooks, setPreHooks] = createSignal<string[]>([]);
   const [postHooks, setPostHooks] = createSignal<{ command: string; timeout: string }[]>([]);
+  const [confirmingDelete, setConfirmingDelete] = createSignal(false);
 
   const cmd = (): CommandConfig | null => {
     const proj = selectedProject();
@@ -37,6 +38,7 @@ export default function EditCommandModal() {
   });
 
   function close() {
+    setConfirmingDelete(false);
     setEditingCmd(null);
   }
 
@@ -69,6 +71,21 @@ export default function EditCommandModal() {
       alert('Save failed: ' + result);
       return;
     }
+    close();
+  }
+
+  async function handleDelete() {
+    const c = cmd();
+    if (!c) return;
+    const cmdId = c.id;
+    const projIdx = projects.findIndex(p => p.id === selectedId());
+    if (projIdx === -1) return;
+    setProjects(projIdx, 'commands', (cmds: any[]) => cmds.filter((cm: any) => cm.id !== cmdId));
+    setProjects(projIdx, 'shortcuts', (shortcuts: any[] | undefined) =>
+      (shortcuts || []).map((s: any) => ({ ...s, commandIds: s.commandIds.filter((id: string) => id !== cmdId) }))
+    );
+    const result = await go.SaveProjects(projects as any);
+    if (result !== 'ok') { alert('Save failed: ' + result); return; }
     close();
   }
 
@@ -185,6 +202,18 @@ export default function EditCommandModal() {
             </button>
           </div>
 
+          <div class="danger-zone">
+            <Show when={!confirmingDelete()}>
+              <button class="btn-danger" onClick={() => setConfirmingDelete(true)}>Delete Command</button>
+            </Show>
+            <Show when={confirmingDelete()}>
+              <div class="delete-confirm-row">
+                <span class="delete-confirm-label">Delete "{cmd()?.label}"?</span>
+                <button class="btn-cancel" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+                <button class="btn-danger" onClick={handleDelete}>Yes, delete</button>
+              </div>
+            </Show>
+          </div>
           <div class="modal-footer">
             <button class="btn-cancel" onClick={close}>Cancel</button>
             <button class="btn-primary" onClick={handleSave}>Save</button>
