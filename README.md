@@ -19,6 +19,9 @@ This is an open source project.
 
 ---
 
+![sample](./.github/sample.png)
+
+
 ## Requirements
 
 - macOS (ARM64 / Apple Silicon)

@@ -28,7 +28,7 @@ const listeners = new Map<string, { offOutput: () => void; offDone: () => void; 
 
 // Layout
 const [sidebarWidth, setSidebarWidth] = createSignal(220);
-const [groupsWidth, setGroupsWidth] = createSignal(140);
+const [groupsWidth, setGroupsWidth] = createSignal(220);
 const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
 
 // Per-command resource stats (updated by resource-stats event)

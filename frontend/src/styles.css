@@ -13,7 +13,7 @@
       --radius:   6px;
       --sidebar:  220px;
       --sidebar-collapsed: 48px;
-      --groups:   140px;
+      --groups:   220px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }

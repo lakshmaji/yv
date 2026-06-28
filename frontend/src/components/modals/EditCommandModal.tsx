@@ -53,18 +53,25 @@ export default function EditCommandModal() {
     const co = command().trim();
     if (!l || !co) return;
 
-    c.label = l;
-    c.group = group().trim();
-    c.command = co;
-    c.workingDir = workingDir().trim();
-    c.interactive = interactive();
-    c.preCommands = preHooks().filter(h => h.trim());
-    c.postCommands = postHooks()
-      .filter(h => h.command.trim())
-      .map(h => ({
-        command: h.command.trim(),
-        timeout: h.timeout ? parseInt(h.timeout, 10) || 0 : 0,
-      }));
+    const projIdx = projects.findIndex(p => p.id === selectedId());
+    if (projIdx === -1) return;
+    const cmdIdx = projects[projIdx].commands.findIndex(cm => cm.id === c.id);
+    if (cmdIdx === -1) return;
+
+    setProjects(projIdx, 'commands', cmdIdx, {
+      label: l,
+      group: group().trim(),
+      command: co,
+      workingDir: workingDir().trim(),
+      interactive: interactive(),
+      preCommands: preHooks().filter(h => h.trim()),
+      postCommands: postHooks()
+        .filter(h => h.command.trim())
+        .map(h => ({
+          command: h.command.trim(),
+          timeout: h.timeout ? parseInt(h.timeout, 10) || 0 : 0,
+        })),
+    });
 
     const result = await go.SaveProjects(projects as any);
     if (result !== 'ok') {
