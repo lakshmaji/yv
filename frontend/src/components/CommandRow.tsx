@@ -85,9 +85,6 @@ export default function CommandRow(props: CommandRowProps) {
         <span class="cmd-spinner"><span class="loader"></span></span>
         <span class="cmd-label">{props.cmd.label}</span>
         <span class="cmd-snippet" title={props.cmd.command}>{props.cmd.command}</span>
-        <Show when={props.cmd.workingDir}>
-          <span class="cmd-dir" title={props.cmd.workingDir}>{props.cmd.workingDir}</span>
-        </Show>
         <Show when={hookBadge()}>
           <span class="pre-count-badge">{hookBadge()}</span>
         </Show>
