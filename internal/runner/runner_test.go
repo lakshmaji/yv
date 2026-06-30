@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"nicosia/internal/models"
+	"yv/internal/models"
 )
 
 // injectProcess adds a fake process entry for testing state queries.

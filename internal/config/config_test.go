@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"nicosia/internal/models"
+	"yv/internal/models"
 )
 
 func TestMarshalUnmarshalProjects(t *testing.T) {
@@ -143,7 +143,7 @@ func TestConfigPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("configPath: %v", err)
 	}
-	if !strings.HasSuffix(path, "nicosia/projects.json") {
+	if !strings.HasSuffix(path, "yv/projects.json") {
 		t.Errorf("unexpected path: %q", path)
 	}
 }

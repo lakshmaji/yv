@@ -13,6 +13,7 @@ interface GoApp {
   StopAllCommands(): Promise<void>;
   GetRunningCommands(): Promise<string[]>;
   GetResourceStats(): Promise<main.ResourceStats>;
+  CheckPath(path: string): Promise<boolean>;
   PickFolder(): Promise<string>;
   ExportProjects(): Promise<string>;
   ExportProject(id: string, format: string): Promise<string>;

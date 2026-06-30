@@ -3,7 +3,7 @@ package main
 // Type aliases re-export internal/models types under package main so that
 // Wails generates TypeScript bindings in the "main" namespace, keeping the
 // frontend unchanged after the backend package restructure.
-import models "nicosia/internal/models"
+import models "yv/internal/models"
 
 type (
 	Shortcut      = models.Shortcut

@@ -3,6 +3,7 @@ import {
   selectedGroup, selectedProject,
   getCmdState, updateCmdState, listeners,
   updateShortcutState,
+  projects, setProjects,
 } from '../store';
 import type { CommandConfig, Shortcut, CommandResult } from '../types';
 
@@ -84,9 +85,34 @@ export async function runCommand(cmd: CommandConfig): Promise<number> {
   try {
     const group = selectedGroup();
     const effectiveGroup = group !== 'All' ? group : cmd.group;
-    const workingDir = (effectiveGroup && proj.groupPaths?.[effectiveGroup])
+    let workingDir = (effectiveGroup && proj.groupPaths?.[effectiveGroup])
       ? proj.groupPaths[effectiveGroup]
       : proj.workingDir;
+
+    const pathOk = await go.CheckPath(workingDir);
+    if (!pathOk) {
+      const picked = await go.PickFolder();
+      if (!picked) {
+        teardownListeners(cmd.id);
+        updateCmdState(cmd.id, { running: false, exitCode: -1 });
+        resolveDone!(-1);
+        return donePromise;
+      }
+      workingDir = picked;
+      // Persist the chosen path so future runs use it automatically.
+      const all = JSON.parse(JSON.stringify([...projects]));
+      const idx = all.findIndex((p: any) => p.id === proj.id);
+      if (idx !== -1) {
+        if (effectiveGroup) {
+          all[idx].groupPaths = { ...(all[idx].groupPaths || {}), [effectiveGroup]: picked };
+        } else {
+          all[idx].workingDir = picked;
+        }
+        setProjects(all);
+        go.SaveProjects(all);
+      }
+    }
+
     await go.ExecuteCommand(cmd as any, workingDir, runID);
   } catch (err) {
     updateCmdState(cmd.id, s => ({

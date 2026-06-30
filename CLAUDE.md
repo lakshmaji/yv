@@ -1,4 +1,4 @@
-# Nicosia — Context for Next Session
+# yv — Context for Next Session
 
 ## What this app is
 
@@ -9,7 +9,7 @@ Wails v2 desktop app (macOS ARM64) — a local dev command runner. Users create 
 All files are committed. The app compiles and runs with `make run` from the project root.
 
 ```
-nicosia/
+yv/
 ├── main.go          — Wails bootstrap, mac title bar config, quit dialog
 ├── app.go           — App facade: NewApp, startup, PickFolder, startFullscreenMonitor,
 │                      thin delegating wrappers for all Wails-bound methods
@@ -59,7 +59,7 @@ nicosia/
                 └── ProjectSettingsModal.tsx — project name, working dir, delete
 ```
 
-Config persisted at: `~/Library/Application Support/nicosia/projects.json`
+Config persisted at: `~/Library/Application Support/yv/projects.json`
 
 ### Current data model
 
@@ -181,7 +181,7 @@ Format is determined by the file extension chosen in the save/open dialog. No se
 
 ### Behaviour
 
-- **Export**: opens a native save dialog (`nicosia-projects.json` default name, JSON and YAML filters). Writes all current projects to the chosen file.
+- **Export**: opens a native save dialog (`yv-projects.json` default name, JSON and YAML filters). Writes all current projects to the chosen file.
 - **Import**: opens a native open dialog (JSON/YAML filter). Merges incoming projects into the existing config by ID — projects with a new ID are appended, projects whose ID already exists are skipped (no overwrite). Reports a summary: `"Imported N project(s), skipped M (already exist)"`.
 - Cancelling either dialog is a silent no-op.
 
@@ -574,18 +574,18 @@ When the sidebar is collapsed, the following are hidden via CSS:
 
 ### App renamed
 
-Window title and HTML `<title>` changed from "yv" to "Nicosia". The `Header.tsx` component (which rendered the old full-width "yv" title bar) was deleted; its grid row removed from the body layout.
+Window title and HTML `<title>` changed from "yv" to "yv". The `Header.tsx` component (which rendered the old full-width "yv" title bar) was deleted; its grid row removed from the body layout.
 
 ### Files changed
 
 | File | Change |
 |---|---|
-| `main.go` | Title `"yv"` → `"Nicosia"`; quit dialog title updated; `TitleBarHiddenInset()` → custom `TitleBar{}` with transparent + hidden title |
+| `main.go` | Title `"yv"` → `"yv"`; quit dialog title updated; `TitleBarHiddenInset()` → custom `TitleBar{}` with transparent + hidden title |
 | `app.go` | New `startFullscreenMonitor()` goroutine; called from `startup()` |
 | `frontend/src/App.tsx` | Removed `Header` import; added `fullscreen-changed` event listener toggling `body.fullscreen` class |
 | `frontend/src/styles.css` | Removed header grid row (was `44px`); body grid now 2-row (`1fr 24px`); removed `#header` CSS; header padding-top 24px (windowed) / 12px (fullscreen); collapsed sidebar hides settings btn |
 | `frontend/src/components/Header.tsx` | Deleted |
-| `frontend/index.html` | `<title>yv</title>` → `<title>Nicosia</title>` |
+| `frontend/index.html` | `<title>yv</title>` → `<title>yv</title>` |
 
 ---
 
@@ -618,7 +618,7 @@ Relevant when configuring pre-hook commands that need to load environment variab
 ### Commands that do NOT trigger SSO / load env
 
 - `direnv allow .` — only writes a hash to `~/.config/direnv/allow/`. Does not evaluate `.envrc`. Exits immediately.
-- `eval "$(direnv hook zsh)"` — installs `_direnv_hook` into `precmd_functions`. In a non-interactive shell (`zsh -l -c ...`, which is how Nicosia runs all commands), `precmd_functions` are never called. The hook is defined but never fires. No SSO, no env vars loaded.
+- `eval "$(direnv hook zsh)"` — installs `_direnv_hook` into `precmd_functions`. In a non-interactive shell (`zsh -l -c ...`, which is how yv runs all commands), `precmd_functions` are never called. The hook is defined but never fires. No SSO, no env vars loaded.
 
 ### Commands that DO trigger SSO / load env
 
@@ -627,7 +627,7 @@ Relevant when configuring pre-hook commands that need to load environment variab
 
 ### PTY / browser note
 
-The `open` command works in any Mac process regardless of PTY context, so the browser will open correctly from within Nicosia's PTY-attached shell.
+The `open` command works in any Mac process regardless of PTY context, so the browser will open correctly from within yv's PTY-attached shell.
 
 ### Recommended pattern
 

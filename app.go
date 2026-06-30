@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"nicosia/internal/config"
-	"nicosia/internal/models"
-	"nicosia/internal/monitor"
-	"nicosia/internal/runner"
+	"yv/internal/config"
+	"yv/internal/models"
+	"yv/internal/monitor"
+	"yv/internal/runner"
 )
 
 // App is the Wails-bound facade. All business logic lives in the internal packages;
@@ -64,6 +65,16 @@ func (a *App) startFullscreenMonitor(ctx context.Context) {
 // StopAllCommands kills all running command processes. Called from main.go on quit.
 func (a *App) StopAllCommands() {
 	a.runner.StopAll()
+}
+
+// CheckPath returns true if path is an existing readable directory.
+// An empty path is considered valid (the runner inherits the parent CWD).
+func (a *App) CheckPath(path string) bool {
+	if path == "" {
+		return true
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // PickFolder opens a native macOS folder picker.

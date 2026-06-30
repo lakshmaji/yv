@@ -11,7 +11,7 @@ import (
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
-	"nicosia/internal/models"
+	"yv/internal/models"
 )
 
 // Store is a stateless persistence layer. All state lives on disk.
@@ -116,7 +116,7 @@ func (s *Store) ExportProject(ctx context.Context, projectID, format string) (st
 func (s *Store) ExportProjects(ctx context.Context) (string, error) {
 	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "Export Projects",
-		DefaultFilename: "nicosia-projects.json",
+		DefaultFilename: "yv-projects.json",
 		Filters: []wailsRuntime.FileFilter{
 			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
 			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},
@@ -244,7 +244,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("UserConfigDir: %w", err)
 	}
-	appDir := filepath.Join(dir, "nicosia")
+	appDir := filepath.Join(dir, "yv")
 	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		return "", fmt.Errorf("MkdirAll: %w", err)
 	}

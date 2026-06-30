@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"nicosia/internal/models"
+	"yv/internal/models"
 )
 
 func TestProjectJSONRoundTrip(t *testing.T) {

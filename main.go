@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 
 	"github.com/wailsapp/wails/v2"
@@ -13,13 +14,18 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-//go:embed all:frontend
+//go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
 	app := NewApp()
 
-	err := wails.Run(&options.App{
+	distFS, err := fs.Sub(assets, "frontend/dist")
+	if err != nil {
+		log.Fatal("frontend/dist embed:", err)
+	}
+
+	err = wails.Run(&options.App{
 		Title:     "yv",
 		Width:     1200,
 		Height:    800,
@@ -27,7 +33,7 @@ func main() {
 		MinHeight: 600,
 
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets: distFS,
 		},
 
 		Bind: []any{app},

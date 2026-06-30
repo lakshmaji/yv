@@ -13,7 +13,7 @@ import (
 
 	"github.com/creack/pty"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"nicosia/internal/models"
+	"yv/internal/models"
 )
 
 // ansiRe matches ANSI/VT escape sequences emitted by PTY-attached processes.
@@ -347,9 +347,26 @@ func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDi
 	if shell == "" {
 		shell = "zsh"
 	}
-	// -l (login) sources /etc/zprofile + ~/.zprofile so Homebrew PATH is available.
-	c := exec.Command(shell, "-l", "-c", shellCmd)
+	// Use a non-login shell to avoid sourcing ~/.zprofile, which runs
+	// `brew shellenv` and prints a spurious CWD-readability warning to stderr.
+	// The parent process (launched from the user's terminal) already carries
+	// the full PATH; we prepend Homebrew paths as a safety net for app-bundle launches.
+	c := exec.Command(shell, "-c", shellCmd)
 	c.Dir = workDir
+	env := os.Environ()
+	const homebrewPaths = "/opt/homebrew/bin:/opt/homebrew/sbin"
+	added := false
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + homebrewPaths + ":" + e[5:]
+			added = true
+			break
+		}
+	}
+	if !added {
+		env = append(env, "PATH="+homebrewPaths)
+	}
+	c.Env = env
 
 	ptmx, startErr := pty.Start(c)
 	if startErr != nil {

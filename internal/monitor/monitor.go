@@ -9,8 +9,8 @@ import (
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"nicosia/internal/models"
-	"nicosia/internal/runner"
+	"yv/internal/models"
+	"yv/internal/runner"
 )
 
 type Monitor struct {
