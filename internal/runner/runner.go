@@ -19,6 +19,35 @@ import (
 // ansiRe matches ANSI/VT escape sequences emitted by PTY-attached processes.
 var ansiRe = regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`)
 
+// loginPath captures the user's full login-shell PATH exactly once at startup.
+// We run "zsh -l -c 'echo $PATH'" silently (stderr discarded) so the brew
+// shellenv warning never reaches any terminal row. The result gives every tool
+// the user has — Homebrew, Android SDK, rbenv, nvm, etc. — without needing to
+// hard-code individual tool directories.
+var (
+	loginPathOnce  sync.Once
+	loginPathValue string
+)
+
+func resolveLoginPath() string {
+	loginPathOnce.Do(func() {
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "zsh"
+		}
+		// stderr goes to /dev/null so the brew CWD warning is never visible.
+		cmd := exec.Command(shell, "-l", "-c", "echo $PATH")
+		cmd.Stderr = nil
+		if out, err := cmd.Output(); err == nil {
+			loginPathValue = strings.TrimSpace(string(out))
+		}
+		if loginPathValue == "" {
+			loginPathValue = os.Getenv("PATH")
+		}
+	})
+	return loginPathValue
+}
+
 // ptmxBufPool reuses 32 KB read buffers across PTY sessions to reduce allocations.
 var ptmxBufPool = sync.Pool{New: func() any { return make([]byte, 32*1024) }}
 
@@ -347,24 +376,25 @@ func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDi
 	if shell == "" {
 		shell = "zsh"
 	}
-	// Use a non-login shell to avoid sourcing ~/.zprofile, which runs
-	// `brew shellenv` and prints a spurious CWD-readability warning to stderr.
-	// The parent process (launched from the user's terminal) already carries
-	// the full PATH; we prepend Homebrew paths as a safety net for app-bundle launches.
+	// Use a non-login shell so ~/.zprofile is never sourced during command
+	// execution — that's what triggered the brew CWD warning in terminal output.
+	// Instead, inject the full login-shell PATH (captured once at startup) so
+	// every user tool (adb, emulator, gradlew, brew, rbenv, nvm…) is reachable
+	// regardless of whether the app was launched from a terminal or a DMG.
 	c := exec.Command(shell, "-c", shellCmd)
 	c.Dir = workDir
 	env := os.Environ()
-	const homebrewPaths = "/opt/homebrew/bin:/opt/homebrew/sbin"
-	added := false
+	fullPath := resolveLoginPath()
+	replaced := false
 	for i, e := range env {
 		if strings.HasPrefix(e, "PATH=") {
-			env[i] = "PATH=" + homebrewPaths + ":" + e[5:]
-			added = true
+			env[i] = "PATH=" + fullPath
+			replaced = true
 			break
 		}
 	}
-	if !added {
-		env = append(env, "PATH="+homebrewPaths)
+	if !replaced {
+		env = append(env, "PATH="+fullPath)
 	}
 	c.Env = env
 
