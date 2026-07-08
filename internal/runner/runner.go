@@ -36,7 +36,7 @@ func resolveLoginPath() string {
 			shell = "zsh"
 		}
 		// stderr goes to /dev/null so the brew CWD warning is never visible.
-		cmd := exec.Command(shell, "-l", "-c", "echo $PATH")
+		cmd := exec.Command(shell, "-l", "-i", "-c", "echo $PATH")
 		cmd.Stderr = nil
 		if out, err := cmd.Output(); err == nil {
 			loginPathValue = strings.TrimSpace(string(out))
