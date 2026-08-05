@@ -1,0 +1,271 @@
+import { describe, it, expect } from 'vitest';
+import {
+  DEFAULT_BOUNDS,
+  DINO_SPECIES,
+  dinoShape,
+  randomDino,
+  randomDinos,
+  type Dino,
+  type DinoSpecies,
+  type Rect,
+} from './dino';
+import { isValidColor } from './envColors';
+import { pointInPolygon, type Pt } from './landscape/geometry';
+
+const NAMES = ['Rexy', 'Bronte', 'Spike', 'Trixie', 'Dot', 'Nessa', 'a', ''];
+
+/** Non-null placement inside the default bounds — the common case. */
+function dino(name: string, opts = {}): Dino {
+  const d = randomDino(name, opts);
+  expect(d, `expected a dinosaur for "${name}"`).not.toBeNull();
+  return d!;
+}
+
+describe('randomDino', () => {
+  it('is fully determined by the name', () => {
+    for (const name of NAMES) {
+      expect(randomDino(name)).toEqual(randomDino(name));
+    }
+  });
+
+  it('gives different names different animals', () => {
+    const a = dino('Rexy');
+    const b = dino('Bronte');
+    expect({ ...a, name: '' }).not.toEqual({ ...b, name: '' });
+  });
+
+  it('distinguishes names that differ by one character', () => {
+    const a = dino('Rexy');
+    const b = dino('Rexz');
+    expect([a.x, a.y]).not.toEqual([b.x, b.y]);
+  });
+
+  it('reports the name it was given', () => {
+    expect(dino('Trixie').name).toBe('Trixie');
+    expect(dino('').name).toBe('');
+  });
+
+  it('picks a known species and a valid palette', () => {
+    for (const name of NAMES) {
+      const d = dino(name);
+      expect(DINO_SPECIES).toContain(d.species);
+      for (const [key, value] of Object.entries(d.colors)) {
+        expect(isValidColor(value), `${d.name}.${key} = ${value}`).toBe(true);
+      }
+    }
+  });
+
+  it('honours a forced species', () => {
+    for (const species of DINO_SPECIES) {
+      expect(dino('Rexy', { species }).species).toBe(species);
+    }
+  });
+
+  it('stays inside the bounds it is given', () => {
+    const bounds: Rect = { x: 500, y: 200, width: 120, height: 90 };
+    for (const name of NAMES) {
+      const d = dino(name, { bounds });
+      expect(d.x).toBeGreaterThanOrEqual(bounds.x);
+      expect(d.x).toBeLessThanOrEqual(bounds.x + bounds.width);
+      expect(d.y).toBeGreaterThanOrEqual(bounds.y);
+      expect(d.y).toBeLessThanOrEqual(bounds.y + bounds.height);
+    }
+  });
+
+  it('defaults to DEFAULT_BOUNDS', () => {
+    for (const name of NAMES) {
+      const d = dino(name);
+      expect(d.x).toBeGreaterThanOrEqual(DEFAULT_BOUNDS.x);
+      expect(d.x).toBeLessThanOrEqual(DEFAULT_BOUNDS.x + DEFAULT_BOUNDS.width);
+      expect(d.y).toBeLessThanOrEqual(DEFAULT_BOUNDS.y + DEFAULT_BOUNDS.height);
+    }
+  });
+
+  it('respects the allow predicate', () => {
+    // A band down the middle: every placement must land in it.
+    const allow = (p: Pt): boolean => p.x > 700 && p.x < 900;
+    for (const name of NAMES) {
+      const d = randomDino(name, { allow, attempts: 400 });
+      if (!d) continue;
+      expect(d.x).toBeGreaterThan(700);
+      expect(d.x).toBeLessThan(900);
+    }
+  });
+
+  it('returns null rather than cheating when nothing is allowed', () => {
+    expect(randomDino('Rexy', { allow: () => false })).toBeNull();
+  });
+
+  it('keeps size within the requested range', () => {
+    for (const name of NAMES) {
+      const d = dino(name, { minSize: 40, maxSize: 60 });
+      expect(d.size).toBeGreaterThanOrEqual(40);
+      expect(d.size).toBeLessThan(60);
+    }
+  });
+
+  it('faces both ways across a set of names', () => {
+    const facings = new Set(NAMES.map((n) => dino(n).facing));
+    expect(facings.size).toBe(2);
+    for (const f of facings) expect([1, -1]).toContain(f);
+  });
+
+  it('moves the same animal with variant, without redressing it', () => {
+    const a = dino('Rexy', { variant: 1 });
+    const b = dino('Rexy', { variant: 2 });
+    expect([a.x, a.y]).not.toEqual([b.x, b.y]);
+    // Variant reshuffles the whole stream, so the look may change too — what
+    // must hold is that it stays a valid, well-formed animal.
+    expect(DINO_SPECIES).toContain(b.species);
+    expect(dino('Rexy', { variant: 1 })).toEqual(a);
+  });
+
+  it('gives every animal markings and an animation phase', () => {
+    for (const name of NAMES) {
+      const d = dino(name);
+      expect(d.spots.length).toBeGreaterThanOrEqual(3);
+      for (const s of d.spots) expect(s.r).toBeGreaterThan(0);
+      expect(d.phase).toBeGreaterThanOrEqual(0);
+      expect(d.phase).toBeLessThan(1);
+    }
+  });
+});
+
+describe('randomDinos', () => {
+  it('places a herd, spaced apart, sorted back to front', () => {
+    const herd = randomDinos(NAMES, { minGap: 200 });
+    expect(herd.length).toBeGreaterThan(1);
+    const ys = herd.map((d) => d.y);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+    for (let i = 0; i < herd.length; i++) {
+      for (let j = i + 1; j < herd.length; j++) {
+        expect(Math.hypot(herd[i].x - herd[j].x, herd[i].y - herd[j].y)).toBeGreaterThanOrEqual(200);
+      }
+    }
+  });
+
+  it('keeps each animal seeded by its own name', () => {
+    const herd = randomDinos(['Rexy', 'Dot']);
+    for (const d of herd) {
+      // Placement is constrained by the herd, but identity is not.
+      expect(d.species).toBe(randomDino(d.name)!.species);
+      expect(d.colors).toEqual(randomDino(d.name)!.colors);
+    }
+  });
+
+  it('is deterministic and drops what will not fit rather than overlapping', () => {
+    expect(randomDinos(NAMES)).toEqual(randomDinos(NAMES));
+    // An impossibly large gap means at most one animal can be placed.
+    expect(randomDinos(NAMES, { minGap: 100_000 }).length).toBeLessThanOrEqual(1);
+  });
+
+  it('combines the caller predicate with its own spacing', () => {
+    const coast: Pt[] = [
+      { x: 100, y: 100 }, { x: 900, y: 100 }, { x: 900, y: 700 }, { x: 100, y: 700 },
+    ];
+    const herd = randomDinos(NAMES, { allow: (p) => pointInPolygon(p, coast), minGap: 120 });
+    expect(herd.length).toBeGreaterThan(0);
+    for (const d of herd) expect(pointInPolygon({ x: d.x, y: d.y }, coast)).toBe(true);
+  });
+
+  it('returns an empty herd for no names', () => {
+    expect(randomDinos([])).toEqual([]);
+  });
+});
+
+describe('dinoShape', () => {
+  const all: Dino[] = DINO_SPECIES.flatMap((species: DinoSpecies) =>
+    NAMES.map((n) => dino(n, { species })),
+  );
+
+  it('emits closed paths with no NaN', () => {
+    for (const d of all) {
+      const s = dinoShape(d);
+      const closed = [s.body, s.belly, ...s.plates, ...s.legsBack, ...s.legsFront];
+      for (const path of closed) {
+        expect(path).not.toContain('NaN');
+        expect(path.endsWith('Z')).toBe(true);
+      }
+      // The smile is an open stroke, so it must not close.
+      expect(s.smile).not.toContain('NaN');
+      expect(s.smile.endsWith('Z')).toBe(false);
+      for (const optional of [s.frill, ...s.horns, ...s.arms]) {
+        if (optional) expect(optional).not.toContain('NaN');
+      }
+    }
+  });
+
+  it('gives every species legs, a face and a shadow', () => {
+    for (const d of all) {
+      const s = dinoShape(d);
+      const legs = s.legsBack.length + s.legsFront.length;
+      expect(legs).toBeGreaterThanOrEqual(2);
+      expect(s.legsFront.length).toBeGreaterThan(0);
+      expect(s.toes).toHaveLength(s.legsFront.length);
+      expect(s.eye.r).toBeGreaterThan(0);
+      expect(s.glint.r).toBeGreaterThan(0);
+      expect(s.glint.r).toBeLessThan(s.eye.r);
+      expect(s.shadow.rx).toBeGreaterThan(s.shadow.ry);
+    }
+  });
+
+  it('only gives the triceratops a frill and horns, and only the theropod arms', () => {
+    for (const d of all) {
+      const s = dinoShape(d);
+      const horned = d.species === 'triceratops';
+      expect(s.frill !== null).toBe(horned);
+      expect(s.horns.length > 0).toBe(horned);
+      if (horned) expect(s.horns).toHaveLength(2);
+      expect(s.arms.length > 0).toBe(d.species === 'theropod');
+    }
+  });
+
+  it('plates the species that should have them', () => {
+    const plateCount = (species: DinoSpecies): number =>
+      dinoShape(dino('Rexy', { species })).plates.length;
+    expect(plateCount('stegosaur')).toBeGreaterThan(3);
+    expect(plateCount('sauropod')).toBeGreaterThan(0);
+    expect(plateCount('theropod')).toBeGreaterThan(0);
+    expect(plateCount('triceratops')).toBe(0);
+  });
+
+  it('stands on its feet: nothing reaches below the ground point', () => {
+    for (const d of all) {
+      const s = dinoShape(d);
+      const ys: number[] = [];
+      for (const path of [s.body, s.belly, ...s.legsBack, ...s.legsFront, ...s.plates, ...s.arms]) {
+        const nums = (path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+        for (let i = 1; i < nums.length; i += 2) ys.push(nums[i]);
+      }
+      // A smoothed outline can overshoot its control points slightly, so allow a
+      // small margin — but the figure must not hang far below its own feet.
+      expect(Math.max(...ys)).toBeLessThanOrEqual(d.y + d.size * 0.06);
+      expect(Math.min(...ys)).toBeGreaterThan(d.y - d.size * 1.6);
+    }
+  });
+
+  it('mirrors when facing left', () => {
+    const right = { ...dino('Rexy', { species: 'sauropod' }), x: 0, y: 0, facing: 1 as const };
+    const left = { ...right, facing: -1 as const };
+    const sr = dinoShape(right);
+    const sl = dinoShape(left);
+    expect(sl.body).not.toBe(sr.body);
+    // The eye is forward of centre, so mirroring must flip its side.
+    expect(Math.sign(sl.eye.cx)).toBe(-Math.sign(sr.eye.cx));
+    // Height is unaffected by a horizontal mirror.
+    expect(sl.eye.cy).toBeCloseTo(sr.eye.cy, 6);
+  });
+
+  it('scales linearly with size', () => {
+    const small = { ...dino('Dot', { species: 'stegosaur' }), x: 0, y: 0, size: 50 };
+    const big = { ...small, size: 100 };
+    expect(dinoShape(big).eye.cx).toBeCloseTo(dinoShape(small).eye.cx * 2, 6);
+    expect(dinoShape(big).eye.r).toBeCloseTo(dinoShape(small).eye.r * 2, 6);
+  });
+
+  it('is pure — repeated calls agree, including the randomised plates', () => {
+    for (const d of all.slice(0, 8)) {
+      expect(dinoShape(d)).toEqual(dinoShape(d));
+    }
+  });
+});

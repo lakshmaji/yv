@@ -649,6 +649,26 @@ export function linePath(points: readonly Pt[]): string {
   return catmullRomPath(points, false);
 }
 
+/**
+ * A predicate for "somewhere you could actually stand": on the island, clear of
+ * rivers and lakes, and not inside a mountain's footprint.
+ *
+ * Exposed because anything placing extra things on the map needs it — the
+ * dinosaur utility, for one, knows nothing about islands and just takes an
+ * `allow` callback.
+ */
+export function openGround(world: World, pad = 26): (p: Pt) => boolean {
+  const discs = waterDiscs(world.rivers, world.lakes);
+  return (p: Pt): boolean => {
+    if (!pointInPolygon(p, world.coast)) return false;
+    if (nearWater(p, discs, pad)) return false;
+    for (const peak of world.peaks) {
+      if (dist(p, peak) < peak.baseR + pad) return false;
+    }
+    return true;
+  };
+}
+
 export interface SceneryItem {
   kind: 'tree' | 'peak';
   /** Index into world.trees or world.peaks. */

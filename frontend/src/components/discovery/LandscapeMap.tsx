@@ -1,5 +1,8 @@
+import { For } from 'solid-js';
 import { LAND } from '../../lib/landscape/palette';
 import { ringPath, type World } from '../../lib/landscape/world';
+import type { Dino } from '../../lib/dino';
+import Dinosaur from './Dinosaur';
 import Terrain from './Terrain';
 import Water from './Water';
 import Scenery from './Scenery';
@@ -16,7 +19,7 @@ import Clouds from './Clouds';
  * generator emits is resolution-independent — the panel can be any size and the
  * composition holds.
  */
-export default function LandscapeMap(props: { world: World }) {
+export default function LandscapeMap(props: { world: World; dinos?: Dino[] }) {
   const coastPath = () => ringPath(props.world.coast);
 
   return (
@@ -85,6 +88,9 @@ export default function LandscapeMap(props: { world: World }) {
       <Water world={props.world} />
       <Scenery world={props.world} />
       <Trails world={props.world} />
+      {/* Above the trails so a dinosaur isn't crossed by a path, below the
+          settlement labels so names stay readable. */}
+      <For each={props.dinos ?? []}>{(dino) => <Dinosaur dino={dino} />}</For>
       <Settlements world={props.world} />
       <Clouds world={props.world} />
 

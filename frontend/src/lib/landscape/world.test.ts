@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generateWorld, linePath, ringPath, sceneryOrder, worldBiomeKinds,
+  generateWorld, linePath, openGround, ringPath, sceneryOrder, worldBiomeKinds,
   MAX_CRAG, MAX_TREES, RIDGE_STEPS, WORLD_H, WORLD_W,
 } from './world';
 import { pointInPolygon, type Pt } from './geometry';
@@ -434,6 +434,60 @@ describe('rockRamp', () => {
     const darker = rockRamp(GREY_ROCK, -1);
     expect(lighter.mid).not.toBe(darker.mid);
     expect(parseInt(lighter.mid.slice(1), 16)).toBeGreaterThan(parseInt(darker.mid.slice(1), 16));
+  });
+});
+
+describe('openGround', () => {
+  for (const seed of SEEDS) {
+    it(`seed ${seed}: only accepts standable ground`, () => {
+      const w = generateWorld(seed);
+      const pad = 26;
+      const ok = openGround(w, pad);
+      // Sweep the canvas rather than trusting a handful of points.
+      let accepted = 0;
+      for (let x = 20; x < WORLD_W; x += 37) {
+        for (let y = 20; y < WORLD_H; y += 41) {
+          const p = { x, y };
+          if (!ok(p)) continue;
+          accepted++;
+          expect(pointInPolygon(p, w.coast)).toBe(true);
+          for (const lake of w.lakes) {
+            expect(Math.hypot(p.x - lake.center.x, p.y - lake.center.y))
+              .toBeGreaterThanOrEqual(lake.radius + pad);
+          }
+          for (const peak of w.peaks) {
+            expect(Math.hypot(p.x - peak.x, p.y - peak.y)).toBeGreaterThanOrEqual(peak.baseR + pad);
+          }
+          for (const river of w.rivers) {
+            for (const q of river.points) {
+              expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThanOrEqual(river.width * 0.8 + pad);
+            }
+          }
+        }
+      }
+      // A predicate that rejects everything would pass all the above vacuously.
+      expect(accepted).toBeGreaterThan(10);
+    });
+  }
+
+  it('rejects open sea', () => {
+    const w = generateWorld(42);
+    const ok = openGround(w);
+    expect(ok({ x: 5, y: 5 })).toBe(false);
+    expect(ok({ x: WORLD_W - 5, y: WORLD_H - 5 })).toBe(false);
+  });
+
+  it('gets stricter as the pad grows', () => {
+    const w = generateWorld(42);
+    const count = (pad: number): number => {
+      const ok = openGround(w, pad);
+      let n = 0;
+      for (let x = 20; x < WORLD_W; x += 23) {
+        for (let y = 20; y < WORLD_H; y += 29) if (ok({ x, y })) n++;
+      }
+      return n;
+    };
+    expect(count(80)).toBeLessThan(count(10));
   });
 });
 

@@ -42,3 +42,20 @@ export function makeRng(seed: number): Rng {
   };
 }
 
+/**
+ * FNV-1a over a string, as a uint32 suitable for makeRng.
+ *
+ * Lets a caller seed from a name instead of a number, so "Rexy" is always the
+ * same creature. Two names that differ by one character land in unrelated parts
+ * of the sequence, which matters — a hash that clustered similar names would
+ * give a herd of near-identical animals.
+ */
+export function hashText(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+

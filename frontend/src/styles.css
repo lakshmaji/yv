@@ -2614,6 +2614,13 @@
       50%      { transform: rotate(1.1deg); }
     }
 
+    /* A slow breathing bob. Deliberately not a walk cycle — at this scale
+       vertical motion reads as alive, whereas translation reads as sliding. */
+    @keyframes land-dino-bob {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50%      { transform: translateY(-1.5px) scale(1.012); }
+    }
+
     .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }
     .land-swell.swell-b { animation-duration: 38s; animation-delay: -9s; }
     .land-swell.swell-c { animation-duration: 47s; animation-delay: -20s; }
@@ -2631,16 +2638,25 @@
       will-change: transform;
     }
 
+    .land-dino {
+      transform-box: fill-box;
+      transform-origin: bottom center;
+      animation: land-dino-bob 4s ease-in-out infinite;
+      will-change: transform;
+    }
+
     .landscape-stage.no-motion .land-swell,
     .landscape-stage.no-motion .land-cloud,
     .landscape-stage.no-motion .land-river-glint,
     .landscape-stage.no-motion .land-foam,
-    .landscape-stage.no-motion .land-tree { animation: none; }
+    .landscape-stage.no-motion .land-tree,
+    .landscape-stage.no-motion .land-dino { animation: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
       .land-cloud,
       .land-river-glint,
       .land-foam,
-      .land-tree { animation: none; }
+      .land-tree,
+      .land-dino { animation: none; }
     }
