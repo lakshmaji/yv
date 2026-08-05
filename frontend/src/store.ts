@@ -33,6 +33,16 @@ function setHighlightedCmd(cmdId: string | null) {
   }
 }
 
+// Command whose terminal is blown up to fill the window. Only one at a time —
+// a single signal is the enforcement, not a per-row flag.
+const [maximizedCmd, setMaximizedCmdSignal] = createSignal<string | null>(null);
+
+/** Maximizes a command (expanding its terminal), or restores when passed null. */
+function setMaximizedCmd(cmdId: string | null) {
+  if (cmdId) updateCmdState(cmdId, { collapsed: false });
+  setMaximizedCmdSignal(cmdId);
+}
+
 // Environments of the selected project (loaded from Go, which owns the secrets file)
 const [projectEnvs, setProjectEnvs] = createSignal<ProjectEnvs>({ environments: [], activeId: '' });
 const [envModalOpen, setEnvModalOpen] = createSignal(false);
@@ -169,6 +179,7 @@ export {
   searchQuery, setSearchQuery,
   spotlightOpen, setSpotlightOpen,
   highlightedCmd, setHighlightedCmd,
+  maximizedCmd, setMaximizedCmd,
   projectEnvs, setProjectEnvs, loadProjectEnvs,
   envModalOpen, setEnvModalOpen,
   activeEnv, activeEnvVarCount,

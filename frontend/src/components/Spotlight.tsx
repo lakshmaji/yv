@@ -3,6 +3,7 @@ import {
   projects, spotlightOpen, setSpotlightOpen,
   searchQuery, setSearchQuery,
   setSelectedId, setSelectedGroup, setHighlightedCmd,
+  maximizedCmd, setMaximizedCmd,
 } from '../store';
 import { searchAllProjects, hasHooks } from '../lib/search';
 import { runCommand } from '../lib/commands';
@@ -44,6 +45,8 @@ export default function Spotlight() {
 
   /** Navigates to a command so its row is visible in the main panel. */
   function reveal(projectId: string, cmd: CommandConfig) {
+    // A maximized terminal would hide whatever we reveal, unless it *is* the hit.
+    if (maximizedCmd() && maximizedCmd() !== cmd.id) setMaximizedCmd(null);
     setSelectedId(projectId);
     setSelectedGroup(cmd.group || 'All');
     setHighlightedCmd(cmd.id);

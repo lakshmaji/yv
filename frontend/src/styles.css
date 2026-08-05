@@ -911,6 +911,56 @@
     }
     .clear-btn:hover { color: var(--text); background: var(--card); }
 
+    /* ── Maximized (focus) terminal ──────────────────────────
+       The row keeps its place in the DOM and is lifted over the app, so
+       output, scroll position and the stdin field survive the transition.
+       Sits below modals (z-index 100) and Spotlight (200). */
+    .cmd-row.maximized {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      border-radius: 0;
+      border-width: 0 0 0 2px;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+    }
+
+    /* Clear the macOS traffic lights, which float above the webview. */
+    .cmd-row.maximized .cmd-header {
+      padding-top: 30px;
+      cursor: default;
+      border-bottom: 1px solid var(--border);
+    }
+    body.fullscreen .cmd-row.maximized .cmd-header { padding-top: 12px; }
+
+    .cmd-row.maximized .chevron { display: none; }
+
+    .cmd-row.maximized .cmd-terminal {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .cmd-row.maximized .terminal-output {
+      flex: 1;
+      max-height: none;
+    }
+
+    .maximize-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 4px 7px;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .maximize-btn:hover { border-color: var(--accent); color: var(--accent); }
+
     .terminal-output {
       font-family: var(--mono);
       font-size: 12px;

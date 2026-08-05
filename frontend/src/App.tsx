@@ -6,6 +6,8 @@ import {
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
   spotlightOpen, setSpotlightOpen,
+  editingCmd, editingShortcut, settingsProjectId, envModalOpen,
+  maximizedCmd, setMaximizedCmd, filteredCommands,
 } from './store';
 import { go, runtime } from './wails';
 import Sidebar from './components/Sidebar';
@@ -57,6 +59,13 @@ export default function App() {
     } catch { /* ignore */ }
   });
 
+  // Switching project or group unmounts the maximized row — drop the focus
+  // rather than leaving an invisible one latched.
+  createEffect(() => {
+    const id = maximizedCmd();
+    if (id && !filteredCommands().some(c => c.id === id)) setMaximizedCmd(null);
+  });
+
   // Keep the environment panel in sync with the selected project.
   createEffect(() => {
     loadProjectEnvs(selectedId(), go.GetEnvironments);
@@ -71,6 +80,13 @@ export default function App() {
       return;
     }
     if (e.key === 'Escape') {
+      // A maximized terminal is below any modal, so it only yields to Esc
+      // once nothing is stacked on top of it.
+      const modalOpen = editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen();
+      if (maximizedCmd() && !modalOpen) {
+        setMaximizedCmd(null);
+        return;
+      }
       setEditingCmd(null);
       setEditingShortcut(null);
       setSettingsProjectId(null);

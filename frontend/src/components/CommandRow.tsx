@@ -1,5 +1,8 @@
 import { Show, createMemo, createEffect } from 'solid-js';
-import { getCmdState, updateCmdState, setEditingCmd, resourceStats, highlightedCmd } from '../store';
+import {
+  getCmdState, updateCmdState, setEditingCmd, resourceStats, highlightedCmd,
+  maximizedCmd, setMaximizedCmd,
+} from '../store';
 import { go } from '../wails';
 import { escHtml, formatBytes } from '../lib/utils';
 import { runCommand } from '../lib/commands';
@@ -13,9 +16,12 @@ interface CommandRowProps {
 export default function CommandRow(props: CommandRowProps) {
   const state = () => getCmdState(props.cmd.id);
 
+  const isMaximized = () => maximizedCmd() === props.cmd.id;
+
   const rowClass = createMemo(() => {
     const s = state();
     let cls = 'cmd-row';
+    if (isMaximized()) cls += ' maximized';
     if (!s.collapsed && s.lines.length) cls += ' expanded';
     if (s.running) {
       cls += ' running';
@@ -39,8 +45,15 @@ export default function CommandRow(props: CommandRowProps) {
 
   function handleToggle(e: MouseEvent) {
     if ((e.target as HTMLElement).closest('.cmd-actions')) return;
+    // Collapsing while maximized would leave an empty full-screen shell.
+    if (isMaximized()) return;
     const s = state();
     updateCmdState(props.cmd.id, { collapsed: !s.collapsed });
+  }
+
+  function handleMaximize(e: MouseEvent) {
+    e.stopPropagation();
+    setMaximizedCmd(isMaximized() ? null : props.cmd.id);
   }
 
   function handleRun(e: MouseEvent) {
@@ -110,6 +123,13 @@ export default function CommandRow(props: CommandRowProps) {
           </span>
         </Show>
         <div class="cmd-actions">
+          <button
+            class="maximize-btn"
+            title={isMaximized() ? 'Restore (Esc)' : 'Maximize terminal'}
+            onClick={handleMaximize}
+          >
+            {isMaximized() ? '⤡' : '⤢'}
+          </button>
           <button class="edit-btn" title="Edit command" onClick={handleEdit}>✎</button>
           <button class="dismiss-btn" onClick={handleDismiss}>✕ Dismiss</button>
           <button class="run-btn" onClick={handleRun}>▶ Run</button>
