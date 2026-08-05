@@ -69,8 +69,19 @@
       position: relative;
     }
 
+    /* The three column headers must line up, so they share a box model:
+       same padding, same border-box height, content vertically centred. */
+    #sidebar-header,
+    #groups-header,
+    #project-header {
+      box-sizing: border-box;
+      min-height: 68px;
+      padding-top: 32px;
+      padding-bottom: 10px;
+    }
+
     #sidebar-header {
-      padding: 32px 12px 8px;
+      padding: 32px 12px 10px;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: .8px;
@@ -86,8 +97,11 @@
     }
 
     body.fullscreen #sidebar-header,
-    body.fullscreen #groups-header { padding-top: 12px; }
-    body.fullscreen #project-header { padding-top: 12px; }
+    body.fullscreen #groups-header,
+    body.fullscreen #project-header {
+      padding-top: 12px;
+      min-height: 48px;
+    }
 
     .sidebar-label {
       white-space: nowrap;
@@ -415,7 +429,7 @@
     }
 
     #groups-header {
-      padding: 32px 12px 8px;
+      padding: 32px 12px 10px;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: .8px;
