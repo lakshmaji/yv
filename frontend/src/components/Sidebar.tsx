@@ -7,6 +7,7 @@ import {
   sidebarCollapsed, setSidebarCollapsed,
   runningCount, projectRunningCount,
   setSettingsProjectId, setSearchQuery, setSpotlightOpen,
+  activeView, setActiveView,
 } from '../store';
 import { go } from '../wails';
 import { uid } from '../lib/utils';
@@ -34,6 +35,9 @@ export default function Sidebar(props: SidebarProps) {
   function selectProject(id: string): void {
     setSelectedId(id);
     setSelectedGroup('All');
+    // Picking a project leaves the dashboard. selectedId is untouched by the
+    // dashboard, so switching back restores whatever was showing.
+    setActiveView('commands');
   }
 
   async function handleBrowse(): Promise<void> {
@@ -144,6 +148,18 @@ export default function Sidebar(props: SidebarProps) {
         <kbd class="spotlight-trigger-kbd">⌘K</kbd>
       </button>
 
+      <button
+        id="dashboard-trigger"
+        type="button"
+        classList={{ active: activeView() === 'dashboard' }}
+        title="Usage metrics across all projects (⌘D)"
+        onClick={() => setActiveView('dashboard')}
+      >
+        <span class="nav-trigger-icon">▤</span>
+        <span class="nav-trigger-label">Dashboard</span>
+        <kbd class="nav-trigger-kbd">⌘D</kbd>
+      </button>
+
       <div id="project-list">
         <For each={projects}>
           {(p: Project) => {
@@ -169,7 +185,7 @@ export default function Sidebar(props: SidebarProps) {
               <div
                 classList={{
                   'project-item': true,
-                  active: selectedId() === p.id,
+                  active: selectedId() === p.id && activeView() === 'commands',
                   'has-running': rc() > 0,
                 }}
                 title={p.name}

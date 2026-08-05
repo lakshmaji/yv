@@ -13,15 +13,28 @@ import (
 	"yv/internal/runner"
 )
 
-type Monitor struct {
-	runner *runner.Runner
+// Sink receives every polled sample. Declared here rather than imported so the
+// monitor has no dependency on the metrics package; a nil sink is a no-op.
+type Sink interface {
+	Observe(now time.Time, stats models.ResourceStats)
 }
 
-func NewMonitor(r *runner.Runner) *Monitor {
-	return &Monitor{runner: r}
+type Monitor struct {
+	runner *runner.Runner
+	sink   Sink
+}
+
+func NewMonitor(r *runner.Runner, sink Sink) *Monitor {
+	return &Monitor{runner: r, sink: sink}
 }
 
 // Start begins the 3-second resource polling loop. It exits cleanly when ctx is cancelled.
+//
+// The sink is fed from this loop only, and only when the poll succeeded — a
+// failed ps must not be recorded as a genuine zero-RSS sample. It runs
+// synchronously: on the common path it is a mutex-guarded map update, and once
+// a minute it is a single buffered append, which keeps the shutdown flush
+// trivially correct.
 func (m *Monitor) Start(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(3 * time.Second)
@@ -31,7 +44,10 @@ func (m *Monitor) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				stats := m.collectStats()
+				stats, ok := m.collectStats()
+				if ok && m.sink != nil {
+					m.sink.Observe(time.Now(), stats)
+				}
 				wailsRuntime.EventsEmit(ctx, "resource-stats", stats)
 			}
 		}
@@ -39,34 +55,30 @@ func (m *Monitor) Start(ctx context.Context) {
 }
 
 // GetResourceStats returns current resource usage on demand.
+//
+// It deliberately does not feed the sink: this is called from the UI, and
+// injecting extra samples into the current minute would skew the N-weighted
+// averages the dashboard computes.
 func (m *Monitor) GetResourceStats() models.ResourceStats {
-	return m.collectStats()
+	stats, _ := m.collectStats()
+	return stats
 }
 
-type pidEntry struct {
-	pid   int
-	cmdID string
-	label string
-}
-
-func (m *Monitor) collectStats() models.ResourceStats {
+// collectStats returns a snapshot and whether the ps call succeeded.
+func (m *Monitor) collectStats() (models.ResourceStats, bool) {
 	appPid := os.Getpid()
 
-	snapshot := m.runner.GetProcessSnapshot()
-	entries := make([]pidEntry, len(snapshot))
-	for i, e := range snapshot {
-		entries[i] = pidEntry{pid: e.PID, cmdID: e.CmdID, label: e.Label}
-	}
+	entries := m.runner.GetProcessSnapshot()
 
 	pids := make([]string, 0, len(entries)+1)
 	pids = append(pids, strconv.Itoa(appPid))
 	for _, e := range entries {
-		pids = append(pids, strconv.Itoa(e.pid))
+		pids = append(pids, strconv.Itoa(e.PID))
 	}
 
 	out, err := exec.Command("ps", "-o", "pid=,rss=,pcpu=", "-p", strings.Join(pids, ",")).Output()
 	if err != nil {
-		return models.ResourceStats{}
+		return models.ResourceStats{}, false
 	}
 
 	parsed := parsePsOutput(string(out))
@@ -78,19 +90,21 @@ func (m *Monitor) collectStats() models.ResourceStats {
 	}
 
 	for _, e := range entries {
-		row := parsed[e.pid]
+		row := parsed[e.PID]
 		cmdStats := models.ProcessStats{
-			CmdID: e.cmdID,
-			Label: e.label,
-			RSS:   row.rss,
-			CPU:   row.cpu,
+			CmdID:     e.CmdID,
+			Label:     e.Label,
+			ProjectID: e.ProjectID,
+			Group:     e.Group,
+			RSS:       row.rss,
+			CPU:       row.cpu,
 		}
 		stats.Commands = append(stats.Commands, cmdStats)
 		stats.TotalCmdRSS += row.rss
 		stats.TotalCmdCPU += row.cpu
 	}
 
-	return stats
+	return stats, true
 }
 
 type psRow struct {

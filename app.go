@@ -9,29 +9,45 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"yv/internal/config"
 	"yv/internal/env"
+	"yv/internal/metrics"
 	"yv/internal/models"
 	"yv/internal/monitor"
 	"yv/internal/runner"
+	"yv/internal/settings"
 )
 
 // App is the Wails-bound facade. All business logic lives in the internal packages;
 // methods here are thin wrappers that keep the frontend-visible API stable.
 // ctx is written once in startup (before any concurrent calls) so no mutex is needed.
 type App struct {
-	ctx    context.Context
-	runner *runner.Runner
-	cfg    *config.Store
-	mon    *monitor.Monitor
-	envs   *env.Store
+	ctx     context.Context
+	runner  *runner.Runner
+	cfg     *config.Store
+	mon     *monitor.Monitor
+	envs    *env.Store
+	set     *settings.Store
+	metrics *metrics.Store
 }
 
 func NewApp() *App {
 	r := runner.NewRunner()
+	set := settings.NewStore()
+
+	// The metrics store is the sink for both the resource monitor and the
+	// runner, and it follows the settings toggle: nothing reaches the disk
+	// until the user opts in, and disabling stops collection immediately.
+	mx := metrics.NewStore(set.RetentionDays)
+	mx.SetEnabled(set.MetricsEnabled())
+	r.SetRunSink(mx)
+	set.OnChange(func(s models.Settings) { mx.SetEnabled(s.MetricsEnabled) })
+
 	return &App{
-		runner: r,
-		cfg:    config.NewStore(),
-		mon:    monitor.NewMonitor(r),
-		envs:   env.NewStore(),
+		runner:  r,
+		cfg:     config.NewStore(),
+		mon:     monitor.NewMonitor(r, mx),
+		envs:    env.NewStore(),
+		set:     set,
+		metrics: mx,
 	}
 }
 
@@ -39,6 +55,16 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.mon.Start(ctx)
 	a.startFullscreenMonitor(ctx)
+	// Clean up expired metrics on launch, so a long-idle app prunes without
+	// waiting for the first day rollover.
+	go func() { _ = a.metrics.Prune(time.Now()) }()
+}
+
+// closeMetrics flushes the partial metrics bucket and releases the day files.
+// Unexported so it stays out of the generated TypeScript bindings; main.go is
+// in the same package and calls it on shutdown.
+func (a *App) closeMetrics() {
+	_ = a.metrics.Close()
 }
 
 func (a *App) getCtx() context.Context {
@@ -156,7 +182,7 @@ func (a *App) ExecuteCommand(cmd models.CommandConfig, workingDir string, runID 
 	if projectID != "" {
 		vars = a.envs.ActiveVars(projectID)
 	}
-	return a.runner.ExecuteCommand(a.getCtx(), cmd, workingDir, runID, vars)
+	return a.runner.ExecuteCommand(a.getCtx(), cmd, workingDir, runID, vars, projectID)
 }
 
 func (a *App) GetRunningCommands() []string {
@@ -175,4 +201,56 @@ func (a *App) StopCommand(cmdID string) string {
 
 func (a *App) GetResourceStats() models.ResourceStats {
 	return a.mon.GetResourceStats()
+}
+
+// --- Settings delegation ---
+
+// GetSettings returns the global app settings with defaults applied.
+func (a *App) GetSettings() models.Settings {
+	return a.set.Get()
+}
+
+// SaveSettings persists the global settings. Returns "ok" or "error: …".
+//
+// Turning metrics off takes effect before this returns and does not delete
+// anything already collected — ClearMetrics does that.
+func (a *App) SaveSettings(s models.Settings) string {
+	if _, err := a.set.Save(s); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// --- Metrics delegation ---
+
+// GetMetrics returns pre-aggregated resource series for a bounded time range,
+// grouped by command, project, or group. Aggregation happens in Go so the
+// frontend never parses raw records.
+func (a *App) GetMetrics(req models.MetricsQuery) models.MetricsResult {
+	return a.metrics.Query(req)
+}
+
+// GetUsageFrequency returns how often commands, projects, or groups were run
+// over a bounded range — the run-count counterpart to GetMetrics.
+func (a *App) GetUsageFrequency(req models.MetricsQuery) models.FrequencyResult {
+	return a.metrics.UsageFrequency(req)
+}
+
+// GetActivityHeatmap returns dense per-day run counts for the last `days` days
+// (clamped to the retention window) for the calendar heatmap.
+func (a *App) GetActivityHeatmap(days int) models.ActivityHeatmap {
+	return a.metrics.ActivityHeatmap(days)
+}
+
+// ClearMetrics deletes every stored metrics file. Returns "ok" or "error: …".
+func (a *App) ClearMetrics() string {
+	if err := a.metrics.Clear(); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// GetMetricsStorageInfo reports how much disk the metrics store is using.
+func (a *App) GetMetricsStorageInfo() models.MetricsStorageInfo {
+	return a.metrics.StorageInfo()
 }

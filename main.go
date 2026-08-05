@@ -67,7 +67,10 @@ func main() {
 		},
 
 		OnShutdown: func(ctx context.Context) {
+			// StopAllCommands waits for every ExecuteCommand goroutine, so all
+			// in-flight run records have landed before the metrics files close.
 			app.StopAllCommands()
+			app.closeMetrics()
 		},
 
 		Mac: &mac.Options{

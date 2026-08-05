@@ -66,6 +66,8 @@ const GROUPS: { title: string; items: Shortcut[] }[] = [
       { label: 'Open Spotlight Search', combo: ['⌘', 'K'], keys: ['cmd', 'k'] },
       { label: 'Toggle Sidebar', combo: ['⌘', 'B'], keys: ['cmd', 'b'] },
       { label: 'Stop All Commands', combo: ['⌘', '.'], keys: ['cmd', '.'] },
+      { label: 'Dashboard', combo: ['⌘', 'D'], keys: ['cmd', 'd'] },
+      { label: 'Settings', combo: ['⌘', ','], keys: ['cmd', ','] },
       { label: 'Keyboard Shortcuts', combo: ['⌘', '/'], keys: ['cmd', '/'] },
       { label: 'Close / Cancel', combo: ['esc'], keys: ['esc'] },
     ],

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -52,13 +53,23 @@ func resolveLoginPath() string {
 // ptmxBufPool reuses 32 KB read buffers across PTY sessions to reduce allocations.
 var ptmxBufPool = sync.Pool{New: func() any { return make([]byte, 32*1024) }}
 
+// RunSink receives one record per completed command run. Declared here rather
+// than imported so the runner has no dependency on the metrics package; a nil
+// sink disables recording entirely.
+type RunSink interface {
+	RecordRun(rec models.RunRecord)
+}
+
 type Runner struct {
 	processes   map[string]*exec.Cmd
 	processesMu sync.RWMutex
 	ptmxWriters map[string]*os.File
 	ptmxMu      sync.RWMutex
-	cmdLabels   map[string]string
-	cmdLabelsMu sync.RWMutex
+	cmdMeta     map[string]models.CmdMeta
+	cmdMetaMu   sync.RWMutex
+	stopped     map[string]bool // cmdIDs the user stopped, cleared when the run ends
+	stoppedMu   sync.Mutex
+	runSink     atomic.Pointer[RunSink]
 	wg          sync.WaitGroup // tracks live ExecuteCommand goroutines for clean shutdown
 }
 
@@ -66,16 +77,35 @@ func NewRunner() *Runner {
 	return &Runner{
 		processes:   make(map[string]*exec.Cmd),
 		ptmxWriters: make(map[string]*os.File),
-		cmdLabels:   make(map[string]string),
+		cmdMeta:     make(map[string]models.CmdMeta),
+		stopped:     make(map[string]bool),
 	}
 }
 
+// SetRunSink installs the sink that receives completed-run records. Called once
+// at startup; passing nil disables recording.
+func (r *Runner) SetRunSink(s RunSink) {
+	if s == nil {
+		r.runSink.Store(nil)
+		return
+	}
+	r.runSink.Store(&s)
+}
+
 // GetProcessSnapshot returns a point-in-time copy of all non-post running processes
-// with their labels. Used by the monitor without holding runner's internal locks.
+// with their attribution. Used by the monitor without holding runner's internal locks.
+//
+// It also prunes metadata for commands that have exited. Pruning happens here,
+// rather than in the exit path, because metadata must outlive the process entry:
+// if it were deleted on exit, a monitor tick could observe a live process whose
+// metadata had already gone and attribute its sample to nothing. The map stays
+// bounded by (live commands + those that died since the last 3-second tick).
 func (r *Runner) GetProcessSnapshot() []models.ProcessEntry {
 	r.processesMu.RLock()
+	live := make(map[string]struct{}, len(r.processes))
 	entries := make([]models.ProcessEntry, 0, len(r.processes))
 	for id, cmd := range r.processes {
+		live[id] = struct{}{}
 		if strings.HasSuffix(id, ":post") {
 			continue
 		}
@@ -85,13 +115,22 @@ func (r *Runner) GetProcessSnapshot() []models.ProcessEntry {
 	}
 	r.processesMu.RUnlock()
 
-	r.cmdLabelsMu.RLock()
+	r.cmdMetaMu.Lock()
 	for i := range entries {
-		if lbl, ok := r.cmdLabels[entries[i].CmdID]; ok {
-			entries[i].Label = lbl
+		if m, ok := r.cmdMeta[entries[i].CmdID]; ok {
+			if m.Label != "" {
+				entries[i].Label = m.Label
+			}
+			entries[i].ProjectID = m.ProjectID
+			entries[i].Group = m.Group
 		}
 	}
-	r.cmdLabelsMu.RUnlock()
+	for id := range r.cmdMeta {
+		if _, still := live[strings.TrimSuffix(id, ":post")]; !still {
+			delete(r.cmdMeta, id)
+		}
+	}
+	r.cmdMetaMu.Unlock()
 
 	return entries
 }
@@ -132,6 +171,8 @@ func (r *Runner) StopCommand(cmdID string) string {
 	if !ok {
 		return "not running"
 	}
+
+	r.markStopped(cmdID)
 
 	pgid := c.Process.Pid // PTY Setsid guarantees pgid == pid
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
@@ -175,6 +216,7 @@ func (r *Runner) StopAll() {
 	}
 
 	for _, e := range snapshot {
+		r.markStopped(e.id)
 		_ = syscall.Kill(-e.pid, syscall.SIGTERM)
 	}
 	time.Sleep(3 * time.Second)
@@ -200,8 +242,9 @@ func (r *Runner) StopAll() {
 //	"output:<cmdID>:<runID>"    string        — one line of output
 //	"done:<cmdID>:<runID>"      CommandResult — main process exit info
 //	"post-done:<cmdID>:<runID>" CommandResult — post-hooks exit info (only if PostCommands set)
-func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, workingDir string, runID string, envVars []models.EnvVar) string {
-	r.storeCmdLabel(cmd.ID, cmd.Label)
+func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, workingDir string, runID string, envVars []models.EnvVar, projectID string) string {
+	meta := models.CmdMeta{Label: cmd.Label, ProjectID: projectID, Group: cmd.Group}
+	r.storeCmdMeta(cmd.ID, meta)
 
 	// Kill any prior run of this command (process-group kill to include children).
 	r.processesMu.Lock()
@@ -232,6 +275,8 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 	go func() {
 		defer r.wg.Done()
 
+		start := time.Now()
+
 		if len(cmd.PostCommands) == 0 {
 			// Pre-hooks + main command in one PTY session so that environment changes
 			// in pre-hooks (eval, export, source, direnv) carry into the main command.
@@ -253,6 +298,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 			} else {
 				result.ExitCode = exitCode
 			}
+			r.recordRun(meta, cmd.ID, runID, start, result)
 			if ctx != nil {
 				wailsRuntime.EventsEmit(ctx, doneEvent, result)
 			}
@@ -279,6 +325,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 					result.ExitCode = -1
 					result.Error = err.Error()
 				}
+				r.recordRun(meta, cmd.ID, runID, start, result)
 				if ctx != nil {
 					wailsRuntime.EventsEmit(ctx, doneEvent, result)
 					wailsRuntime.EventsEmit(ctx, postDoneEvent, result)
@@ -290,12 +337,16 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 		// 2. Start main command in a background goroutine (may run forever, e.g. emulator).
 		mainFailed := make(chan struct{}, 1)
 		go func() {
+			// The main command begins after the pre-hooks, so it is timed
+			// separately from the outer run.
+			mainStart := time.Now()
 			exitCode, err := r.runShellCommand(cmd.ID, cmd.Command, workDir, environ, emit)
 			result := models.CommandResult{ExitCode: exitCode}
 			if err != nil {
 				result.ExitCode = -1
 				result.Error = err.Error()
 			}
+			r.recordRun(meta, cmd.ID, runID, mainStart, result)
 			if result.ExitCode != 0 {
 				select {
 				case mainFailed <- struct{}{}:
@@ -428,10 +479,9 @@ func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDi
 			delete(r.processes, cmdID)
 		}
 		r.processesMu.Unlock()
-		// Prune the label cache so it doesn't grow unboundedly.
-		r.cmdLabelsMu.Lock()
-		delete(r.cmdLabels, cmdID)
-		r.cmdLabelsMu.Unlock()
+		// cmdMeta is deliberately NOT deleted here — it must outlive the process
+		// entry so a concurrent monitor tick cannot see a live process with no
+		// attribution. GetProcessSnapshot prunes it instead.
 	}()
 
 	// Kill process when ctx is cancelled (timeout or main-command failure).
@@ -484,8 +534,47 @@ func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDi
 	return 0, nil
 }
 
-func (r *Runner) storeCmdLabel(cmdID, label string) {
-	r.cmdLabelsMu.Lock()
-	r.cmdLabels[cmdID] = label
-	r.cmdLabelsMu.Unlock()
+func (r *Runner) storeCmdMeta(cmdID string, meta models.CmdMeta) {
+	r.cmdMetaMu.Lock()
+	r.cmdMeta[cmdID] = meta
+	r.cmdMetaMu.Unlock()
+}
+
+// markStopped records that the user stopped a command, so the run is reported
+// as stopped rather than failed — a SIGTERMed dev server is not an error.
+func (r *Runner) markStopped(cmdID string) {
+	r.stoppedMu.Lock()
+	r.stopped[cmdID] = true
+	r.stoppedMu.Unlock()
+}
+
+// takeStopped reads and clears the stopped flag for a command.
+func (r *Runner) takeStopped(cmdID string) bool {
+	r.stoppedMu.Lock()
+	was := r.stopped[cmdID]
+	delete(r.stopped, cmdID)
+	r.stoppedMu.Unlock()
+	return was
+}
+
+// recordRun forwards one completed run to the sink, if any is installed.
+func (r *Runner) recordRun(meta models.CmdMeta, cmdID, runID string, start time.Time, res models.CommandResult) {
+	sink := r.runSink.Load()
+	if sink == nil || *sink == nil {
+		return
+	}
+	stopped := r.takeStopped(cmdID)
+	(*sink).RecordRun(models.RunRecord{
+		T:        start.Unix(),
+		DurMS:    time.Since(start).Milliseconds(),
+		CmdID:    cmdID,
+		Label:    meta.Label,
+		Project:  meta.ProjectID,
+		Group:    meta.Group,
+		RunID:    runID,
+		ExitCode: res.ExitCode,
+		OK:       res.ExitCode == 0 && res.Error == "",
+		Stopped:  stopped,
+		Err:      res.Error,
+	})
 }

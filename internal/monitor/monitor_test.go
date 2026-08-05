@@ -1,7 +1,12 @@
 package monitor
 
 import (
+	"sync"
 	"testing"
+	"time"
+
+	"yv/internal/models"
+	"yv/internal/runner"
 )
 
 func TestParsePsOutput(t *testing.T) {
@@ -90,5 +95,46 @@ func TestParsePsOutput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// countingSink records how many times Observe was called.
+type countingSink struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (c *countingSink) Observe(_ time.Time, _ models.ResourceStats) {
+	c.mu.Lock()
+	c.n++
+	c.mu.Unlock()
+}
+
+func (c *countingSink) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.n
+}
+
+// GetResourceStats is called from the UI on demand. Feeding the sink from there
+// would inject extra samples into the current minute and skew the N-weighted
+// averages the dashboard computes, so it must stay read-only.
+func TestGetResourceStatsDoesNotFeedSink(t *testing.T) {
+	sink := &countingSink{}
+	m := NewMonitor(runner.NewRunner(), sink)
+
+	for i := 0; i < 3; i++ {
+		m.GetResourceStats()
+	}
+
+	if got := sink.count(); got != 0 {
+		t.Errorf("sink observed %d samples from GetResourceStats, want 0", got)
+	}
+}
+
+func TestNilSinkIsSafe(t *testing.T) {
+	m := NewMonitor(runner.NewRunner(), nil)
+	if stats := m.GetResourceStats(); stats.AppRSS == 0 {
+		t.Log("app RSS unavailable in this environment; the point is that it did not panic")
 	}
 }

@@ -82,6 +82,113 @@ export interface ResourceStats {
 export interface ProcessStats {
   cmdId: string;
   label: string;
+  projectId?: string;
+  group?: string;
   rss: number;
   cpu: number;
+}
+
+// --- global settings ---
+
+/** Dashboard sections the user can show or hide. */
+export type PanelId = 'stats' | 'memory' | 'frequency' | 'activity';
+
+export interface AppSettings {
+  schemaVersion: number;
+  metricsEnabled: boolean;
+  retentionDays: number;
+  panels: PanelId[];
+}
+
+// --- metrics ---
+
+export type MetricKind = 'memory' | 'cpu';
+export type MetricGroupBy = 'command' | 'project' | 'group';
+
+export interface MetricsQuery {
+  from: number; // unix seconds, inclusive
+  to: number; // unix seconds, exclusive
+  groupBy: MetricGroupBy;
+  resolution?: number; // seconds per bucket; omit for auto
+  maxPoints?: number;
+  projectId?: string;
+  group?: string;
+  cmdIds?: string[];
+  maxSeries?: number;
+}
+
+export interface MetricsPoint {
+  t: number;
+  n: number;
+  rssAvg: number;
+  rssPeak: number;
+  cpuAvg: number;
+  cpuPeak: number;
+}
+
+export interface MetricsSeries {
+  key: string;
+  label: string;
+  points: MetricsPoint[];
+  peakRss: number;
+  peakCpu: number;
+}
+
+export interface MetricsResult {
+  from: number;
+  to: number;
+  resolution: number;
+  groupBy: MetricGroupBy;
+  series: MetricsSeries[];
+  seriesOmitted: number;
+  error?: string;
+}
+
+export interface FrequencyPoint {
+  t: number;
+  count: number;
+}
+
+export interface FrequencySeries {
+  key: string;
+  label: string;
+  points: FrequencyPoint[];
+  total: number;
+}
+
+export interface FrequencyResult {
+  from: number;
+  to: number;
+  resolution: number;
+  groupBy: MetricGroupBy;
+  series: FrequencySeries[];
+  total: number;
+  seriesOmitted: number;
+  error?: string;
+}
+
+export interface ActivityDay {
+  date: string; // 'YYYY-MM-DD', local
+  total: number;
+  success: number;
+  fail: number;
+  stopped: number;
+  durMs: number;
+}
+
+export interface ActivityHeatmap {
+  from: string;
+  to: string;
+  days: ActivityDay[];
+  max: number;
+  total: number;
+  error?: string;
+}
+
+export interface MetricsStorageInfo {
+  enabled: boolean;
+  files: number;
+  bytes: number;
+  oldestDay?: string;
+  dir: string;
 }

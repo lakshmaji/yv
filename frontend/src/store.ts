@@ -1,6 +1,19 @@
 import { createSignal, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { Project, CmdState, ShortcutState, ProcessStats, ProjectEnvs, EnvVar } from './types';
+import type {
+  Project,
+  CmdState,
+  ShortcutState,
+  ProcessStats,
+  ProjectEnvs,
+  EnvVar,
+  AppSettings,
+  MetricGroupBy,
+  MetricsQuery,
+  MetricsResult,
+  FrequencyResult,
+  ActivityHeatmap,
+} from './types';
 
 const DEFAULT_CMD_STATE: CmdState = {
   lines: [], collapsed: true, exitCode: null, stopped: false, running: false, trimmedCount: 0,
@@ -49,6 +62,31 @@ const [envModalOpen, setEnvModalOpen] = createSignal(false);
 
 // Keyboard shortcuts help modal (opened from the Help menu / ⌘/)
 const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
+
+// Which main view is showing. The dashboard is app-wide rather than per-project,
+// so it replaces both the command list and the (meaningless there) groups column.
+const [activeView, setActiveView] = createSignal<'commands' | 'dashboard'>('commands');
+
+// Global settings modal (opened from View → Settings… / ⌘,)
+const [settingsModalOpen, setSettingsModalOpen] = createSignal(false);
+const [appSettings, setAppSettings] = createSignal<AppSettings>({
+  schemaVersion: 1,
+  metricsEnabled: false,
+  retentionDays: 365,
+  panels: ['stats', 'memory', 'frequency', 'activity'],
+});
+
+// Dashboard controls. Memory vs CPU is not a toggle — both charts render, and
+// the Settings panel list is what turns either off.
+const [dashGroupBy, setDashGroupBy] = createSignal<MetricGroupBy>('command');
+const [dashRangeDays, setDashRangeDays] = createSignal(1);
+
+// Dashboard data
+const [metricsResult, setMetricsResult] = createSignal<MetricsResult | null>(null);
+const [frequencyResult, setFrequencyResult] = createSignal<FrequencyResult | null>(null);
+const [activityHeatmap, setActivityHeatmap] = createSignal<ActivityHeatmap | null>(null);
+const [dashLoading, setDashLoading] = createSignal(false);
+const [dashError, setDashError] = createSignal('');
 
 // Per-command terminal state
 const [cmdState, setCmdState] = createSignal<Map<string, CmdState>>(new Map(), { equals: false });
@@ -112,6 +150,66 @@ async function loadProjectEnvs(projectId: string | null, fetch: (id: string) => 
     setProjectEnvs({ environments: envs?.environments || [], activeId: envs?.activeId || '' });
   } catch {
     setProjectEnvs({ environments: [], activeId: '' });
+  }
+}
+
+/**
+ * Loads the global settings. Fetchers are injected rather than imported so this
+ * module stays free of the Wails global and testable in isolation, matching
+ * loadProjectEnvs above.
+ */
+async function loadAppSettings(fetch: () => Promise<AppSettings>) {
+  try {
+    const s = await fetch();
+    if (s) setAppSettings({ ...s, panels: s.panels || [] });
+  } catch {
+    // Settings are a convenience; the defaults above already apply.
+  }
+}
+
+interface DashboardFetchers {
+  metrics: (req: MetricsQuery) => Promise<MetricsResult>;
+  frequency: (req: MetricsQuery) => Promise<FrequencyResult>;
+  activity: (days: number) => Promise<ActivityHeatmap>;
+}
+
+interface DashboardOptions {
+  groupBy: MetricGroupBy;
+  rangeDays: number;
+  heatmapDays?: number;
+}
+
+/**
+ * Loads everything the dashboard renders. Both requests are issued together so
+ * one slow read does not stall the other.
+ */
+async function loadDashboard(fetchers: DashboardFetchers, opts: DashboardOptions) {
+  setDashLoading(true);
+  setDashError('');
+
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - opts.rangeDays * 86400;
+
+  try {
+    const [metrics, frequency, activity] = await Promise.all([
+      // The memory profile bins its points by footprint, so more samples make
+      // the frequency counts better rather than the chart denser — the default
+      // point budget is the right one here.
+      fetchers.metrics({ from, to, groupBy: opts.groupBy }),
+      fetchers.frequency({ from, to, groupBy: opts.groupBy }),
+      fetchers.activity(opts.heatmapDays ?? 365),
+    ]);
+    setMetricsResult(metrics ?? null);
+    setFrequencyResult(frequency ?? null);
+    setActivityHeatmap(activity ?? null);
+    setDashError(metrics?.error || frequency?.error || activity?.error || '');
+  } catch (e) {
+    setMetricsResult(null);
+    setFrequencyResult(null);
+    setActivityHeatmap(null);
+    setDashError(e instanceof Error ? e.message : String(e));
+  } finally {
+    setDashLoading(false);
   }
 }
 
@@ -189,4 +287,15 @@ export {
   envModalOpen, setEnvModalOpen,
   shortcutsModalOpen, setShortcutsModalOpen,
   activeEnv, activeEnvVarCount,
+  activeView, setActiveView,
+  settingsModalOpen, setSettingsModalOpen,
+  appSettings, setAppSettings, loadAppSettings,
+  dashGroupBy, setDashGroupBy,
+  dashRangeDays, setDashRangeDays,
+  metricsResult, setMetricsResult,
+  frequencyResult, setFrequencyResult,
+  activityHeatmap, setActivityHeatmap,
+  dashLoading, setDashLoading,
+  dashError, setDashError,
+  loadDashboard,
 };

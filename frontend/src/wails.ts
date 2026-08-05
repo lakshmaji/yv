@@ -1,7 +1,18 @@
 // Bound Go methods are typed against the interfaces in types.ts, which mirror the
 // JSON wire format. The generated wailsjs classes are deliberately not used here:
 // they carry a convertValues() member that plain object literals can never satisfy.
-import type { Project, CommandConfig, ResourceStats, ProjectEnvs } from './types';
+import type {
+  Project,
+  CommandConfig,
+  ResourceStats,
+  ProjectEnvs,
+  AppSettings,
+  MetricsQuery,
+  MetricsResult,
+  FrequencyResult,
+  ActivityHeatmap,
+  MetricsStorageInfo,
+} from './types';
 
 interface WailsRuntime {
   EventsOn(event: string, callback: (...args: any[]) => void): () => void;
@@ -27,7 +38,21 @@ interface GoApp {
   GetEnvironments(projectId: string): Promise<ProjectEnvs>;
   SaveEnvironments(projectId: string, envs: ProjectEnvs): Promise<string>;
   DeleteEnvironments(projectId: string): Promise<string>;
+
+  GetSettings(): Promise<AppSettings>;
+  SaveSettings(settings: AppSettings): Promise<string>;
+  GetMetrics(req: MetricsQuery): Promise<MetricsResult>;
+  GetUsageFrequency(req: MetricsQuery): Promise<FrequencyResult>;
+  GetActivityHeatmap(days: number): Promise<ActivityHeatmap>;
+  ClearMetrics(): Promise<string>;
+  GetMetricsStorageInfo(): Promise<MetricsStorageInfo>;
+  /** True only in a build made with `-tags yvdev` (see app_dev.go). */
+  SampleDataAvailable(): Promise<boolean>;
+  /** Development builds only — rejects in a production build (see app_nodev.go). */
+  ImportSampleMetrics(): Promise<string>;
 }
+
+export type { GoApp };
 
 export const go: GoApp = (window as any)['go']['main']['App'];
 export const runtime: WailsRuntime = (window as any).runtime;

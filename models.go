@@ -16,4 +16,16 @@ type (
 	EnvVar        = models.EnvVar
 	Environment   = models.Environment
 	ProjectEnvs   = models.ProjectEnvs
+
+	Settings           = models.Settings
+	MetricsQuery       = models.MetricsQuery
+	MetricsPoint       = models.MetricsPoint
+	MetricsSeries      = models.MetricsSeries
+	MetricsResult      = models.MetricsResult
+	FrequencyPoint     = models.FrequencyPoint
+	FrequencySeries    = models.FrequencySeries
+	FrequencyResult    = models.FrequencyResult
+	ActivityDay        = models.ActivityDay
+	ActivityHeatmap    = models.ActivityHeatmap
+	MetricsStorageInfo = models.MetricsStorageInfo
 )

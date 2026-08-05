@@ -9,6 +9,8 @@ import {
   editingCmd, editingShortcut, settingsProjectId, envModalOpen,
   maximizedCmd, setMaximizedCmd, filteredCommands,
   setShortcutsModalOpen,
+  activeView, setActiveView,
+  settingsModalOpen, setSettingsModalOpen, loadAppSettings,
 } from './store';
 import { go, runtime } from './wails';
 import { stopAllCommands } from './lib/commands';
@@ -23,14 +25,28 @@ import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
+import SettingsModal from './components/modals/SettingsModal';
+import DashboardPanel from './components/DashboardPanel';
 import {
   setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
 import type { ResourceStats, ProcessStats } from './types';
 
-function applyColumnWidths(sbCollapsed: boolean, grpCollapsed: boolean, sw: number, gw: number) {
-  const effectiveSw = sbCollapsed ? 48 : sw;
-  const effectiveGw = grpCollapsed ? 48 : gw;
+/**
+ * Pushes the current column widths onto the body grid.
+ *
+ * Reads the signals directly rather than taking them as arguments, so a single
+ * createEffect keeps the layout in sync and no caller has to remember to pass
+ * the view. In dashboard view the groups column collapses to zero — the
+ * dashboard is app-wide, so per-project groups are meaningless there.
+ */
+function applyColumnWidths() {
+  const effectiveSw = sidebarCollapsed() ? 48 : sidebarWidth();
+  if (activeView() === 'dashboard') {
+    document.body.style.gridTemplateColumns = `${effectiveSw}px 0px 1fr`;
+    return;
+  }
+  const effectiveGw = groupsCollapsed() ? 48 : groupsWidth();
   document.body.style.gridTemplateColumns = `${effectiveSw}px ${effectiveGw}px 1fr`;
 }
 
@@ -46,8 +62,6 @@ export default function App() {
     if (projects.length > 0) {
       setSelectedId(projects[0].id);
     }
-
-    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
 
     // Re-sync running state from Go backend
     try {
@@ -75,6 +89,12 @@ export default function App() {
     loadProjectEnvs(selectedId(), go.GetEnvironments);
   });
 
+  // The dashboard and its empty state both need to know the metrics toggle
+  // before the view is first opened.
+  onMount(() => {
+    void loadAppSettings(go.GetSettings);
+  });
+
   function handleKeydown(e: KeyboardEvent) {
     // ⌘K / ⌘F open the global Spotlight search from anywhere in the app.
     if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'f')) {
@@ -87,7 +107,6 @@ export default function App() {
     if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
       e.preventDefault();
       setSidebarCollapsed(!sidebarCollapsed());
-      applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
       return;
     }
     // ⌘. (the macOS cancel gesture) stops every running command at once.
@@ -99,7 +118,8 @@ export default function App() {
     if (e.key === 'Escape') {
       // A maximized terminal is below any modal, so it only yields to Esc
       // once nothing is stacked on top of it.
-      const modalOpen = editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen();
+      const modalOpen =
+        editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() || settingsModalOpen();
       if (maximizedCmd() && !modalOpen) {
         setMaximizedCmd(null);
         return;
@@ -109,12 +129,15 @@ export default function App() {
       setSettingsProjectId(null);
       setEnvModalOpen(false);
       setShortcutsModalOpen(false);
+      setSettingsModalOpen(false);
     }
   }
 
   let unsubFullscreen: (() => void) | undefined;
   let unsubResources: (() => void) | undefined;
   let unsubShortcuts: (() => void) | undefined;
+  let unsubSettings: (() => void) | undefined;
+  let unsubDashboard: (() => void) | undefined;
 
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
@@ -131,33 +154,44 @@ export default function App() {
     unsubShortcuts = runtime.EventsOn('open-keyboard-shortcuts', () => {
       setShortcutsModalOpen(true);
     });
+    // ⌘, and ⌘D are native menu accelerators — macOS swallows them before they
+    // reach the webview, so they arrive only as these events.
+    unsubSettings = runtime.EventsOn('open-settings', () => {
+      setSettingsModalOpen(true);
+    });
+    unsubDashboard = runtime.EventsOn('open-dashboard', () => {
+      setActiveView('dashboard');
+    });
   });
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeydown);
     unsubFullscreen?.();
     unsubResources?.();
     unsubShortcuts?.();
+    unsubSettings?.();
+    unsubDashboard?.();
   });
 
-  function handleSidebarResize() {
-    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
-  }
-
-  function handleGroupsResize() {
-    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
-  }
+  // Column widths are driven by one effect, so a resize, a collapse, or a view
+  // switch all converge on the same code path.
+  createEffect(applyColumnWidths);
 
   return (
     <>
-      <Sidebar onResize={handleSidebarResize} />
-      <GroupsPanel onResize={handleGroupsResize} />
-      <MainPanel />
+      <Sidebar onResize={applyColumnWidths} />
+      <Show when={activeView() === 'commands'}>
+        <GroupsPanel onResize={applyColumnWidths} />
+      </Show>
+      <Show when={activeView() === 'dashboard'} fallback={<MainPanel />}>
+        <DashboardPanel />
+      </Show>
       <StatusBar />
       <EditCommandModal />
       <ShortcutModal />
       <ProjectSettingsModal />
       <EnvironmentsModal />
       <KeyboardShortcutsModal />
+      <SettingsModal />
       <Show when={spotlightOpen()}>
         <Spotlight />
       </Show>

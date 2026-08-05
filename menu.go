@@ -15,10 +15,26 @@ const (
 
 // appMenu builds the macOS menu bar. It reconstructs the standard App / Edit /
 // Window menus (which Wails provides automatically when no menu is set) and adds
-// a custom "Help" menu next to "Window".
+// custom "View" and "Help" menus.
+//
+// Settings lives under View rather than in the canonical "yv › Settings…" slot
+// because menu.AppMenu() maps to the native AppMenuRole, which Wails builds in
+// Objective-C and does not expose to Go — reaching that slot would mean
+// hand-rolling the whole app menu and losing Hide Others / Services.
 func appMenu(ctx func() context.Context) *menu.Menu {
 	m := menu.NewMenu()
 	m.Append(menu.AppMenu())
+
+	view := menu.NewMenu()
+	view.Append(menu.Text("Dashboard", keys.CmdOrCtrl("d"), func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(ctx(), "open-dashboard")
+	}))
+	view.Append(menu.Separator())
+	view.Append(menu.Text("Settings…", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(ctx(), "open-settings")
+	}))
+	m.Append(menu.SubMenu("View", view))
+
 	m.Append(menu.EditMenu())
 	m.Append(menu.WindowMenu())
 

@@ -1,12 +1,19 @@
 WAILS := $(HOME)/go/bin/wails
 
-.PHONY: run install fmt test test-go test-frontend build dmg
+.PHONY: run install fmt test test-go test-frontend build build-dev dmg
 
 install:
 	go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1
 
+# The `yvdev` tag compiles app_dev.go, which enables importing sample dashboard
+# data. `build` deliberately omits it, so no seeding code ships to production.
 run: $(WAILS)
-	$(WAILS) dev
+	$(WAILS) dev -tags yvdev
+
+# A production-shaped build with the dev tooling still available, for testing
+# the packaged app against sample data.
+build-dev: $(WAILS)
+	$(WAILS) build -platform darwin/arm64 -tags yvdev
 
 fmt:
 	gofmt -w $(shell find . -name "*.go" -not -path "*/wailsjs/*")

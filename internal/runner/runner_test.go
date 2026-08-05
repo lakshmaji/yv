@@ -3,6 +3,7 @@ package runner
 import (
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 
 	"yv/internal/models"
@@ -15,10 +16,16 @@ func (r *Runner) injectProcess(id string, cmd *exec.Cmd) {
 	r.processesMu.Unlock()
 }
 
-func (r *Runner) injectLabel(id, label string) {
-	r.cmdLabelsMu.Lock()
-	r.cmdLabels[id] = label
-	r.cmdLabelsMu.Unlock()
+func (r *Runner) injectMeta(id string, meta models.CmdMeta) {
+	r.cmdMetaMu.Lock()
+	r.cmdMeta[id] = meta
+	r.cmdMetaMu.Unlock()
+}
+
+func (r *Runner) metaLen() int {
+	r.cmdMetaMu.RLock()
+	defer r.cmdMetaMu.RUnlock()
+	return len(r.cmdMeta)
 }
 
 func TestGetRunningCommandsExcludesPost(t *testing.T) {
@@ -112,7 +119,7 @@ func TestSendInputNotRunning(t *testing.T) {
 	}
 }
 
-func TestGetProcessSnapshotFiltersPostAndMapsLabels(t *testing.T) {
+func TestGetProcessSnapshotFiltersPostAndMapsMeta(t *testing.T) {
 	r := NewRunner()
 
 	// Start a real background process so cmd.Process != nil.
@@ -124,7 +131,7 @@ func TestGetProcessSnapshotFiltersPostAndMapsLabels(t *testing.T) {
 
 	r.injectProcess("cmd-1", realCmd)
 	r.injectProcess("cmd-1:post", &exec.Cmd{}) // nil Process, :post suffix
-	r.injectLabel("cmd-1", "My Command")
+	r.injectMeta("cmd-1", models.CmdMeta{Label: "My Command", ProjectID: "proj-1", Group: "Android"})
 
 	snapshot := r.GetProcessSnapshot()
 
@@ -132,11 +139,143 @@ func TestGetProcessSnapshotFiltersPostAndMapsLabels(t *testing.T) {
 	if len(snapshot) != 1 {
 		t.Fatalf("snapshot len = %d, want 1; got %+v", len(snapshot), snapshot)
 	}
-	if snapshot[0].CmdID != "cmd-1" {
-		t.Errorf("CmdID = %q, want %q", snapshot[0].CmdID, "cmd-1")
+	got := snapshot[0]
+	if got.CmdID != "cmd-1" {
+		t.Errorf("CmdID = %q, want %q", got.CmdID, "cmd-1")
 	}
-	if snapshot[0].Label != "My Command" {
-		t.Errorf("Label = %q, want %q", snapshot[0].Label, "My Command")
+	if got.Label != "My Command" {
+		t.Errorf("Label = %q, want %q", got.Label, "My Command")
+	}
+	if got.ProjectID != "proj-1" {
+		t.Errorf("ProjectID = %q, want %q — metrics group by this", got.ProjectID, "proj-1")
+	}
+	if got.Group != "Android" {
+		t.Errorf("Group = %q, want %q", got.Group, "Android")
+	}
+}
+
+func TestGetProcessSnapshotPrunesDeadMeta(t *testing.T) {
+	r := NewRunner()
+
+	realCmd := exec.Command("sleep", "60")
+	if err := realCmd.Start(); err != nil {
+		t.Skip("cannot start sleep process: " + err.Error())
+	}
+	defer realCmd.Process.Kill() //nolint:errcheck
+
+	r.injectProcess("live", realCmd)
+	r.injectMeta("live", models.CmdMeta{Label: "Live"})
+	r.injectMeta("dead", models.CmdMeta{Label: "Dead"})
+	r.injectMeta("dead:post", models.CmdMeta{Label: "Dead post-hook"})
+
+	r.GetProcessSnapshot()
+
+	if n := r.metaLen(); n != 1 {
+		t.Errorf("cmdMeta len = %d, want 1 — entries for exited commands must be pruned", n)
+	}
+
+	// The live command's metadata must survive, or its samples lose attribution.
+	snapshot := r.GetProcessSnapshot()
+	if len(snapshot) != 1 || snapshot[0].Label != "Live" {
+		t.Errorf("live metadata was pruned: %+v", snapshot)
+	}
+}
+
+// fakeSink captures run records for assertion.
+type fakeSink struct {
+	mu      sync.Mutex
+	records []models.RunRecord
+}
+
+func (f *fakeSink) RecordRun(rec models.RunRecord) {
+	f.mu.Lock()
+	f.records = append(f.records, rec)
+	f.mu.Unlock()
+}
+
+func (f *fakeSink) all() []models.RunRecord {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]models.RunRecord, len(f.records))
+	copy(out, f.records)
+	return out
+}
+
+func TestRecordRunSink(t *testing.T) {
+	cases := []struct {
+		name     string
+		command  string
+		wantOK   bool
+		wantCode int
+	}{
+		{"successful command", "exit 0", true, 0},
+		{"failing command", "exit 3", false, 3},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewRunner()
+			sink := &fakeSink{}
+			r.SetRunSink(sink)
+
+			cmd := models.CommandConfig{
+				ID:      "cmd-1",
+				Label:   "Test Command",
+				Command: tc.command,
+				Group:   "Android",
+			}
+			// A nil ctx keeps the runner headless — no Wails events are emitted.
+			r.ExecuteCommand(nil, cmd, t.TempDir(), "run-1", nil, "proj-1")
+			r.wg.Wait()
+
+			records := sink.all()
+			if len(records) != 1 {
+				t.Fatalf("got %d records, want 1: %+v", len(records), records)
+			}
+			rec := records[0]
+			if rec.CmdID != "cmd-1" || rec.Label != "Test Command" {
+				t.Errorf("identity = %q/%q, want cmd-1/Test Command", rec.CmdID, rec.Label)
+			}
+			if rec.Project != "proj-1" || rec.Group != "Android" {
+				t.Errorf("attribution = %q/%q, want proj-1/Android", rec.Project, rec.Group)
+			}
+			if rec.RunID != "run-1" {
+				t.Errorf("RunID = %q, want run-1", rec.RunID)
+			}
+			if rec.ExitCode != tc.wantCode || rec.OK != tc.wantOK {
+				t.Errorf("exit = %d/ok=%v, want %d/%v", rec.ExitCode, rec.OK, tc.wantCode, tc.wantOK)
+			}
+			if rec.Stopped {
+				t.Error("a command that exited on its own must not be marked stopped")
+			}
+			if rec.T == 0 {
+				t.Error("start time not recorded")
+			}
+		})
+	}
+}
+
+func TestNilRunSinkIsSafe(t *testing.T) {
+	r := NewRunner()
+	// No sink installed — the default state, and what happens with metrics off.
+	cmd := models.CommandConfig{ID: "cmd-1", Label: "Test", Command: "exit 0"}
+	r.ExecuteCommand(nil, cmd, t.TempDir(), "run-1", nil, "proj-1")
+	r.wg.Wait()
+}
+
+func TestStoppedFlagRoundTrip(t *testing.T) {
+	r := NewRunner()
+
+	if r.takeStopped("cmd-1") {
+		t.Error("a command nobody stopped should not be flagged")
+	}
+
+	r.markStopped("cmd-1")
+	if !r.takeStopped("cmd-1") {
+		t.Error("markStopped was not observed")
+	}
+	if r.takeStopped("cmd-1") {
+		t.Error("the flag must be cleared once taken, so the next run is not mislabelled")
 	}
 }
 
@@ -153,14 +292,17 @@ func TestGetProcessSnapshotWithoutProcess(t *testing.T) {
 	}
 }
 
-func TestStoreCmdLabel(t *testing.T) {
+func TestStoreCmdMeta(t *testing.T) {
 	r := NewRunner()
-	r.storeCmdLabel("cmd-1", "Label One")
-	r.cmdLabelsMu.RLock()
-	got := r.cmdLabels["cmd-1"]
-	r.cmdLabelsMu.RUnlock()
-	if got != "Label One" {
-		t.Errorf("label = %q, want %q", got, "Label One")
+	want := models.CmdMeta{Label: "Label One", ProjectID: "proj-1", Group: "Android"}
+	r.storeCmdMeta("cmd-1", want)
+
+	r.cmdMetaMu.RLock()
+	got := r.cmdMeta["cmd-1"]
+	r.cmdMetaMu.RUnlock()
+
+	if got != want {
+		t.Errorf("meta = %+v, want %+v", got, want)
 	}
 }
 
