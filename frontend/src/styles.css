@@ -456,6 +456,13 @@
     }
     #new-project-form input:focus { outline: none; border-color: var(--accent); }
 
+    .np-form-hint {
+      color: #e05252;
+      font-size: 11px;
+      line-height: 1.3;
+      margin: -1px 1px 1px;
+    }
+
     .form-row {
       display: flex;
       gap: 4px;
@@ -1139,7 +1146,9 @@
       width: 100%;
     }
     .modal-box input:focus { outline: none; border-color: var(--accent); }
-    .modal-box input.input-error { border-color: #e05252; box-shadow: 0 0 0 2px rgba(224,82,82,0.25); }
+    .modal-box input.input-error,
+    #new-project-form input.input-error,
+    #add-group-form input.input-error { border-color: #e05252; box-shadow: 0 0 0 2px rgba(224,82,82,0.25); }
 
     .pre-hooks-section {
       border-top: 1px solid var(--border);

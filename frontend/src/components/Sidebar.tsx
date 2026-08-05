@@ -21,6 +21,15 @@ export default function Sidebar(props: SidebarProps) {
   const [showForm, setShowForm] = createSignal(false);
   const [npName, setNpName] = createSignal('');
   const [npDir, setNpDir] = createSignal('');
+  const [nameError, setNameError] = createSignal(false);
+  const [dirError, setDirError] = createSignal(false);
+
+  const hintText = (): string => {
+    if (nameError() && dirError()) return 'Enter a project name and choose a folder.';
+    if (nameError()) return 'Enter a project name.';
+    if (dirError()) return 'Choose a folder for this project.';
+    return '';
+  };
 
   function selectProject(id: string): void {
     setSelectedId(id);
@@ -29,13 +38,17 @@ export default function Sidebar(props: SidebarProps) {
 
   async function handleBrowse(): Promise<void> {
     const path = await go.PickFolder();
-    if (path) setNpDir(path);
+    if (path) { setNpDir(path); setDirError(false); }
   }
 
   async function handleCreate(): Promise<void> {
     const name = npName().trim();
     const dir = npDir().trim();
-    if (!name || !dir) return;
+    const missingName = !name;
+    const missingDir = !dir;
+    setNameError(missingName);
+    setDirError(missingDir);
+    if (missingName || missingDir) return;
 
     const proj: Project = {
       id: uid(),
@@ -63,6 +76,8 @@ export default function Sidebar(props: SidebarProps) {
     setShowForm(false);
     setNpName('');
     setNpDir('');
+    setNameError(false);
+    setDirError(false);
   }
 
   async function handleExport(): Promise<void> {
@@ -192,7 +207,11 @@ export default function Sidebar(props: SidebarProps) {
 
       <button
         id="add-project-btn"
-        onClick={() => setShowForm(!showForm())}
+        onClick={() => {
+          const next = !showForm();
+          setShowForm(next);
+          if (!next) { setNameError(false); setDirError(false); }
+        }}
       >
         + New Project
       </button>
@@ -202,21 +221,26 @@ export default function Sidebar(props: SidebarProps) {
           <input
             id="np-name"
             placeholder="Project name"
+            classList={{ 'input-error': nameError() }}
             value={npName()}
-            onInput={(e: InputEvent) => setNpName((e.target as HTMLInputElement).value)}
+            onInput={(e: InputEvent) => { setNpName((e.target as HTMLInputElement).value); setNameError(false); }}
           />
           <div class="form-row">
             <input
               id="np-dir"
               placeholder="Folder path"
               style={{ flex: '1' }}
+              classList={{ 'input-error': dirError() }}
               value={npDir()}
-              onInput={(e: InputEvent) => setNpDir((e.target as HTMLInputElement).value)}
+              onInput={(e: InputEvent) => { setNpDir((e.target as HTMLInputElement).value); setDirError(false); }}
             />
             <button class="pick-btn" id="np-pick" onClick={handleBrowse}>
               Browse
             </button>
           </div>
+          <Show when={nameError() || dirError()}>
+            <div class="np-form-hint">{hintText()}</div>
+          </Show>
           <div class="form-actions">
             <button class="btn-primary" id="np-save" onClick={handleCreate}>
               Create

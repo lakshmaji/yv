@@ -18,20 +18,23 @@ interface GroupsPanelProps {
 export default function GroupsPanel(props: GroupsPanelProps) {
   const [showForm, setShowForm] = createSignal(false);
   const [groupName, setGroupName] = createSignal('');
+  const [nameError, setNameError] = createSignal('');
 
   const allGroups = (): string[] => ['All', ...visibleGroups()];
 
-  async function addGroup(name: string): Promise<void> {
+  async function addGroup(name: string): Promise<boolean> {
     const proj = selectedProject();
-    if (!proj) return;
-    if ((proj.groups || []).includes(name)) return;
+    if (!proj) return false;
+    if ((proj.groups || []).includes(name)) return false;
     const projIdx = projects.findIndex(p => p.id === proj.id);
     setProjects(projIdx, 'groups', (groups: string[]) => [...(groups || []), name]);
     const result = await go.SaveProjects(projects as Project[]);
     if (result !== 'ok') {
       alert('Save failed: ' + result);
       setProjects(projIdx, 'groups', (groups: string[]) => groups.filter(g => g !== name));
+      return false;
     }
+    return true;
   }
 
   async function handleDeleteGroup(groupName: string): Promise<void> {
@@ -55,15 +58,26 @@ export default function GroupsPanel(props: GroupsPanelProps) {
 
   async function handleAddGroup(): Promise<void> {
     const name = groupName().trim();
-    if (!name) return;
-    await addGroup(name);
+    if (!name) {
+      setNameError('Enter a group name.');
+      return;
+    }
+    const proj = selectedProject();
+    if (proj && (proj.groups || []).includes(name)) {
+      setNameError(`A group named "${name}" already exists.`);
+      return;
+    }
+    const ok = await addGroup(name);
+    if (!ok) return;
     setShowForm(false);
     setGroupName('');
+    setNameError('');
   }
 
   function handleCancel(): void {
     setShowForm(false);
     setGroupName('');
+    setNameError('');
   }
 
   function handleKeyDown(e: KeyboardEvent): void {
@@ -115,7 +129,9 @@ export default function GroupsPanel(props: GroupsPanelProps) {
       <button
         id="add-group-btn"
         onClick={() => {
-          setShowForm(!showForm());
+          const next = !showForm();
+          setShowForm(next);
+          if (!next) setNameError('');
         }}
       >
         + Add Group
@@ -126,10 +142,14 @@ export default function GroupsPanel(props: GroupsPanelProps) {
           <input
             id="ag-name"
             placeholder="Group name"
+            classList={{ 'input-error': !!nameError() }}
             value={groupName()}
-            onInput={(e: InputEvent) => setGroupName((e.target as HTMLInputElement).value)}
+            onInput={(e: InputEvent) => { setGroupName((e.target as HTMLInputElement).value); setNameError(''); }}
             onKeyDown={handleKeyDown}
           />
+          <Show when={nameError()}>
+            <div class="np-form-hint">{nameError()}</div>
+          </Show>
           <div class="form-actions">
             <button class="btn-primary" id="ag-save" onClick={handleAddGroup}>
               Add
