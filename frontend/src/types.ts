@@ -6,6 +6,8 @@ export interface Project {
   groupPaths?: Record<string, string>;
   commands: CommandConfig[];
   shortcuts?: Shortcut[];
+  labelBgColor?: string;
+  labelTxColor?: string;
 }
 
 export interface CommandConfig {

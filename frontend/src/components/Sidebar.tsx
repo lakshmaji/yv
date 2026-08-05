@@ -135,6 +135,21 @@ export default function Sidebar(props: SidebarProps) {
             const rc = (): number => projectRunningCount(p.id);
             const initials = (): string => p.name.slice(0, 2).toUpperCase();
 
+            const hasColor = (): boolean => !!(p.labelBgColor || p.labelTxColor);
+            const dotStyle = () => p.labelBgColor ? { background: p.labelBgColor } : {};
+            const avatarStyle = () => {
+              const s: Record<string, string> = {};
+              if (p.labelBgColor) { s['background'] = p.labelBgColor; s['border-color'] = p.labelBgColor; }
+              if (p.labelTxColor) s['color'] = p.labelTxColor;
+              return s;
+            };
+            const nameStyle = () => {
+              const s: Record<string, string> = {};
+              if (p.labelBgColor) s['background'] = p.labelBgColor;
+              if (p.labelTxColor) s['color'] = p.labelTxColor;
+              return s;
+            };
+
             return (
               <div
                 classList={{
@@ -145,9 +160,15 @@ export default function Sidebar(props: SidebarProps) {
                 title={p.name}
                 onClick={() => selectProject(p.id)}
               >
-                <span class="project-avatar">{initials()}</span>
-                <span class="project-dot" />
-                <span class="project-name">{p.name}</span>
+                <span class="project-avatar" style={avatarStyle()}>{initials()}</span>
+                <span class="project-dot" style={dotStyle()} />
+                <span
+                  class="project-name"
+                  classList={{ 'project-name-chip': hasColor() }}
+                  style={nameStyle()}
+                >
+                  {p.name}
+                </span>
                 <Show when={rc() > 0}>
                   <span class="project-running-count" style={{ display: 'inline-block' }}>
                     {rc()}

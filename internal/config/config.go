@@ -56,12 +56,14 @@ func (s *Store) SaveProjects(projects []models.Project) string {
 	return "ok"
 }
 
-func (s *Store) UpdateProject(projectID, name, workingDir string) string {
+func (s *Store) UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor string) string {
 	projects := s.LoadProjects()
 	for i, p := range projects {
 		if p.ID == projectID {
 			projects[i].Name = name
 			projects[i].WorkingDir = workingDir
+			projects[i].LabelBgColor = labelBgColor
+			projects[i].LabelTxColor = labelTxColor
 			return s.SaveProjects(projects)
 		}
 	}

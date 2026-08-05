@@ -174,6 +174,14 @@
       text-overflow: ellipsis;
       flex: 1;
     }
+    /* When a custom label colour is set, render the name as a tinted pill so
+       both the background and text colour are clearly visible. */
+    .project-name.project-name-chip {
+      flex: 0 1 auto;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
 
     .project-settings-btn {
       display: flex;
@@ -192,6 +200,75 @@
       transition: color .15s;
     }
     .project-settings-btn:hover { color: var(--text); }
+
+    /* ── Project label colour picker ─────────────────────── */
+    .proj-color-section {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .proj-color-preview-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .proj-color-preview {
+      display: flex !important;
+      width: 36px;
+      height: 36px;
+      font-size: 13px;
+    }
+    .proj-color-preview-hint {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .proj-color-pickers {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+    .proj-color-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .proj-color-group-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+    }
+    .proj-color-swatches {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .proj-color-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 2px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .1s, box-shadow .1s;
+    }
+    .proj-color-swatch:hover { transform: scale(1.15); }
+    .proj-color-swatch.selected {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+    .swatch-none {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1;
+    }
 
     .project-settings-export {
       display: flex;

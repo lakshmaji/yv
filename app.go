@@ -102,8 +102,8 @@ func (a *App) SaveProjects(projects []models.Project) string {
 	return a.cfg.SaveProjects(projects)
 }
 
-func (a *App) UpdateProject(projectID, name, workingDir string) string {
-	return a.cfg.UpdateProject(projectID, name, workingDir)
+func (a *App) UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor string) string {
+	return a.cfg.UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor)
 }
 
 func (a *App) ExportProject(projectID, format string) (string, error) {

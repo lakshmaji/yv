@@ -22,7 +22,7 @@ interface GoApp {
   ExportProject(id: string, format: string): Promise<string>;
   ImportProjects(): Promise<string>;
   ImportProject(): Promise<string>;
-  UpdateProject(id: string, name: string, dir: string): Promise<string>;
+  UpdateProject(id: string, name: string, dir: string, labelBgColor: string, labelTxColor: string): Promise<string>;
   SendInput(cmdId: string, text: string): Promise<string>;
   GetEnvironments(projectId: string): Promise<ProjectEnvs>;
   SaveEnvironments(projectId: string, envs: ProjectEnvs): Promise<string>;
