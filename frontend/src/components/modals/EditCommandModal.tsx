@@ -1,4 +1,4 @@
-import { Show, For, createSignal, createEffect } from 'solid-js';
+import { Show, Index, createSignal, createEffect } from 'solid-js';
 import { projects, setProjects, selectedProject, selectedId, editingCmd, setEditingCmd } from '../../store';
 import { go } from '../../wails';
 import type { CommandConfig, PostCommand } from '../../types';
@@ -158,19 +158,21 @@ export default function EditCommandModal() {
 
           <div class="pre-hooks-section">
             <div class="pre-hooks-header">Pre-hook Commands</div>
-            <For each={preHooks()}>
+            {/* Index, not For: For keys by value for a string list, so every
+                keystroke changed the key, rebuilt the row, and dropped focus. */}
+            <Index each={preHooks()}>
               {(hook, idx) => (
                 <div class="pre-hook-row">
                   <input
                     class="pre-hook-input"
                     placeholder="shell command…"
-                    value={hook}
-                    onInput={e => updatePreHook(idx(), e.currentTarget.value)}
+                    value={hook()}
+                    onInput={e => updatePreHook(idx, e.currentTarget.value)}
                   />
-                  <button class="pre-hook-del-btn" type="button" onClick={() => removePreHook(idx())}>✕</button>
+                  <button class="pre-hook-del-btn" type="button" onClick={() => removePreHook(idx)}>✕</button>
                 </div>
               )}
-            </For>
+            </Index>
             <button type="button" onClick={addPreHook} style={{ background: "transparent", border: "1px dashed var(--border)", color: "var(--muted)", "border-radius": "var(--radius)", padding: "5px 10px", cursor: "pointer", "font-size": "11px", "text-align": "left" }}>
               + Add pre-hook
             </button>
@@ -180,30 +182,30 @@ export default function EditCommandModal() {
             <div class="pre-hooks-header">
               Post-hook Commands <span class="hook-hint">run after main starts · default 120 s timeout</span>
             </div>
-            <For each={postHooks()}>
+            <Index each={postHooks()}>
               {(hook, idx) => (
                 <div class="post-hook-row">
                   <input
                     class="post-hook-input"
                     placeholder="shell command…"
-                    value={hook.command}
-                    onInput={e => updatePostHook(idx(), 'command', e.currentTarget.value)}
+                    value={hook().command}
+                    onInput={e => updatePostHook(idx, 'command', e.currentTarget.value)}
                   />
                   <input
                     class="post-hook-timeout"
                     type="number"
                     placeholder="120"
-                    value={hook.timeout}
+                    value={hook().timeout}
                     min="1"
                     max="3600"
                     title="Timeout in seconds (default: 120)"
-                    onInput={e => updatePostHook(idx(), 'timeout', e.currentTarget.value)}
+                    onInput={e => updatePostHook(idx, 'timeout', e.currentTarget.value)}
                   />
                   <span class="post-hook-timeout-label">s</span>
-                  <button class="pre-hook-del-btn" type="button" onClick={() => removePostHook(idx())}>✕</button>
+                  <button class="pre-hook-del-btn" type="button" onClick={() => removePostHook(idx)}>✕</button>
                 </div>
               )}
-            </For>
+            </Index>
             <button type="button" onClick={addPostHook} style={{ background: "transparent", border: "1px dashed var(--border)", color: "var(--muted)", "border-radius": "var(--radius)", padding: "5px 10px", cursor: "pointer", "font-size": "11px", "text-align": "left" }}>
               + Add post-hook
             </button>

@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup } from 'solid-js';
 import {
   projectEnvs, setProjectEnvs, setEnvModalOpen,
-  activeEnv, activeEnvVarCount, selectedId,
+  activeEnv, selectedId,
 } from '../store';
 import { go } from '../wails';
 import { envChipStyle } from '../lib/envColors';
@@ -43,9 +43,6 @@ export default function EnvSelector() {
       >
         <span class="env-dot" />
         <span class="env-name">{label()}</span>
-        <Show when={activeEnvVarCount() > 0}>
-          <span class="env-var-count">{activeEnvVarCount()}</span>
-        </Show>
         <span class="env-caret">▾</span>
       </button>
 
@@ -70,7 +67,6 @@ export default function EnvSelector() {
               >
                 <span class="env-menu-swatch" style={envChipStyle(env)} />
                 <span class="env-menu-name">{env.name}</span>
-                <span class="env-menu-count">{env.vars?.length || 0} vars</span>
               </button>
             )}
           </For>

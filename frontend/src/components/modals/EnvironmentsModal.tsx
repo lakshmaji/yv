@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from 'solid-js';
+import { For, Index, Show, createEffect, createSignal } from 'solid-js';
 import {
   envModalOpen, setEnvModalOpen, projectEnvs, setProjectEnvs, selectedId,
 } from '../../store';
@@ -233,41 +233,47 @@ export default function EnvironmentsModal() {
 
                     <div class="modal-field-label">Variables</div>
                     <div class="env-vars">
-                      <For each={env().vars || []}>
+                      {/* Index, not For: For keys by item reference, and every
+                          keystroke replaces the edited row's object. That
+                          disposed the row's DOM and rebuilt it mid-typing, so
+                          the input lost focus after each character. Index keys
+                          by position, so the input element is created once and
+                          only its value updates. */}
+                      <Index each={env().vars || []}>
                         {(v, i) => {
-                          const rowKey = () => `${env().id}:${i()}`;
-                          const isRevealed = () => !v.secret || revealed().has(rowKey());
+                          const rowKey = () => `${env().id}:${i}`;
+                          const isRevealed = () => !v().secret || revealed().has(rowKey());
                           return (
                             <div class="env-var-row">
                               <input
                                 class="env-var-key"
                                 placeholder="KEY"
-                                value={v.key}
+                                value={v().key}
                                 onInput={e => updateVars(env().id, vars =>
-                                  vars.map((row, idx) => (idx === i() ? { ...row, key: e.currentTarget.value } : row)))
+                                  vars.map((row, idx) => (idx === i ? { ...row, key: e.currentTarget.value } : row)))
                                 }
                               />
                               <input
                                 class="env-var-value"
                                 type={isRevealed() ? 'text' : 'password'}
                                 placeholder="value"
-                                value={v.value}
+                                value={v().value}
                                 onInput={e => updateVars(env().id, vars =>
-                                  vars.map((row, idx) => (idx === i() ? { ...row, value: e.currentTarget.value } : row)))
+                                  vars.map((row, idx) => (idx === i ? { ...row, value: e.currentTarget.value } : row)))
                                 }
                               />
                               <button
                                 class="env-var-btn"
                                 type="button"
-                                title={v.secret ? 'Stored as a secret (masked)' : 'Mark as secret'}
+                                title={v().secret ? 'Stored as a secret (masked)' : 'Mark as secret'}
                                 onClick={() => updateVars(env().id, vars =>
-                                  vars.map((row, idx) => (idx === i() ? { ...row, secret: !row.secret } : row)))
+                                  vars.map((row, idx) => (idx === i ? { ...row, secret: !row.secret } : row)))
                                 }
-                              >{v.secret ? '🔒' : '🔓'}</button>
+                              >{v().secret ? '🔒' : '🔓'}</button>
                               <button
                                 class="env-var-btn"
                                 type="button"
-                                disabled={!v.secret}
+                                disabled={!v().secret}
                                 title={isRevealed() ? 'Hide value' : 'Reveal value'}
                                 onClick={() => toggleReveal(rowKey())}
                               >{isRevealed() ? '🙈' : '👁'}</button>
@@ -275,12 +281,12 @@ export default function EnvironmentsModal() {
                                 class="env-var-btn env-var-del"
                                 type="button"
                                 title="Remove variable"
-                                onClick={() => updateVars(env().id, vars => vars.filter((_, idx) => idx !== i()))}
+                                onClick={() => updateVars(env().id, vars => vars.filter((_, idx) => idx !== i))}
                               >✕</button>
                             </div>
                           );
                         }}
-                      </For>
+                      </Index>
                       <button class="env-var-add" type="button" onClick={() => addVar(env().id)}>
                         + Add variable
                       </button>
