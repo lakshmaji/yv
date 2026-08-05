@@ -1470,6 +1470,12 @@
     }
     .env-trigger:hover { border-color: var(--accent); color: var(--accent); }
     .env-trigger.env-active { color: var(--text); border-color: var(--green); }
+    /* A user-picked background wins over the hover/active defaults. */
+    .env-trigger.env-tinted,
+    .env-trigger.env-tinted:hover { color: inherit; }
+    .env-trigger.env-tinted .env-dot,
+    .env-trigger.env-tinted .env-var-count { color: inherit; border-color: currentColor; }
+    .env-trigger.env-tinted .env-dot { background: currentColor; }
 
     .env-dot {
       width: 6px;
@@ -1537,6 +1543,16 @@
     }
     .env-menu-item:hover { background: var(--card); }
     .env-menu-item.selected { background: var(--card); color: var(--accent); }
+
+    .env-menu-swatch,
+    .env-list-swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--muted);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
 
     .env-menu-count {
       font-family: var(--mono);
@@ -1668,6 +1684,65 @@
       cursor: pointer;
     }
     .env-active-toggle input { width: auto; }
+
+    /* ── Environment colour pickers ──────────────────────── */
+    .env-colors {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .env-color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .env-color-label {
+      width: 74px;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .env-swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .env-swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      padding: 0;
+      transition: transform .1s, box-shadow .1s;
+    }
+    .env-swatch:hover { transform: scale(1.12); }
+    .env-swatch.selected {
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+    }
+    /* "Default" swatch reads as an empty slot. */
+    .env-swatch-none {
+      background: transparent;
+      border-style: dashed;
+    }
+
+    .env-color-preview {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--card);
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     .env-vars {
       display: flex;

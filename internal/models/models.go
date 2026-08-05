@@ -41,10 +41,14 @@ type EnvVar struct {
 }
 
 // Environment is a named set of variables that can be injected into commands.
+// BgColor/TextColor are optional "#rrggbb" overrides used to make the active
+// environment visually unmistakable; empty means "use the default theme".
 type Environment struct {
-	ID   string   `json:"id"`
-	Name string   `json:"name"`
-	Vars []EnvVar `json:"vars,omitempty"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	BgColor   string   `json:"bgColor,omitempty"`
+	TextColor string   `json:"textColor,omitempty"`
+	Vars      []EnvVar `json:"vars,omitempty"`
 }
 
 // ProjectEnvs holds every environment defined for one project plus the ID of

@@ -711,6 +711,7 @@ Deliberately a **separate file from `projects.json`** so that Export Project / E
 
 - **Top-right of the project header**: environment switcher showing the active environment, its variable count, and a green dot. Picking one persists immediately.
 - **Manage environments…** opens a modal: environment list on the left (create / delete / mark active), variables on the right. Values are masked by default with a reveal toggle and a lock toggle per row. Nothing is persisted until Save; Cancel discards.
+- **Colours**: each environment can pick a background and a text colour from preset swatches (9 backgrounds + 4 text options, first entry of each = "Default"/theme). The chosen colours tint the top-right selector, the dropdown swatches, and the modal list, so a prod environment is unmistakable. A live preview chip sits next to the pickers.
 - Validation (`[A-Za-z_][A-Za-z0-9_]*`, no duplicate keys or environment names) runs in the modal for fast feedback and again in Go, which is the enforcement point.
 
 ### New Go API
@@ -725,14 +726,16 @@ Deliberately a **separate file from `projects.json`** so that Export Project / E
 
 | File | Change |
 |---|---|
-| `internal/env/env.go` | New package — file-backed `Store` (0600) plus pure `Merge`, `ActiveVars`, `Validate`, `ValidateKey` |
+| `internal/env/env.go` | New package — file-backed `Store` (0600) plus pure `Merge`, `ActiveVars`, `Validate`, `ValidateKey`, `ValidateColor` |
 | `internal/env/env_test.go` | New — table-driven tests for merging, validation, active resolution, store round-trip, file permissions |
-| `internal/models/models.go` | Added `EnvVar`, `Environment`, `ProjectEnvs` |
+| `internal/models/models.go` | Added `EnvVar`, `Environment` (incl. `BgColor` / `TextColor`), `ProjectEnvs` |
 | `models.go` | Wails type aliases for the three new types |
 | `app.go` | `envs *env.Store`; `GetEnvironments` / `SaveEnvironments` / `DeleteEnvironments`; `ExecuteCommand` gained a `projectID` argument |
 | `internal/runner/runner.go` | `ExecuteCommand` takes `[]models.EnvVar`; new `buildEnv` helper; shell runners take a resolved `environ` |
 | `internal/runner/runner_test.go` | Table-driven `buildEnv` + end-to-end "variable reaches the shell" tests |
-| `frontend/src/components/EnvSelector.tsx` | New — top-right switcher |
+| `frontend/src/components/EnvSelector.tsx` | New — top-right switcher, tinted by the active environment's colours |
+| `frontend/src/lib/envColors.ts` | New — preset palettes + pure `envChipStyle` / `swatchStyle` / `isValidColor`, shared by every environment surface |
+| `frontend/src/lib/envColors.test.ts` | New — 28 table-driven vitest cases (preset integrity, colour validation, chip styles) |
 | `frontend/src/components/modals/EnvironmentsModal.tsx` | New — create/edit/delete environments and variables |
 | `frontend/src/store.ts` | `projectEnvs`, `envModalOpen`, `activeEnv`, `activeEnvVarCount`, `loadProjectEnvs` |
 | `frontend/src/App.tsx` | Loads environments when the project changes; mounts the modal |
@@ -743,6 +746,10 @@ Deliberately a **separate file from `projects.json`** so that Export Project / E
 ### Note on `wails.ts` typing
 
 The generated `wailsjs/go/models.ts` emits **classes** with a `convertValues()` member, so plain object literals from `types.ts` never satisfy them. The stale `import type { main }` had masked this (the namespace is `models`, not `main`, so the import silently failed type resolution). `GoApp` is now typed against `types.ts`, which already mirrors the JSON wire format — one source of truth, and `tsc --noEmit` is clean.
+
+### Colour safety
+
+Colours are validated as `#rgb` / `#rrggbb` (or empty) on **both** sides — `env.ValidateColor` in Go and `isValidColor` in `envColors.ts`. Since the values are written into inline `style` attributes, an unvalidated string would be a CSS-injection vector; invalid values are dropped rather than rendered, and both test suites cover an injection attempt explicitly.
 
 ### Testing
 

@@ -160,6 +160,26 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "valid colours",
+			in: models.ProjectEnvs{Environments: []models.Environment{
+				{ID: "e1", Name: "dev", BgColor: "#1f6feb", TextColor: "#fff"},
+			}},
+		},
+		{
+			name: "bad background colour",
+			in: models.ProjectEnvs{Environments: []models.Environment{
+				{ID: "e1", Name: "dev", BgColor: "red"},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "bad text colour",
+			in: models.ProjectEnvs{Environments: []models.Environment{
+				{ID: "e1", Name: "dev", TextColor: "#12345"},
+			}},
+			wantErr: true,
+		},
+		{
 			name: "no environments",
 			in:   models.ProjectEnvs{},
 		},
@@ -413,5 +433,56 @@ func TestStoreActiveVars(t *testing.T) {
 	vars := s.ActiveVars("p1")
 	if len(vars) != 1 || vars[0].Value != "2" {
 		t.Errorf("got %+v, want A=2", vars)
+	}
+}
+
+func TestValidateColor(t *testing.T) {
+	cases := []struct {
+		name    string
+		color   string
+		wantErr bool
+	}{
+		{name: "empty means default theme", color: ""},
+		{name: "six digit lowercase", color: "#1f6feb"},
+		{name: "six digit uppercase", color: "#1F6FEB"},
+		{name: "three digit", color: "#fff"},
+		{name: "missing hash", color: "1f6feb", wantErr: true},
+		{name: "named colour", color: "red", wantErr: true},
+		{name: "too short", color: "#12", wantErr: true},
+		{name: "five digits", color: "#12345", wantErr: true},
+		{name: "too long", color: "#1234567", wantErr: true},
+		{name: "non-hex digit", color: "#12345g", wantErr: true},
+		{name: "css injection attempt", color: "#fff;background:url(x)", wantErr: true},
+		{name: "just a hash", color: "#", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateColor(tc.color)
+			if tc.wantErr != (err != nil) {
+				t.Errorf("ValidateColor(%q): wantErr=%v, got %v", tc.color, tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestStoreNormalizesColors(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s := NewStore()
+
+	if err := s.Save("p1", models.ProjectEnvs{
+		Environments: []models.Environment{
+			{ID: "e1", Name: "dev", BgColor: "  #1F6FEB ", TextColor: " #FFF "},
+		},
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got := s.Get("p1").Environments[0]
+	if got.BgColor != "#1f6feb" {
+		t.Errorf("BgColor: got %q, want %q", got.BgColor, "#1f6feb")
+	}
+	if got.TextColor != "#fff" {
+		t.Errorf("TextColor: got %q, want %q", got.TextColor, "#fff")
 	}
 }

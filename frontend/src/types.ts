@@ -39,6 +39,8 @@ export interface EnvVar {
 export interface Environment {
   id: string;
   name: string;
+  bgColor?: string;
+  textColor?: string;
   vars?: EnvVar[];
 }
 

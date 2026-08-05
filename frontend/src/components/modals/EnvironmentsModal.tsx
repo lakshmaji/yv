@@ -4,6 +4,9 @@ import {
 } from '../../store';
 import { go } from '../../wails';
 import { uid } from '../../lib/utils';
+import {
+  ENV_BG_PRESETS, ENV_TEXT_PRESETS, envChipStyle, swatchStyle,
+} from '../../lib/envColors';
 import type { Environment, EnvVar, ProjectEnvs } from '../../types';
 
 /** Same rule the Go side enforces — kept here to fail fast in the UI. */
@@ -143,6 +146,7 @@ export default function EnvironmentsModal() {
                     type="button"
                     onClick={() => setEditingId(env.id)}
                   >
+                    <span class="env-list-swatch" style={envChipStyle(env)} />
                     <span class="env-list-name">{env.name || 'unnamed'}</span>
                     <Show when={env.id === activeId()}>
                       <span class="env-list-active">active</span>
@@ -175,6 +179,56 @@ export default function EnvironmentsModal() {
                         />
                         Active
                       </label>
+                    </div>
+
+                    <div class="modal-field-label">Colour</div>
+                    <div class="env-colors">
+                      <div class="env-color-row">
+                        <span class="env-color-label">Background</span>
+                        <div class="env-swatches">
+                          <For each={ENV_BG_PRESETS}>
+                            {preset => (
+                              <button
+                                class="env-swatch"
+                                classList={{
+                                  selected: (env().bgColor || '') === preset.value,
+                                  'env-swatch-none': preset.value === '',
+                                }}
+                                type="button"
+                                title={preset.name}
+                                style={swatchStyle(preset.value)}
+                                onClick={() => updateEnv(env().id, { bgColor: preset.value })}
+                              />
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                      <div class="env-color-row">
+                        <span class="env-color-label">Text</span>
+                        <div class="env-swatches">
+                          <For each={ENV_TEXT_PRESETS}>
+                            {preset => (
+                              <button
+                                class="env-swatch"
+                                classList={{
+                                  selected: (env().textColor || '') === preset.value,
+                                  'env-swatch-none': preset.value === '',
+                                }}
+                                type="button"
+                                title={preset.name}
+                                style={swatchStyle(preset.value)}
+                                onClick={() => updateEnv(env().id, { textColor: preset.value })}
+                              />
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                      <div class="env-color-row">
+                        <span class="env-color-label">Preview</span>
+                        <span class="env-color-preview" style={envChipStyle(env())}>
+                          {env().name || 'unnamed'}
+                        </span>
+                      </div>
                     </div>
 
                     <div class="modal-field-label">Variables</div>

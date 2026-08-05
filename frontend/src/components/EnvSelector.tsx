@@ -4,6 +4,7 @@ import {
   activeEnv, activeEnvVarCount, selectedId,
 } from '../store';
 import { go } from '../wails';
+import { envChipStyle } from '../lib/envColors';
 
 /**
  * Top-right environment switcher. Picking an environment persists the choice
@@ -34,9 +35,10 @@ export default function EnvSelector() {
     <div id="env-selector">
       <button
         class="env-trigger"
-        classList={{ 'env-active': !!activeEnv() }}
+        classList={{ 'env-active': !!activeEnv(), 'env-tinted': !!activeEnv()?.bgColor }}
         type="button"
         title="Active environment"
+        style={envChipStyle(activeEnv())}
         onClick={() => setOpen(!open())}
       >
         <span class="env-dot" />
@@ -66,6 +68,7 @@ export default function EnvSelector() {
                 type="button"
                 onClick={() => activate(env.id)}
               >
+                <span class="env-menu-swatch" style={envChipStyle(env)} />
                 <span class="env-menu-name">{env.name}</span>
                 <span class="env-menu-count">{env.vars?.length || 0} vars</span>
               </button>

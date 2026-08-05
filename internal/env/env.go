@@ -198,11 +198,36 @@ func ValidateKey(key string) error {
 	return nil
 }
 
-// Validate checks every environment name and variable key in pe.
+// ValidateColor accepts an empty string (use the default theme) or a
+// "#rgb" / "#rrggbb" hex colour. Anything else is rejected so a stored value
+// can never break the UI or smuggle CSS into a style attribute.
+func ValidateColor(color string) error {
+	if color == "" {
+		return nil
+	}
+	if color[0] != '#' || (len(color) != 4 && len(color) != 7) {
+		return fmt.Errorf("invalid colour %q", color)
+	}
+	for _, r := range color[1:] {
+		isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+		if !isHex {
+			return fmt.Errorf("invalid colour %q", color)
+		}
+	}
+	return nil
+}
+
+// Validate checks every environment name, colour, and variable key in pe.
 func Validate(pe models.ProjectEnvs) error {
 	for _, e := range pe.Environments {
 		if strings.TrimSpace(e.Name) == "" {
 			return fmt.Errorf("environment name required")
+		}
+		if err := ValidateColor(strings.TrimSpace(e.BgColor)); err != nil {
+			return fmt.Errorf("%s: %w", e.Name, err)
+		}
+		if err := ValidateColor(strings.TrimSpace(e.TextColor)); err != nil {
+			return fmt.Errorf("%s: %w", e.Name, err)
 		}
 		for _, v := range e.Vars {
 			key := strings.TrimSpace(v.Key)
@@ -217,11 +242,13 @@ func Validate(pe models.ProjectEnvs) error {
 	return nil
 }
 
-// normalize trims names/keys and drops variable rows with no key.
+// normalize trims names/keys/colours and drops variable rows with no key.
 func normalize(envs []models.Environment) []models.Environment {
 	out := make([]models.Environment, 0, len(envs))
 	for _, e := range envs {
 		e.Name = strings.TrimSpace(e.Name)
+		e.BgColor = strings.ToLower(strings.TrimSpace(e.BgColor))
+		e.TextColor = strings.ToLower(strings.TrimSpace(e.TextColor))
 		vars := make([]models.EnvVar, 0, len(e.Vars))
 		for _, v := range e.Vars {
 			v.Key = strings.TrimSpace(v.Key)
