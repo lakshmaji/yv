@@ -128,6 +128,24 @@ export async function runCommand(cmd: CommandConfig): Promise<number> {
   return donePromise;
 }
 
+// stopAllCommands kills every running command process across all projects.
+// Running rows are flagged `stopped` up front so they settle into the grey
+// done-stopped state; the per-command `done` events (fired as each process
+// dies) then flip `running` off. Returns the number of commands it stopped.
+export async function stopAllCommands(): Promise<number> {
+  let count = 0;
+  for (const proj of projects) {
+    for (const cmd of proj.commands) {
+      if (getCmdState(cmd.id).running) {
+        count++;
+        updateCmdState(cmd.id, s => ({ ...s, stopped: true }));
+      }
+    }
+  }
+  if (count > 0) await go.StopAllCommands();
+  return count;
+}
+
 export async function runShortcut(shortcut: Shortcut): Promise<void> {
   const proj = selectedProject();
   if (!proj) return;

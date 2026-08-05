@@ -10,6 +10,7 @@ import {
   maximizedCmd, setMaximizedCmd, filteredCommands,
 } from './store';
 import { go, runtime } from './wails';
+import { stopAllCommands } from './lib/commands';
 import Sidebar from './components/Sidebar';
 import GroupsPanel from './components/GroupsPanel';
 import MainPanel from './components/MainPanel';
@@ -77,6 +78,12 @@ export default function App() {
       e.preventDefault();
       setSearchQuery('');
       setSpotlightOpen(true);
+      return;
+    }
+    // ⌘. (the macOS cancel gesture) stops every running command at once.
+    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+      e.preventDefault();
+      stopAllCommands();
       return;
     }
     if (e.key === 'Escape') {
