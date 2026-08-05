@@ -1189,6 +1189,139 @@
       padding-top: 10px;
     }
 
+    /* ── Keyboard Shortcuts modal ─────────────────────────── */
+    .kb-modal {
+      width: 760px;
+      max-width: 94vw;
+      gap: 16px;
+    }
+
+    .kb-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .kb-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 15px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .kb-close:hover { color: var(--text); background: var(--card); }
+
+    .kb-keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .kb-row {
+      display: flex;
+      gap: 5px;
+    }
+
+    .kb-key {
+      flex: 1 1 0;
+      flex-basis: 0;
+      min-width: 0;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+      user-select: none;
+      transition: background 0.12s ease, color 0.12s ease,
+                  box-shadow 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+    }
+
+    .kb-key.kb-space { min-width: 60px; }
+
+    /* Keys that participate in a shortcut carry a resting highlight. */
+    .kb-key.active {
+      color: var(--accent);
+      border-color: rgba(88, 166, 255, 0.45);
+      background: rgba(88, 166, 255, 0.10);
+    }
+
+    /* Keys of the currently hovered shortcut light up with a strong glow. */
+    .kb-key.hot {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 0 16px 2px rgba(88, 166, 255, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .kb-groups {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .kb-group-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .kb-shortcut {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: default;
+      transition: background 0.12s ease;
+    }
+    .kb-shortcut:hover { background: var(--card); }
+
+    .kb-shortcut-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .kb-shortcut:hover .kb-shortcut-label { color: var(--text); }
+
+    .kb-combo {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .kb-combo kbd {
+      font-family: var(--mono);
+      font-size: 10px;
+      min-width: 18px;
+      text-align: center;
+      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+    .kb-shortcut:hover .kb-combo kbd {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     /* ── Add command form ─────────────────────────────────── */
     #add-cmd-form {
       border-top: 1px solid var(--border);

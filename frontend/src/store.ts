@@ -47,6 +47,9 @@ function setMaximizedCmd(cmdId: string | null) {
 const [projectEnvs, setProjectEnvs] = createSignal<ProjectEnvs>({ environments: [], activeId: '' });
 const [envModalOpen, setEnvModalOpen] = createSignal(false);
 
+// Keyboard shortcuts help modal (opened from the Help menu / ⌘/)
+const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
+
 // Per-command terminal state
 const [cmdState, setCmdState] = createSignal<Map<string, CmdState>>(new Map(), { equals: false });
 
@@ -182,5 +185,6 @@ export {
   maximizedCmd, setMaximizedCmd,
   projectEnvs, setProjectEnvs, loadProjectEnvs,
   envModalOpen, setEnvModalOpen,
+  shortcutsModalOpen, setShortcutsModalOpen,
   activeEnv, activeEnvVarCount,
 };

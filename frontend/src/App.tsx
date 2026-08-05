@@ -8,6 +8,7 @@ import {
   spotlightOpen, setSpotlightOpen,
   editingCmd, editingShortcut, settingsProjectId, envModalOpen,
   maximizedCmd, setMaximizedCmd, filteredCommands,
+  setShortcutsModalOpen,
 } from './store';
 import { go, runtime } from './wails';
 import { stopAllCommands } from './lib/commands';
@@ -21,6 +22,7 @@ import EnvironmentsModal from './components/modals/EnvironmentsModal';
 import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
+import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import {
   setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
@@ -98,11 +100,13 @@ export default function App() {
       setEditingShortcut(null);
       setSettingsProjectId(null);
       setEnvModalOpen(false);
+      setShortcutsModalOpen(false);
     }
   }
 
   let unsubFullscreen: (() => void) | undefined;
   let unsubResources: (() => void) | undefined;
+  let unsubShortcuts: (() => void) | undefined;
 
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
@@ -116,11 +120,15 @@ export default function App() {
       }
       setResourceStats(map);
     });
+    unsubShortcuts = runtime.EventsOn('open-keyboard-shortcuts', () => {
+      setShortcutsModalOpen(true);
+    });
   });
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeydown);
     unsubFullscreen?.();
     unsubResources?.();
+    unsubShortcuts?.();
   });
 
   function handleSidebarResize() {
@@ -141,6 +149,7 @@ export default function App() {
       <ShortcutModal />
       <ProjectSettingsModal />
       <EnvironmentsModal />
+      <KeyboardShortcutsModal />
       <Show when={spotlightOpen()}>
         <Spotlight />
       </Show>

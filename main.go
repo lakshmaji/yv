@@ -38,6 +38,8 @@ func main() {
 
 		Bind: []any{app},
 
+		Menu: appMenu(app.getCtx),
+
 		OnStartup: func(ctx context.Context) {
 			app.startup(ctx)
 		},
