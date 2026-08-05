@@ -160,6 +160,17 @@ export default function Sidebar(props: SidebarProps) {
         <kbd class="nav-trigger-kbd">⌘D</kbd>
       </button>
 
+      <button
+        id="discovery-trigger"
+        type="button"
+        classList={{ active: activeView() === 'discovery' }}
+        title="A procedurally generated world map"
+        onClick={() => setActiveView('discovery')}
+      >
+        <span class="nav-trigger-icon">◈</span>
+        <span class="nav-trigger-label">Discovery</span>
+      </button>
+
       <div id="project-list">
         <For each={projects}>
           {(p: Project) => {

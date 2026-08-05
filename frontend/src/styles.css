@@ -1543,9 +1543,10 @@
       white-space: nowrap;
     }
 
-    /* Sidebar nav buttons above the project list: Spotlight and Dashboard. */
+    /* Sidebar nav buttons above the project list: Spotlight, Dashboard, Discovery. */
     #spotlight-trigger,
-    #dashboard-trigger {
+    #dashboard-trigger,
+    #discovery-trigger {
       display: flex;
       align-items: center;
       gap: 7px;
@@ -1562,10 +1563,13 @@
       transition: border-color .15s, color .15s;
     }
     #spotlight-trigger:hover,
-    #dashboard-trigger:hover { border-color: var(--accent); color: var(--accent); }
+    #dashboard-trigger:hover,
+    #discovery-trigger:hover { border-color: var(--accent); color: var(--accent); }
 
-    #dashboard-trigger { margin-top: 0; }
-    #dashboard-trigger.active {
+    #dashboard-trigger,
+    #discovery-trigger { margin-top: 0; }
+    #dashboard-trigger.active,
+    #discovery-trigger.active {
       border-color: var(--accent);
       color: var(--accent);
       background: rgba(88,166,255,.1);
@@ -1599,12 +1603,14 @@
 
     /* Collapsed sidebar keeps the icon only, still clickable. */
     #sidebar.collapsed #spotlight-trigger,
-    #sidebar.collapsed #dashboard-trigger {
+    #sidebar.collapsed #dashboard-trigger,
+    #sidebar.collapsed #discovery-trigger {
       justify-content: center;
       margin: 8px 6px 4px;
       padding: 6px 0;
     }
-    #sidebar.collapsed #dashboard-trigger { margin-top: 0; }
+    #sidebar.collapsed #dashboard-trigger,
+    #sidebar.collapsed #discovery-trigger { margin-top: 0; }
     #sidebar.collapsed .spotlight-trigger-label,
     #sidebar.collapsed .spotlight-trigger-kbd,
     #sidebar.collapsed .nav-trigger-label,
@@ -2504,3 +2510,148 @@
        the states the settings screen adds. */
     .btn-danger { flex-shrink: 0; }
     .btn-danger:disabled { opacity: .35; cursor: default; }
+
+    /* ── Discovery landscape ─────────────────────────────── */
+    /* Reuses #dashboard-header / .dash-toolbar / .dash-refresh, so the header
+       and controls match the Dashboard without a second set of rules. */
+    #main.discovery {
+      overflow: hidden;
+      padding: 0 20px 20px;
+      gap: 12px;
+    }
+
+    .disc-seed {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 3px 8px;
+    }
+    .disc-seed-label { font-size: 11px; color: var(--muted); }
+    .disc-seed-input {
+      width: 130px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 0;
+    }
+
+    .disc-legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .disc-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .disc-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      border: 1px solid rgba(0,0,0,.35);
+    }
+
+    /* The map fills whatever height the panel has left; the SVG's own viewBox
+       keeps the composition intact at any aspect ratio. */
+    .landscape-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #061626;
+    }
+
+    .landscape-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .landscape-meta {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      display: flex;
+      gap: 12px;
+      padding: 4px 9px;
+      border-radius: var(--radius);
+      background: rgba(4,18,30,.55);
+      border: 1px solid rgba(255,255,255,.09);
+      font-family: var(--mono);
+      font-size: 10px;
+      color: #cfe3f2;
+      pointer-events: none;
+    }
+
+    .land-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      fill: #f4f8fb;
+      stroke: rgba(4,18,30,.8);
+      stroke-width: 3px;
+      paint-order: stroke fill;
+      letter-spacing: .2px;
+    }
+
+    /* Ambient motion. All of it is transform/opacity only, and all of it is
+       cancelled by .no-motion (the toolbar toggle) or by the OS setting. */
+    @keyframes land-swell-drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(60px, -22px) scale(1.06); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    @keyframes land-cloud-drift {
+      0%   { transform: translateX(-360px); }
+      100% { transform: translateX(1960px); }
+    }
+    @keyframes land-glint {
+      0%   { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -240; }
+    }
+    @keyframes land-foam-pulse {
+      0%, 100% { opacity: .28; }
+      50%      { opacity: .55; }
+    }
+    @keyframes land-sway {
+      0%, 100% { transform: rotate(-1.1deg); }
+      50%      { transform: rotate(1.1deg); }
+    }
+
+    .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }
+    .land-swell.swell-b { animation-duration: 38s; animation-delay: -9s; }
+    .land-swell.swell-c { animation-duration: 47s; animation-delay: -20s; }
+
+    .land-cloud { animation: land-cloud-drift linear infinite; }
+    .land-river-glint { animation: land-glint 9s linear infinite; }
+    .land-foam { animation: land-foam-pulse 7s ease-in-out infinite; }
+
+    /* fill-box puts the rotation origin at the tree's own bounding box, so a
+       conifer pivots about its trunk rather than about the map's origin. */
+    .land-tree {
+      transform-box: fill-box;
+      transform-origin: bottom center;
+      animation: land-sway 6s ease-in-out infinite;
+      will-change: transform;
+    }
+
+    .landscape-stage.no-motion .land-swell,
+    .landscape-stage.no-motion .land-cloud,
+    .landscape-stage.no-motion .land-river-glint,
+    .landscape-stage.no-motion .land-foam,
+    .landscape-stage.no-motion .land-tree { animation: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .land-swell,
+      .land-cloud,
+      .land-river-glint,
+      .land-foam,
+      .land-tree { animation: none; }
+    }

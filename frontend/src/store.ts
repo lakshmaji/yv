@@ -63,9 +63,15 @@ const [envModalOpen, setEnvModalOpen] = createSignal(false);
 // Keyboard shortcuts help modal (opened from the Help menu / ⌘/)
 const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
 
-// Which main view is showing. The dashboard is app-wide rather than per-project,
-// so it replaces both the command list and the (meaningless there) groups column.
-const [activeView, setActiveView] = createSignal<'commands' | 'dashboard'>('commands');
+// Which main view is showing. Dashboard and Discovery are app-wide rather than
+// per-project, so they replace both the command list and the (meaningless there)
+// groups column.
+const [activeView, setActiveView] = createSignal<'commands' | 'dashboard' | 'discovery'>('commands');
+
+// Discovery landscape. The seed lives here rather than in the panel so leaving
+// the view and coming back shows the same world instead of silently rerolling.
+const [discoverySeed, setDiscoverySeed] = createSignal('20260806');
+const [discoveryMotion, setDiscoveryMotion] = createSignal(true);
 
 // Global settings modal (opened from View → Settings… / ⌘,)
 const [settingsModalOpen, setSettingsModalOpen] = createSignal(false);
@@ -288,6 +294,8 @@ export {
   shortcutsModalOpen, setShortcutsModalOpen,
   activeEnv, activeEnvVarCount,
   activeView, setActiveView,
+  discoverySeed, setDiscoverySeed,
+  discoveryMotion, setDiscoveryMotion,
   settingsModalOpen, setSettingsModalOpen,
   appSettings, setAppSettings, loadAppSettings,
   dashGroupBy, setDashGroupBy,

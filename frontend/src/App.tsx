@@ -1,4 +1,4 @@
-import { onMount, onCleanup, createEffect, Show } from 'solid-js';
+import { onMount, onCleanup, createEffect, Match, Show, Switch } from 'solid-js';
 import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
@@ -27,6 +27,7 @@ import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import SettingsModal from './components/modals/SettingsModal';
 import DashboardPanel from './components/DashboardPanel';
+import DiscoveryPanel from './components/DiscoveryPanel';
 import {
   setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
@@ -37,12 +38,13 @@ import type { ResourceStats, ProcessStats } from './types';
  *
  * Reads the signals directly rather than taking them as arguments, so a single
  * createEffect keeps the layout in sync and no caller has to remember to pass
- * the view. In dashboard view the groups column collapses to zero — the
- * dashboard is app-wide, so per-project groups are meaningless there.
+ * the view. Outside the command view the groups column collapses to zero — the
+ * dashboard and Discovery are app-wide, so per-project groups are meaningless
+ * there.
  */
 function applyColumnWidths() {
   const effectiveSw = sidebarCollapsed() ? 48 : sidebarWidth();
-  if (activeView() === 'dashboard') {
+  if (activeView() !== 'commands') {
     document.body.style.gridTemplateColumns = `${effectiveSw}px 0px 1fr`;
     return;
   }
@@ -182,9 +184,14 @@ export default function App() {
       <Show when={activeView() === 'commands'}>
         <GroupsPanel onResize={applyColumnWidths} />
       </Show>
-      <Show when={activeView() === 'dashboard'} fallback={<MainPanel />}>
-        <DashboardPanel />
-      </Show>
+      <Switch fallback={<MainPanel />}>
+        <Match when={activeView() === 'dashboard'}>
+          <DashboardPanel />
+        </Match>
+        <Match when={activeView() === 'discovery'}>
+          <DiscoveryPanel />
+        </Match>
+      </Switch>
       <StatusBar />
       <EditCommandModal />
       <ShortcutModal />
