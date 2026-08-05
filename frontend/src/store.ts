@@ -17,6 +17,22 @@ const [projects, setProjects] = createStore<Project[]>([]);
 const [selectedId, setSelectedId] = createSignal<string | null>(null);
 const [selectedGroup, setSelectedGroup] = createSignal('All');
 
+// Global Spotlight-style command search
+const [spotlightOpen, setSpotlightOpen] = createSignal(false);
+const [searchQuery, setSearchQuery] = createSignal('');
+
+// Command revealed from Spotlight — flashes briefly so the user can spot the row.
+const [highlightedCmd, setHighlightedCmdSignal] = createSignal<string | null>(null);
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+function setHighlightedCmd(cmdId: string | null) {
+  clearTimeout(highlightTimer);
+  setHighlightedCmdSignal(cmdId);
+  if (cmdId) {
+    highlightTimer = setTimeout(() => setHighlightedCmdSignal(null), 2000);
+  }
+}
+
 // Environments of the selected project (loaded from Go, which owns the secrets file)
 const [projectEnvs, setProjectEnvs] = createSignal<ProjectEnvs>({ environments: [], activeId: '' });
 const [envModalOpen, setEnvModalOpen] = createSignal(false);
@@ -54,6 +70,8 @@ const visibleGroups = createMemo(() => {
   return [...new Set([...stored, ...derived])].sort();
 });
 
+// Commands shown in the main panel — filtered by the selected group only.
+// Search is global and lives in the Spotlight overlay, not in this list.
 const filteredCommands = createMemo(() => {
   const proj = selectedProject();
   if (!proj) return [];
@@ -148,6 +166,9 @@ export {
   selectedProject, visibleGroups, filteredCommands,
   runningCount, projectRunningCount,
   resourceStats, setResourceStats,
+  searchQuery, setSearchQuery,
+  spotlightOpen, setSpotlightOpen,
+  highlightedCmd, setHighlightedCmd,
   projectEnvs, setProjectEnvs, loadProjectEnvs,
   envModalOpen, setEnvModalOpen,
   activeEnv, activeEnvVarCount,

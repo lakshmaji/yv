@@ -1,5 +1,5 @@
-import { Show, createMemo } from 'solid-js';
-import { getCmdState, updateCmdState, setEditingCmd, resourceStats } from '../store';
+import { Show, createMemo, createEffect } from 'solid-js';
+import { getCmdState, updateCmdState, setEditingCmd, resourceStats, highlightedCmd } from '../store';
 import { go } from '../wails';
 import { escHtml, formatBytes } from '../lib/utils';
 import { runCommand } from '../lib/commands';
@@ -25,7 +25,16 @@ export default function CommandRow(props: CommandRowProps) {
       else if (s.stopped) cls += ' done-stopped';
       else cls += ' done-err';
     }
+    // Flash the row when it was just revealed from Spotlight.
+    if (highlightedCmd() === props.cmd.id) cls += ' revealed';
     return cls;
+  });
+
+  // Scroll a Spotlight-revealed row into view once it is rendered.
+  createEffect(() => {
+    if (highlightedCmd() !== props.cmd.id) return;
+    document.getElementById(`row-${props.cmd.id}`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 
   function handleToggle(e: MouseEvent) {

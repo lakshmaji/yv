@@ -6,7 +6,7 @@ import {
   setSelectedGroup,
   sidebarCollapsed, setSidebarCollapsed,
   runningCount, projectRunningCount,
-  setSettingsProjectId,
+  setSettingsProjectId, setSearchQuery, setSpotlightOpen,
 } from '../store';
 import { go } from '../wails';
 import { uid } from '../lib/utils';
@@ -117,6 +117,17 @@ export default function Sidebar(props: SidebarProps) {
           {sidebarCollapsed() ? '›' : '‹'}
         </button>
       </div>
+
+      <button
+        id="spotlight-trigger"
+        type="button"
+        title="Search commands across all projects (⌘K)"
+        onClick={() => { setSearchQuery(''); setSpotlightOpen(true); }}
+      >
+        <span class="spotlight-trigger-icon">⌕</span>
+        <span class="spotlight-trigger-label">Search</span>
+        <kbd class="spotlight-trigger-kbd">⌘K</kbd>
+      </button>
 
       <div id="project-list">
         <For each={projects}>

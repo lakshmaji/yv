@@ -645,6 +645,48 @@ Remove `eval "$(direnv hook zsh)"` from pre-hooks — it does nothing in a non-i
 
 ---
 
+## Implemented: Global Spotlight search
+
+### Goal
+
+macOS Spotlight-style command palette: one keystroke from anywhere finds any command in **any** project, over a blurred backdrop.
+
+### Behaviour
+
+- `⌘K` (or `⌘F`) opens a centered overlay; a `⌕ Search ⌘K` button **at the top of the sidebar, directly above the project list**, does the same. Collapsing the sidebar reduces it to the `⌕` icon. `Esc` or a backdrop click closes it.
+- **Global scope**: searches every command of every project. Matches on command label, shell text, group, *project name*, and **pre/post hook commands** — so `storefront install` finds the `Install deps` command inside the Storefront project, and `direnv` finds a command whose pre-hook runs `direnv allow .`.
+- A query is split on whitespace; a command matches only if **every** token appears somewhere. Ranking: label prefix (8) > label substring (4) > group (2) = project name (2) > command body (1) = hook text (1). Score ties keep discovery order, so rows don't jump while typing. Results are capped at 50.
+- Rows that have hooks carry a `hooks` chip, so a match found only in hook text is explicable rather than mysterious.
+- Keyboard: `↑`/`↓` wrap-around navigation with the active row scrolled into view, `↵` reveals, `⌘↵` reveals **and runs**, `Esc` closes. Mouse hover moves the cursor; click activates (⌘-click runs).
+- **Reveal** selects the owning project, switches to the command's group, scrolls the row into view, and flashes it with a blue ring for 2s. Running is never accidental — it needs the ⌘ modifier.
+
+### Visual treatment
+
+- Overlay: `rgba(1,4,9,.45)` plus `backdrop-filter: blur(18px) saturate(140%)` (with `-webkit-` prefix for the Wails WebKit webview) — the app behind it is genuinely blurred rather than merely dimmed.
+- Panel: translucent `rgba(33,38,45,.72)` with a stronger `blur(30px) saturate(180%)`, hairline light border, 12px radius, deep drop shadow, and a short fade + rise-in animation.
+- Footer shows the keyboard legend in `<kbd>` chips.
+
+### Design note
+
+Search remains pure functions in `frontend/src/lib/search.ts`. `searchAllProjects(projects, query, limit)` reuses the same `scoreCommand` used for single-list search, passing the project name in through the optional `project` field of `Searchable` — one scoring rule, no duplicate logic. `Searchable`'s optional `preCommands` / `postCommands` fields mirror `CommandConfig` exactly, so any command satisfies it with no adapter layer. The main command list is **not** filtered by search; it still filters by group only, so the two concerns never interact.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/search.ts` | Pure token matching + ranking; `searchAllProjects` for global scope; `project`, `preCommands`, `postCommands` on `Searchable`; `hasHooks()` |
+| `frontend/src/lib/search.test.ts` | 62 table-driven vitest cases (tokenising, scoring, per-list search, global search, hook matching) |
+| `frontend/src/components/Spotlight.tsx` | New — overlay, keyboard navigation, reveal / reveal-and-run |
+| `frontend/src/store.ts` | `spotlightOpen`, `searchQuery`, `highlightedCmd` (self-clearing after 2s via `setHighlightedCmd`) |
+| `frontend/src/App.tsx` | `⌘K` / `⌘F` opens Spotlight; mounts it behind a `<Show>` |
+| `frontend/src/components/Sidebar.tsx` | `⌕ Search ⌘K` trigger above the project list; icon-only when collapsed |
+| `frontend/src/components/CommandRow.tsx` | `.revealed` flash class + scroll-into-view for the revealed row |
+| `frontend/src/styles.css` | Spotlight overlay/panel/row/footer styles, sidebar trigger (plus collapsed variant), `cmd-reveal` keyframes; `#project-path` is `flex: 1` so header controls sit right |
+| `frontend/vite.config.js` / `package.json` | vitest config (`node` environment) + `npm run test` |
+
+
+---
+
 ## Implemented: Environments (per-project secrets)
 
 ### Goal

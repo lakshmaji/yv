@@ -1213,6 +1213,241 @@
       white-space: nowrap;
     }
 
+    /* Sidebar button that opens Spotlight, sitting above the project list. */
+    #spotlight-trigger {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 8px 10px 4px;
+      padding: 6px 9px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: border-color .15s, color .15s;
+    }
+    #spotlight-trigger:hover { border-color: var(--accent); color: var(--accent); }
+
+    .spotlight-trigger-icon {
+      font-size: 14px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .spotlight-trigger-label {
+      flex: 1;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .spotlight-trigger-kbd {
+      font-family: var(--mono);
+      font-size: 9px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 4px;
+      flex-shrink: 0;
+    }
+
+    /* Collapsed sidebar keeps the icon only, still clickable. */
+    #sidebar.collapsed #spotlight-trigger {
+      justify-content: center;
+      margin: 8px 6px 4px;
+      padding: 6px 0;
+    }
+    #sidebar.collapsed .spotlight-trigger-label,
+    #sidebar.collapsed .spotlight-trigger-kbd { display: none; }
+
+    /* ── Spotlight global search ─────────────────────────── */
+    #spotlight-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 14vh;
+      background: rgba(1, 4, 9, 0.45);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      backdrop-filter: blur(18px) saturate(140%);
+      animation: spotlight-fade .12s ease-out;
+    }
+
+    @keyframes spotlight-fade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    #spotlight-panel {
+      width: 620px;
+      max-width: 88vw;
+      max-height: 66vh;
+      display: flex;
+      flex-direction: column;
+      background: rgba(33, 38, 45, 0.72);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+      animation: spotlight-rise .14s ease-out;
+    }
+
+    @keyframes spotlight-rise {
+      from { opacity: 0; transform: translateY(-8px) scale(.985); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .spotlight-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      flex-shrink: 0;
+    }
+
+    .spotlight-icon {
+      font-size: 20px;
+      color: var(--muted);
+      line-height: 1;
+    }
+
+    #spotlight-input {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 19px;
+      font-weight: 400;
+    }
+    #spotlight-input::placeholder { color: var(--muted); }
+
+    .spotlight-count {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .spotlight-results {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .spotlight-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .spotlight-row.selected { background: var(--accent); }
+
+    .spotlight-row-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .spotlight-row-label {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spotlight-row.selected .spotlight-row-label { color: #fff; }
+
+    .spotlight-row-cmd {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spotlight-row.selected .spotlight-row-cmd { color: rgba(255, 255, 255, 0.75); }
+
+    .spotlight-row-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+
+    .spotlight-row-project,
+    .spotlight-row-group {
+      font-size: 10px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .spotlight-row-project { color: var(--accent); border-color: var(--accent); }
+    .spotlight-row.selected .spotlight-row-project,
+    .spotlight-row.selected .spotlight-row-group {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .spotlight-empty {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 22px 8px;
+    }
+
+    .spotlight-footer {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 7px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .spotlight-footer kbd {
+      font-family: var(--mono);
+      font-size: 9px;
+      background: rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-right: 2px;
+    }
+
+    /* Row flash after being revealed from Spotlight. */
+    .cmd-row.revealed {
+      border-color: var(--accent);
+      animation: cmd-reveal 2s ease-out;
+    }
+
+    @keyframes cmd-reveal {
+      0%, 40% { box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.55); }
+      100%    { box-shadow: 0 0 0 0 rgba(88, 166, 255, 0); }
+    }
+
     /* ── Environment selector (top right) ────────────────── */
     #env-selector {
       position: relative;

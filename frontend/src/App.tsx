@@ -1,10 +1,11 @@
-import { onMount, onCleanup, createEffect } from 'solid-js';
+import { onMount, onCleanup, createEffect, Show } from 'solid-js';
 import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
   sidebarWidth, groupsWidth, sidebarCollapsed,
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
-  updateCmdState, setEnvModalOpen, loadProjectEnvs,
+  updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
+  spotlightOpen, setSpotlightOpen,
 } from './store';
 import { go, runtime } from './wails';
 import Sidebar from './components/Sidebar';
@@ -12,6 +13,7 @@ import GroupsPanel from './components/GroupsPanel';
 import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
 import ResizeHandle from './components/ResizeHandle';
+import Spotlight from './components/Spotlight';
 import EnvironmentsModal from './components/modals/EnvironmentsModal';
 import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
@@ -61,6 +63,13 @@ export default function App() {
   });
 
   function handleKeydown(e: KeyboardEvent) {
+    // ⌘K / ⌘F open the global Spotlight search from anywhere in the app.
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'f')) {
+      e.preventDefault();
+      setSearchQuery('');
+      setSpotlightOpen(true);
+      return;
+    }
     if (e.key === 'Escape') {
       setEditingCmd(null);
       setEditingShortcut(null);
@@ -109,6 +118,9 @@ export default function App() {
       <ShortcutModal />
       <ProjectSettingsModal />
       <EnvironmentsModal />
+      <Show when={spotlightOpen()}>
+        <Spotlight />
+      </Show>
     </>
   );
 }
