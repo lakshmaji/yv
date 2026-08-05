@@ -63,6 +63,7 @@ const listeners = new Map<string, { offOutput: () => void; offDone: () => void; 
 const [sidebarWidth, setSidebarWidth] = createSignal(220);
 const [groupsWidth, setGroupsWidth] = createSignal(220);
 const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+const [groupsCollapsed, setGroupsCollapsed] = createSignal(false);
 
 // Per-command resource stats (updated by resource-stats event)
 const [resourceStats, setResourceStats] = createSignal<Map<string, ProcessStats>>(new Map(), { equals: false });
@@ -173,6 +174,7 @@ export {
   sidebarWidth, setSidebarWidth,
   groupsWidth, setGroupsWidth,
   sidebarCollapsed, setSidebarCollapsed,
+  groupsCollapsed, setGroupsCollapsed,
   editingCmd, setEditingCmd,
   editingShortcut, setEditingShortcut,
   settingsProjectId, setSettingsProjectId,

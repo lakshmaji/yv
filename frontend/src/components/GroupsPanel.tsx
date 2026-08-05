@@ -9,7 +9,7 @@ import {
 } from '../store';
 import { go } from '../wails';
 import ResizeHandle from './ResizeHandle';
-import { groupsWidth, setGroupsWidth } from '../store';
+import { groupsWidth, setGroupsWidth, groupsCollapsed, setGroupsCollapsed } from '../store';
 
 interface GroupsPanelProps {
   onResize: () => void;
@@ -75,8 +75,17 @@ export default function GroupsPanel(props: GroupsPanelProps) {
   }
 
   return (
-    <nav id="groups-panel">
-      <div id="groups-header">Groups</div>
+    <nav id="groups-panel" classList={{ collapsed: groupsCollapsed() }}>
+      <div id="groups-header">
+        <span class="groups-label">Groups</span>
+        <button
+          class="sidebar-toggle"
+          title={groupsCollapsed() ? 'Expand groups' : 'Collapse groups'}
+          onClick={() => { setGroupsCollapsed(!groupsCollapsed()); props.onResize(); }}
+        >
+          {groupsCollapsed() ? '›' : '‹'}
+        </button>
+      </div>
       <div id="groups-list">
         <For each={allGroups()}>
           {(g: string) => (
@@ -85,10 +94,12 @@ export default function GroupsPanel(props: GroupsPanelProps) {
                 'group-item': true,
                 active: g === selectedGroup(),
               }}
+              title={g}
               onClick={() => setSelectedGroup(g)}
             >
+              <span class="group-avatar">{g.slice(0, 2).toUpperCase()}</span>
               <span class="group-dot" />
-              {g}
+              <span class="group-name">{g}</span>
               <Show when={g !== 'All'}>
                 <button
                   class="group-delete-btn"

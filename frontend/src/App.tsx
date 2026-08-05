@@ -2,7 +2,7 @@ import { onMount, onCleanup, createEffect, Show } from 'solid-js';
 import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
-  sidebarWidth, groupsWidth, sidebarCollapsed,
+  sidebarWidth, groupsWidth, sidebarCollapsed, groupsCollapsed,
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
   spotlightOpen, setSpotlightOpen,
@@ -28,9 +28,10 @@ import {
 } from './store';
 import type { ResourceStats, ProcessStats } from './types';
 
-function applyColumnWidths(collapsed: boolean, sw: number, gw: number) {
-  const effectiveSw = collapsed ? 48 : sw;
-  document.body.style.gridTemplateColumns = `${effectiveSw}px ${gw}px 1fr`;
+function applyColumnWidths(sbCollapsed: boolean, grpCollapsed: boolean, sw: number, gw: number) {
+  const effectiveSw = sbCollapsed ? 48 : sw;
+  const effectiveGw = grpCollapsed ? 48 : gw;
+  document.body.style.gridTemplateColumns = `${effectiveSw}px ${effectiveGw}px 1fr`;
 }
 
 export default function App() {
@@ -46,7 +47,7 @@ export default function App() {
       setSelectedId(projects[0].id);
     }
 
-    applyColumnWidths(sidebarCollapsed(), sidebarWidth(), groupsWidth());
+    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
 
     // Re-sync running state from Go backend
     try {
@@ -132,11 +133,11 @@ export default function App() {
   });
 
   function handleSidebarResize() {
-    applyColumnWidths(sidebarCollapsed(), sidebarWidth(), groupsWidth());
+    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
   }
 
   function handleGroupsResize() {
-    applyColumnWidths(sidebarCollapsed(), sidebarWidth(), groupsWidth());
+    applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
   }
 
   return (
