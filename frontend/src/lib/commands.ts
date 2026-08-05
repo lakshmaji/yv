@@ -113,7 +113,8 @@ export async function runCommand(cmd: CommandConfig): Promise<number> {
       }
     }
 
-    await go.ExecuteCommand(cmd as any, workingDir, runID);
+    // proj.id lets Go apply the project's active environment variables.
+    await go.ExecuteCommand(cmd as any, workingDir, runID, proj.id);
   } catch (err) {
     updateCmdState(cmd.id, s => ({
       ...s,

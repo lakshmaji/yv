@@ -32,6 +32,28 @@ type CommandConfig struct {
 	PostCommands []PostCommand `json:"postCommands,omitempty"`
 }
 
+// EnvVar is a single environment variable belonging to an Environment.
+// Secret only affects UI masking — values are stored the same way either way.
+type EnvVar struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Secret bool   `json:"secret,omitempty"`
+}
+
+// Environment is a named set of variables that can be injected into commands.
+type Environment struct {
+	ID   string   `json:"id"`
+	Name string   `json:"name"`
+	Vars []EnvVar `json:"vars,omitempty"`
+}
+
+// ProjectEnvs holds every environment defined for one project plus the ID of
+// the one currently applied to command execution ("" means none).
+type ProjectEnvs struct {
+	Environments []Environment `json:"environments"`
+	ActiveID     string        `json:"activeId"`
+}
+
 type CommandResult struct {
 	ExitCode int    `json:"exitCode"`
 	Error    string `json:"error,omitempty"`

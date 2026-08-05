@@ -1,12 +1,13 @@
-import { Show, For, createSignal } from 'solid-js';
+import { Show, For } from 'solid-js';
 import {
   projects, setProjects, selectedProject, selectedGroup,
-  filteredCommands, setSelectedGroup,
+  filteredCommands,
 } from '../store';
 import { go } from '../wails';
 import { uid } from '../lib/utils';
 import CommandRow from './CommandRow';
 import ShortcutsSection from './ShortcutsSection';
+import EnvSelector from './EnvSelector';
 
 export default function MainPanel() {
   const proj = () => selectedProject();
@@ -68,6 +69,7 @@ export default function MainPanel() {
               Change Path
             </button>
           </Show>
+          <EnvSelector />
         </div>
 
         <ShortcutsSection />

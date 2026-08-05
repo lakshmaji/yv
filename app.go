@@ -8,6 +8,7 @@ import (
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"yv/internal/config"
+	"yv/internal/env"
 	"yv/internal/models"
 	"yv/internal/monitor"
 	"yv/internal/runner"
@@ -21,6 +22,7 @@ type App struct {
 	runner *runner.Runner
 	cfg    *config.Store
 	mon    *monitor.Monitor
+	envs   *env.Store
 }
 
 func NewApp() *App {
@@ -29,6 +31,7 @@ func NewApp() *App {
 		runner: r,
 		cfg:    config.NewStore(),
 		mon:    monitor.NewMonitor(r),
+		envs:   env.NewStore(),
 	}
 }
 
@@ -119,10 +122,41 @@ func (a *App) ImportProject() (string, error) {
 	return a.cfg.ImportProject(a.getCtx())
 }
 
+// --- Environment delegation ---
+
+// GetEnvironments returns every environment defined for a project, plus the
+// active one. Values are included so the frontend can display and edit them.
+func (a *App) GetEnvironments(projectID string) models.ProjectEnvs {
+	return a.envs.Get(projectID)
+}
+
+// SaveEnvironments replaces a project's environments. Returns "ok" or "error: …",
+// matching the convention used by the other save methods.
+func (a *App) SaveEnvironments(projectID string, envs models.ProjectEnvs) string {
+	if err := a.envs.Save(projectID, envs); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// DeleteEnvironments removes all environments belonging to a project.
+func (a *App) DeleteEnvironments(projectID string) string {
+	if err := a.envs.Delete(projectID); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
 // --- Runner delegation ---
 
-func (a *App) ExecuteCommand(cmd models.CommandConfig, workingDir string, runID string) string {
-	return a.runner.ExecuteCommand(a.getCtx(), cmd, workingDir, runID)
+// ExecuteCommand runs a command with the active environment of projectID applied.
+// Passing an empty projectID runs with no extra environment variables.
+func (a *App) ExecuteCommand(cmd models.CommandConfig, workingDir string, runID string, projectID string) string {
+	var vars []models.EnvVar
+	if projectID != "" {
+		vars = a.envs.ActiveVars(projectID)
+	}
+	return a.runner.ExecuteCommand(a.getCtx(), cmd, workingDir, runID, vars)
 }
 
 func (a *App) GetRunningCommands() []string {

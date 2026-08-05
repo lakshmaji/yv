@@ -1,6 +1,6 @@
 import { createSignal, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { Project, CmdState, ShortcutState, ProcessStats } from './types';
+import type { Project, CmdState, ShortcutState, ProcessStats, ProjectEnvs, EnvVar } from './types';
 
 const DEFAULT_CMD_STATE: CmdState = {
   lines: [], collapsed: true, exitCode: null, stopped: false, running: false, trimmedCount: 0,
@@ -16,6 +16,10 @@ const [projects, setProjects] = createStore<Project[]>([]);
 // Selection
 const [selectedId, setSelectedId] = createSignal<string | null>(null);
 const [selectedGroup, setSelectedGroup] = createSignal('All');
+
+// Environments of the selected project (loaded from Go, which owns the secrets file)
+const [projectEnvs, setProjectEnvs] = createSignal<ProjectEnvs>({ environments: [], activeId: '' });
+const [envModalOpen, setEnvModalOpen] = createSignal(false);
 
 // Per-command terminal state
 const [cmdState, setCmdState] = createSignal<Map<string, CmdState>>(new Map(), { equals: false });
@@ -56,6 +60,30 @@ const filteredCommands = createMemo(() => {
   const group = selectedGroup();
   return group === 'All' ? proj.commands : proj.commands.filter(c => c.group === group);
 });
+
+// The environment currently applied to command runs, or null if none.
+const activeEnv = createMemo(() => {
+  const { environments, activeId } = projectEnvs();
+  return environments.find(e => e.id === activeId) || null;
+});
+
+const activeEnvVarCount = createMemo(() => activeEnv()?.vars?.length || 0);
+
+/** Loads the environments of a project into the store (empty on failure). */
+async function loadProjectEnvs(projectId: string | null, fetch: (id: string) => Promise<ProjectEnvs>) {
+  if (!projectId) {
+    setProjectEnvs({ environments: [], activeId: '' });
+    return;
+  }
+  try {
+    const envs = await fetch(projectId);
+    setProjectEnvs({ environments: envs?.environments || [], activeId: envs?.activeId || '' });
+  } catch {
+    setProjectEnvs({ environments: [], activeId: '' });
+  }
+}
+
+export type { EnvVar };
 
 const runningCount = createMemo(() => {
   let count = 0;
@@ -120,4 +148,7 @@ export {
   selectedProject, visibleGroups, filteredCommands,
   runningCount, projectRunningCount,
   resourceStats, setResourceStats,
+  projectEnvs, setProjectEnvs, loadProjectEnvs,
+  envModalOpen, setEnvModalOpen,
+  activeEnv, activeEnvVarCount,
 };

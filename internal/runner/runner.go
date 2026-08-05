@@ -13,6 +13,7 @@ import (
 
 	"github.com/creack/pty"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/env"
 	"yv/internal/models"
 )
 
@@ -192,12 +193,14 @@ func (r *Runner) StopAll() {
 // ExecuteCommand starts a command (after running any pre-hooks) and streams stdout+stderr as Wails events.
 // runID scopes all events to this specific invocation so stale events from a prior run can never
 // clear the Stop button while a new run is still active.
+// envVars are the active environment's variables; they are layered on top of the
+// process environment (and can override PATH) for this command and its hooks.
 // Events emitted:
 //
 //	"output:<cmdID>:<runID>"    string        — one line of output
 //	"done:<cmdID>:<runID>"      CommandResult — main process exit info
 //	"post-done:<cmdID>:<runID>" CommandResult — post-hooks exit info (only if PostCommands set)
-func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, workingDir string, runID string) string {
+func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, workingDir string, runID string, envVars []models.EnvVar) string {
 	r.storeCmdLabel(cmd.ID, cmd.Label)
 
 	// Kill any prior run of this command (process-group kill to include children).
@@ -212,6 +215,8 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 	if workDir == "" {
 		workDir = workingDir
 	}
+
+	environ := buildEnv(envVars)
 
 	outEvent := "output:" + cmd.ID + ":" + runID
 	doneEvent := "done:" + cmd.ID + ":" + runID
@@ -240,7 +245,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 			}
 			script.WriteString(cmd.Command + "\n")
 
-			exitCode, err := r.runShellCommand(cmd.ID, script.String(), workDir, emit)
+			exitCode, err := r.runShellCommand(cmd.ID, script.String(), workDir, environ, emit)
 			result := models.CommandResult{}
 			if err != nil {
 				result.ExitCode = -1
@@ -267,7 +272,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 				preScript.WriteString(preCmd + "\n")
 				preScript.WriteString("wait\n")
 			}
-			exitCode, err := r.runShellCommand(cmd.ID, preScript.String(), workDir, emit)
+			exitCode, err := r.runShellCommand(cmd.ID, preScript.String(), workDir, environ, emit)
 			if err != nil || exitCode != 0 {
 				result := models.CommandResult{ExitCode: exitCode}
 				if err != nil {
@@ -285,7 +290,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 		// 2. Start main command in a background goroutine (may run forever, e.g. emulator).
 		mainFailed := make(chan struct{}, 1)
 		go func() {
-			exitCode, err := r.runShellCommand(cmd.ID, cmd.Command, workDir, emit)
+			exitCode, err := r.runShellCommand(cmd.ID, cmd.Command, workDir, environ, emit)
 			result := models.CommandResult{ExitCode: exitCode}
 			if err != nil {
 				result.ExitCode = -1
@@ -333,7 +338,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 			emit(fmt.Sprintf("[POST] %d/%d: %s", i+1, len(cmd.PostCommands), postCmd.Command))
 
 			tCtx, cancel := context.WithTimeout(postCtx, time.Duration(timeoutSec)*time.Second)
-			exitCode, err := r.runShellCommandCtx(tCtx, cmd.ID+":post", postCmd.Command, workDir, emit)
+			exitCode, err := r.runShellCommandCtx(tCtx, cmd.ID+":post", postCmd.Command, workDir, environ, emit)
 			cancel()
 
 			if postCtx.Err() != nil {
@@ -364,39 +369,38 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 	return "started"
 }
 
-func (r *Runner) runShellCommand(cmdID, shellCmd, workDir string, emit func(string)) (int, error) {
-	return r.runShellCommandCtx(context.Background(), cmdID, shellCmd, workDir, emit)
+// buildEnv layers the active environment's variables on top of the process
+// environment, with PATH replaced by the full login-shell PATH first so every
+// user tool (adb, emulator, gradlew, brew, rbenv, nvm…) stays reachable whether
+// the app was launched from a terminal or a DMG. Because the merge happens after
+// that, an environment variable named PATH still wins — which is intentional.
+func buildEnv(vars []models.EnvVar) []string {
+	base := env.Merge(os.Environ(), []models.EnvVar{{Key: "PATH", Value: resolveLoginPath()}})
+	return env.Merge(base, vars)
+}
+
+func (r *Runner) runShellCommand(cmdID, shellCmd, workDir string, environ []string, emit func(string)) (int, error) {
+	return r.runShellCommandCtx(context.Background(), cmdID, shellCmd, workDir, environ, emit)
 }
 
 // runShellCommandCtx runs one shell command synchronously, streaming output via emit.
 // It uses a PTY so the child process sees a terminal and stays line-buffered.
 // Cancelling ctx sends SIGTERM to the process (used for post-hook timeouts).
-func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir string, emit func(string)) (exitCode int, err error) {
+// environ is the fully-resolved "KEY=value" environment (see buildEnv); an empty
+// slice falls back to buildEnv with no extra variables.
+func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir string, environ []string, emit func(string)) (exitCode int, err error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "zsh"
 	}
 	// Use a non-login shell so ~/.zprofile is never sourced during command
 	// execution — that's what triggered the brew CWD warning in terminal output.
-	// Instead, inject the full login-shell PATH (captured once at startup) so
-	// every user tool (adb, emulator, gradlew, brew, rbenv, nvm…) is reachable
-	// regardless of whether the app was launched from a terminal or a DMG.
 	c := exec.Command(shell, "-c", shellCmd)
 	c.Dir = workDir
-	env := os.Environ()
-	fullPath := resolveLoginPath()
-	replaced := false
-	for i, e := range env {
-		if strings.HasPrefix(e, "PATH=") {
-			env[i] = "PATH=" + fullPath
-			replaced = true
-			break
-		}
+	if len(environ) == 0 {
+		environ = buildEnv(nil)
 	}
-	if !replaced {
-		env = append(env, "PATH="+fullPath)
-	}
-	c.Env = env
+	c.Env = environ
 
 	ptmx, startErr := pty.Start(c)
 	if startErr != nil {

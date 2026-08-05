@@ -13,4 +13,7 @@ type (
 	CommandResult = models.CommandResult
 	ProcessStats  = models.ProcessStats
 	ResourceStats = models.ResourceStats
+	EnvVar        = models.EnvVar
+	Environment   = models.Environment
+	ProjectEnvs   = models.ProjectEnvs
 )

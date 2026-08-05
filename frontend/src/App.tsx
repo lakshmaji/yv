@@ -1,10 +1,10 @@
-import { onMount, onCleanup } from 'solid-js';
+import { onMount, onCleanup, createEffect } from 'solid-js';
 import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
   sidebarWidth, groupsWidth, sidebarCollapsed,
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
-  updateCmdState,
+  updateCmdState, setEnvModalOpen, loadProjectEnvs,
 } from './store';
 import { go, runtime } from './wails';
 import Sidebar from './components/Sidebar';
@@ -12,6 +12,7 @@ import GroupsPanel from './components/GroupsPanel';
 import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
 import ResizeHandle from './components/ResizeHandle';
+import EnvironmentsModal from './components/modals/EnvironmentsModal';
 import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
@@ -54,11 +55,17 @@ export default function App() {
     } catch { /* ignore */ }
   });
 
+  // Keep the environment panel in sync with the selected project.
+  createEffect(() => {
+    loadProjectEnvs(selectedId(), go.GetEnvironments);
+  });
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       setEditingCmd(null);
       setEditingShortcut(null);
       setSettingsProjectId(null);
+      setEnvModalOpen(false);
     }
   }
 
@@ -101,6 +108,7 @@ export default function App() {
       <EditCommandModal />
       <ShortcutModal />
       <ProjectSettingsModal />
+      <EnvironmentsModal />
     </>
   );
 }

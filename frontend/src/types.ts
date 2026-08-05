@@ -30,6 +30,23 @@ export interface Shortcut {
   commandIds: string[];
 }
 
+export interface EnvVar {
+  key: string;
+  value: string;
+  secret?: boolean;
+}
+
+export interface Environment {
+  id: string;
+  name: string;
+  vars?: EnvVar[];
+}
+
+export interface ProjectEnvs {
+  environments: Environment[];
+  activeId: string;
+}
+
 export interface CommandResult {
   exitCode: number;
   error?: string;

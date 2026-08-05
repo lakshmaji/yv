@@ -537,7 +537,6 @@
     }
 
     #change-path-btn {
-      margin-left: auto;
       background: transparent;
       border: 1px solid var(--border);
       color: var(--muted);
@@ -555,6 +554,8 @@
     }
 
     #project-path {
+      flex: 1;
+      min-width: 0;
       font-size: 11px;
       color: var(--muted);
       font-family: var(--mono);
@@ -1210,4 +1211,287 @@
       padding: 1px 6px;
       margin-left: 4px;
       white-space: nowrap;
+    }
+
+    /* ── Environment selector (top right) ────────────────── */
+    #env-selector {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .env-trigger {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+    .env-trigger:hover { border-color: var(--accent); color: var(--accent); }
+    .env-trigger.env-active { color: var(--text); border-color: var(--green); }
+
+    .env-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .env-trigger.env-active .env-dot { background: var(--green); }
+
+    .env-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .env-var-count {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--green);
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      padding: 0 5px;
+    }
+
+    .env-caret { font-size: 8px; }
+
+    .env-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 220px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      z-index: 50;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+
+    .env-menu-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      padding: 2px 6px 4px;
+    }
+
+    .env-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      border-radius: 4px;
+      padding: 5px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .env-menu-item:hover { background: var(--card); }
+    .env-menu-item.selected { background: var(--card); color: var(--accent); }
+
+    .env-menu-count {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .env-menu-empty {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 4px 6px;
+    }
+
+    .env-menu-manage {
+      margin-top: 4px;
+      border-top: 1px solid var(--border);
+      padding-top: 6px;
+      background: transparent;
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .env-menu-manage:hover { color: var(--accent); }
+
+    /* ── Environments modal ──────────────────────────────── */
+    .env-modal { width: 640px; }
+
+    .env-modal-hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .env-modal-hint code {
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .env-modal-body {
+      display: flex;
+      gap: 12px;
+      min-height: 240px;
+    }
+
+    .env-list {
+      width: 150px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border-right: 1px solid var(--border);
+      padding-right: 8px;
+    }
+
+    .env-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      border-radius: 4px;
+      padding: 5px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .env-list-item:hover { background: var(--card); }
+    .env-list-item.selected { background: var(--card); color: var(--accent); }
+
+    .env-list-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .env-list-active {
+      font-size: 9px;
+      color: var(--green);
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    .env-list-add {
+      margin-top: 4px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .env-list-add:hover { border-color: var(--accent); color: var(--accent); }
+
+    .env-detail {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .env-detail-empty {
+      color: var(--muted);
+      font-size: 12px;
+      margin: auto;
+    }
+
+    .env-detail-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .env-active-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .env-active-toggle input { width: auto; }
+
+    .env-vars {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .env-var-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .env-var-key {
+      flex: 0 0 34%;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .env-var-value {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .env-var-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 3px 5px;
+      font-size: 11px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .env-var-btn:hover { color: var(--text); border-color: var(--muted); }
+    .env-var-btn:disabled { opacity: .35; cursor: default; }
+    .env-var-del:hover { color: var(--red); border-color: var(--red); }
+
+    .env-var-add {
+      align-self: flex-start;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .env-var-add:hover { border-color: var(--accent); color: var(--accent); }
+
+    .env-modal-error {
+      font-size: 11px;
+      color: var(--red);
+      background: rgba(248,81,73,0.1);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      padding: 6px 8px;
     }

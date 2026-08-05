@@ -642,3 +642,66 @@ direnv exec . tilt up
 ```
 
 Remove `eval "$(direnv hook zsh)"` from pre-hooks — it does nothing in a non-interactive shell and is misleading.
+
+---
+
+## Implemented: Environments (per-project secrets)
+
+### Goal
+
+Let a user define any number of named environments per project (e.g. `local`, `staging`, `prod`), each holding key/value variables — typically secrets — and inject the active one into every command run.
+
+### Where secrets live
+
+`~/Library/Application Support/yv/environments.json`, **mode 0600**, keyed by project ID:
+
+```json
+{ "<projectId>": { "environments": [ { "id": "...", "name": "staging", "vars": [ {"key":"TOKEN","value":"…","secret":true} ] } ], "activeId": "..." } }
+```
+
+Deliberately a **separate file from `projects.json`** so that Export Project / Export Projects — and anything shared or committed — never carries secrets. Deleting a project also deletes its environments (`DeleteEnvironments`).
+
+### Injection
+
+`App.ExecuteCommand(cmd, workingDir, runID, projectID)` looks up the project's active environment and passes its variables to the runner, which layers them over the process environment via `env.Merge`. Order is: `os.Environ()` → login-shell `PATH` → environment variables. A variable literally named `PATH` therefore wins, which is intentional. Pre-hooks, the main command, and post-hooks all share the same resolved environment.
+
+### UI
+
+- **Top-right of the project header**: environment switcher showing the active environment, its variable count, and a green dot. Picking one persists immediately.
+- **Manage environments…** opens a modal: environment list on the left (create / delete / mark active), variables on the right. Values are masked by default with a reveal toggle and a lock toggle per row. Nothing is persisted until Save; Cancel discards.
+- Validation (`[A-Za-z_][A-Za-z0-9_]*`, no duplicate keys or environment names) runs in the modal for fast feedback and again in Go, which is the enforcement point.
+
+### New Go API
+
+| Method | Purpose |
+|---|---|
+| `GetEnvironments(projectID) ProjectEnvs` | Read a project's environments (values included, for editing) |
+| `SaveEnvironments(projectID, ProjectEnvs) string` | Replace them; `"ok"` or `"error: …"` |
+| `DeleteEnvironments(projectID) string` | Drop all environments of a project |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/env/env.go` | New package — file-backed `Store` (0600) plus pure `Merge`, `ActiveVars`, `Validate`, `ValidateKey` |
+| `internal/env/env_test.go` | New — table-driven tests for merging, validation, active resolution, store round-trip, file permissions |
+| `internal/models/models.go` | Added `EnvVar`, `Environment`, `ProjectEnvs` |
+| `models.go` | Wails type aliases for the three new types |
+| `app.go` | `envs *env.Store`; `GetEnvironments` / `SaveEnvironments` / `DeleteEnvironments`; `ExecuteCommand` gained a `projectID` argument |
+| `internal/runner/runner.go` | `ExecuteCommand` takes `[]models.EnvVar`; new `buildEnv` helper; shell runners take a resolved `environ` |
+| `internal/runner/runner_test.go` | Table-driven `buildEnv` + end-to-end "variable reaches the shell" tests |
+| `frontend/src/components/EnvSelector.tsx` | New — top-right switcher |
+| `frontend/src/components/modals/EnvironmentsModal.tsx` | New — create/edit/delete environments and variables |
+| `frontend/src/store.ts` | `projectEnvs`, `envModalOpen`, `activeEnv`, `activeEnvVarCount`, `loadProjectEnvs` |
+| `frontend/src/App.tsx` | Loads environments when the project changes; mounts the modal |
+| `frontend/src/lib/commands.ts` | Passes `proj.id` to `ExecuteCommand` |
+| `frontend/src/components/modals/ProjectSettingsModal.tsx` | Deletes environments with the project |
+| `frontend/src/wails.ts` | New bindings; now typed against `types.ts` instead of the generated wailsjs classes |
+
+### Note on `wails.ts` typing
+
+The generated `wailsjs/go/models.ts` emits **classes** with a `convertValues()` member, so plain object literals from `types.ts` never satisfy them. The stale `import type { main }` had masked this (the namespace is `models`, not `main`, so the import silently failed type resolution). `GoApp` is now typed against `types.ts`, which already mirrors the JSON wire format — one source of truth, and `tsc --noEmit` is clean.
+
+### Testing
+
+`make test` runs both suites: `make test-go` (Go, `./internal/...`) and `make test-frontend` (vitest).

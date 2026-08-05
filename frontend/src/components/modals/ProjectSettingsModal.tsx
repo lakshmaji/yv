@@ -53,6 +53,7 @@ export default function ProjectSettingsModal() {
     const filtered = projects.filter(pr => pr.id !== id);
     setProjects(filtered as any);
     await go.SaveProjects(filtered as any);
+    await go.DeleteEnvironments(id); // don't leave orphaned secrets behind
     close();
     setSelectedId(filtered[0]?.id ?? null);
   }
