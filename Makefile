@@ -1,6 +1,6 @@
 WAILS := $(HOME)/go/bin/wails
 
-.PHONY: run install fmt test build dmg
+.PHONY: run install fmt test test-go test-frontend build dmg
 
 install:
 	go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1
@@ -11,8 +11,13 @@ run: $(WAILS)
 fmt:
 	gofmt -w $(shell find . -name "*.go" -not -path "*/wailsjs/*")
 
-test:
+test: test-go test-frontend
+
+test-go:
 	go test ./internal/... -v
+
+test-frontend:
+	cd frontend && npm run test
 
 build: $(WAILS)
 	$(WAILS) build -platform darwin/arm64

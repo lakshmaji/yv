@@ -11,4 +11,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  // Unit tests cover pure logic only (no DOM), so the node environment is enough.
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 });
