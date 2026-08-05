@@ -2,7 +2,7 @@ import { onMount, onCleanup, createEffect, Show } from 'solid-js';
 import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
-  sidebarWidth, groupsWidth, sidebarCollapsed, groupsCollapsed,
+  sidebarWidth, groupsWidth, sidebarCollapsed, setSidebarCollapsed, groupsCollapsed,
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
   spotlightOpen, setSpotlightOpen,
@@ -81,6 +81,13 @@ export default function App() {
       e.preventDefault();
       setSearchQuery('');
       setSpotlightOpen(true);
+      return;
+    }
+    // ⌘B toggles the main project sidebar, VSCode-style.
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault();
+      setSidebarCollapsed(!sidebarCollapsed());
+      applyColumnWidths(sidebarCollapsed(), groupsCollapsed(), sidebarWidth(), groupsWidth());
       return;
     }
     // ⌘. (the macOS cancel gesture) stops every running command at once.
