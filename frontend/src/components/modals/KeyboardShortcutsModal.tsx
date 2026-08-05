@@ -164,10 +164,6 @@ export default function KeyboardShortcutsModal() {
               )}
             </For>
           </div>
-
-          <div class="modal-footer">
-            <button class="btn-primary" onClick={close}>Close</button>
-          </div>
         </div>
       </div>
     </Show>
