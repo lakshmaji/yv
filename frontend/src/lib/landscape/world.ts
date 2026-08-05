@@ -54,6 +54,26 @@ export interface Tree {
   sway: number;
 }
 
+/** One talus block at a mountain's foot, offset from its base centre. */
+export interface Scree {
+  dx: number;
+  dy: number;
+  r: number;
+}
+
+/** A subordinate summit on one flank, so a massif isn't a single lonely cone. */
+export interface Shoulder {
+  /** -1 for the left ridge, 1 for the right. */
+  side: -1 | 1;
+  /** Fraction along that ridge, apex (0) to base (1), where the shoulder sits. */
+  at: number;
+  /** Its own height as a fraction of the main summit's. */
+  h: number;
+}
+
+/** How many intermediate vertices each ridge carries. More reads as noise. */
+export const RIDGE_STEPS = 4;
+
 export interface Peak {
   x: number;
   y: number;
@@ -61,7 +81,37 @@ export interface Peak {
   height: number;
   /** Horizontal apex offset, so spires lean instead of standing to attention. */
   tilt: number;
+  /**
+   * True for the canyon region, which is drawn in red stone and never snows.
+   *
+   * Red rock was briefly rendered as flat-topped mesas to echo the reference's
+   * layered canyon. It read as cardboard boxes — a plateau has no silhouette to
+   * speak of at this scale, so the shape carried no information and the strata
+   * looked like corrugation. Red peaks are the same spires as the highlands.
+   */
+  red: boolean;
+  /**
+   * Per-vertex lateral jitter for each ridge, in units of baseR. This is what
+   * makes the silhouette a chiselled arête rather than the straight hypotenuse
+   * of a triangle — every peak gets its own crags.
+   */
+  ridgeL: number[];
+  ridgeR: number[];
+  /**
+   * Smooth curvature of each flank, in units of baseR: positive bulges the face
+   * outward, negative hollows it inward. This is what actually carries silhouette
+   * variety at map scale — small crags are invisible, whereas one convex and one
+   * concave flank makes a summit look chiselled and asymmetric.
+   */
+  bowL: number;
+  bowR: number;
+  shoulders: Shoulder[];
   snow: boolean;
+  /** Fraction of the height, measured down from the apex, that snow covers. */
+  snowline: number;
+  /** -1..1 tone offset, so a range has internal colour variation. */
+  tone: number;
+  scree: Scree[];
 }
 
 export type SettlementKind = 'hut' | 'camp' | 'ruin';
@@ -195,7 +245,9 @@ function buildBiomes(rng: Rng, coast: readonly Pt[]): Biome[] {
     let kind: BiomeKind;
     if (center.x > WORLD_W * 0.66) kind = 'redrock';
     else if (center.y < WORLD_H * 0.3 && rng.chance(0.6)) kind = 'snowfield';
-    else kind = rng.chance(0.55) ? 'grass' : 'highland';
+    // Weighted toward grass: the island should read as green with stone as the
+    // accent. An even split left whole seeds looking like a quarry.
+    else kind = rng.chance(0.68) ? 'grass' : 'highland';
 
     const rx = rng.range(150, 260);
     const ry = rng.range(120, 210);
@@ -211,15 +263,31 @@ function buildBiomes(rng: Rng, coast: readonly Pt[]): Biome[] {
     biomes.push({ kind, center, region, terraces });
   }
 
-  // Guarantee at least one of every kind is *possible* to look at without
-  // depending on the dice: if nothing came out as redrock, retint the
-  // right-most biome. Cheap, and keeps every seed visually varied.
-  if (!biomes.some((b) => b.kind === 'redrock') && biomes.length > 0) {
+  if (biomes.length === 0) return biomes;
+
+  // Two guarantees, so no seed produces a dud composition. Without the redrock
+  // one a world can lose its warm accent; without the highland one it can come
+  // out all grass — and since only non-grass biomes grow mountains, that means
+  // an island with no summits at all.
+  if (!biomes.some((b) => b.kind === 'redrock')) {
     let rightmost = 0;
     for (let i = 1; i < biomes.length; i++) {
       if (biomes[i].center.x > biomes[rightmost].center.x) rightmost = i;
     }
     biomes[rightmost].kind = 'redrock';
+  }
+  if (!biomes.some((b) => b.kind === 'highland' || b.kind === 'snowfield')) {
+    // Retint the most central grass biome, so the range lands inland rather
+    // than hanging off an edge.
+    const islandCenter = centroid(coast);
+    const grass = biomes.filter((b) => b.kind === 'grass');
+    if (grass.length > 0) {
+      let best = grass[0];
+      for (const b of grass) {
+        if (dist(b.center, islandCenter) < dist(best.center, islandCenter)) best = b;
+      }
+      best.kind = 'highland';
+    }
   }
   return biomes;
 }
@@ -304,6 +372,29 @@ function buildLakes(rng: Rng, coast: readonly Pt[], rivers: readonly River[]): L
   return lakes;
 }
 
+/**
+ * Lateral crag offsets for one ridge, in units of baseR.
+ *
+ * Kept small on purpose. A ridge descends about 0.2·baseR in x per step, so an
+ * offset anywhere near that lets adjacent vertices swap order — the silhouette
+ * stops being a function of height and the mountain renders as shattered glass.
+ * `MAX_CRAG` is the safe bound; character comes from the flank bow and the
+ * shoulders instead, both of which cannot break the ordering.
+ */
+export const MAX_CRAG = 0.07;
+
+function buildRidge(rng: Rng): number[] {
+  return Array.from({ length: RIDGE_STEPS }, () => rng.range(-MAX_CRAG, MAX_CRAG));
+}
+
+function buildScree(rng: Rng, baseR: number): Scree[] {
+  return Array.from({ length: rng.int(2, 5) }, () => ({
+    dx: rng.range(-baseR * 1.1, baseR * 1.1),
+    dy: rng.range(-1, baseR * 0.3),
+    r: rng.range(1.6, 4),
+  }));
+}
+
 function buildPeaks(
   rng: Rng,
   coast: readonly Pt[],
@@ -313,21 +404,51 @@ function buildPeaks(
   const peaks: Peak[] = [];
   for (const biome of biomes) {
     if (biome.kind === 'grass') continue;
-    const count = biome.kind === 'redrock' ? rng.int(4, 7) : rng.int(3, 6);
+    const red = biome.kind === 'redrock';
+    const count = red ? rng.int(4, 7) : rng.int(3, 6);
     for (let i = 0; i < count; i++) {
       const p = scatter(rng, coast, biome.center, 170, (q) => nearWater(q, water, 24));
       if (!p) continue;
-      const baseR = rng.range(20, 42);
-      const height = baseR * rng.range(1.6, 3.1);
+
+      // A range needs foothills as well as summits, or every silhouette repeats
+      // at the same scale. Roughly a quarter come out low and broad.
+      const low = rng.chance(0.28);
+      const baseR = rng.range(22, 44);
+      // Taller than the base is wide (ratio > 2, since the base spans 2·baseR).
+      // At ratio 2 a summit is exactly as wide as it is tall and reads as a
+      // shark fin sitting on the grass. Foothills stay deliberately squat.
+      const height = baseR * (low ? rng.range(1.5, 2.0) : rng.range(2.2, 3.2));
+
       peaks.push({
         x: p.x,
         y: p.y,
         baseR,
         height,
-        tilt: rng.range(-baseR * 0.35, baseR * 0.35),
-        // Snow only on the genuinely tall spires, and never on red rock — that
+        tilt: rng.range(-baseR * 0.3, baseR * 0.3),
+        red,
+        ridgeL: buildRidge(rng),
+        ridgeR: buildRidge(rng),
+        // Biased concave: a hollowed flank reads as an arête, whereas a bulging
+        // one reads as a sail. Some outward bow is still wanted for variety.
+        bowL: rng.range(-0.18, 0.1),
+        bowR: rng.range(-0.18, 0.1),
+        // One flanking summit is usually enough; two occasionally, for a proper
+        // massif rather than a lonely cone.
+        shoulders: Array.from({ length: rng.chance(0.55) ? (rng.chance(0.3) ? 2 : 1) : 0 }, () => ({
+          side: (rng.chance(0.5) ? -1 : 1) as -1 | 1,
+          at: rng.range(0.42, 0.72),
+          h: rng.range(0.4, 0.68),
+        })),
+        // Snow only on the genuinely tall summits, and never on red rock — that
         // region reads as hot desert canyon.
-        snow: biome.kind !== 'redrock' && height > baseR * 2.2,
+        snow: !red && height > baseR * 2,
+        // Varying where the snow stops matters more than how much there is: a
+        // constant fraction made every cap look stamped from the same die.
+        // Kept shallow — much past a third of the height and the summit turns
+        // into a white hood with a grey skirt.
+        snowline: rng.range(0.16, 0.32),
+        tone: rng.range(-1, 1),
+        scree: buildScree(rng, baseR),
       });
     }
   }
@@ -526,6 +647,33 @@ export function ringPath(points: readonly Pt[]): string {
 /** Open smooth line — used for rivers and trails. */
 export function linePath(points: readonly Pt[]): string {
   return catmullRomPath(points, false);
+}
+
+export interface SceneryItem {
+  kind: 'tree' | 'peak';
+  /** Index into world.trees or world.peaks. */
+  index: number;
+  y: number;
+}
+
+/**
+ * Trees and peaks interleaved back-to-front.
+ *
+ * Drawing all peaks after all trees put every mountain in front of the whole
+ * forest, including the trees standing downhill of it. One merged order makes a
+ * mountain sit *in* its treeline. Ties put the peak first, so a tree at the same
+ * depth reads as being at its foot.
+ */
+export function sceneryOrder(world: World): SceneryItem[] {
+  const items: SceneryItem[] = [
+    ...world.peaks.map((p, index) => ({ kind: 'peak' as const, index, y: p.y })),
+    ...world.trees.map((t, index) => ({ kind: 'tree' as const, index, y: t.y })),
+  ];
+  return items.sort((a, b) => {
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.kind === b.kind) return a.index - b.index;
+    return a.kind === 'peak' ? -1 : 1;
+  });
 }
 
 /** Kinds present in this world, in canonical palette order — for the legend. */

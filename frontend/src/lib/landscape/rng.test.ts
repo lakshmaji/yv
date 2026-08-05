@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashSeed, makeRng, resolveSeed } from './rng';
+import { makeRng } from './rng';
 
 describe('makeRng', () => {
   it('is deterministic for a given seed', () => {
@@ -70,45 +70,5 @@ describe('range / int / pick / chance', () => {
       expect(rng.chance(0)).toBe(false);
       expect(rng.chance(1)).toBe(true);
     }
-  });
-});
-
-describe('hashSeed', () => {
-  it('is stable and returns a uint32', () => {
-    const h = hashSeed('bramhollow');
-    expect(h).toBe(hashSeed('bramhollow'));
-    expect(Number.isInteger(h)).toBe(true);
-    expect(h).toBeGreaterThanOrEqual(0);
-    expect(h).toBeLessThanOrEqual(0xffffffff);
-  });
-
-  it('distinguishes similar strings', () => {
-    expect(hashSeed('island')).not.toBe(hashSeed('islands'));
-    expect(hashSeed('a')).not.toBe(hashSeed('A'));
-  });
-
-  it('handles the empty string', () => {
-    expect(Number.isInteger(hashSeed(''))).toBe(true);
-  });
-});
-
-describe('resolveSeed', () => {
-  const cases: [string, number][] = [
-    ['42', 42],
-    ['  42  ', 42],
-    ['0', 0],
-  ];
-  for (const [input, expected] of cases) {
-    it(`reads "${input}" as the number ${expected}`, () => {
-      expect(resolveSeed(input)).toBe(expected);
-    });
-  }
-
-  it('hashes non-numeric input', () => {
-    expect(resolveSeed('nicosia')).toBe(hashSeed('nicosia'));
-  });
-
-  it('hashes mixed input rather than parsing a prefix', () => {
-    expect(resolveSeed('42islands')).toBe(hashSeed('42islands'));
   });
 });

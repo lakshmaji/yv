@@ -2,15 +2,15 @@ import { LAND } from '../../lib/landscape/palette';
 import { ringPath, type World } from '../../lib/landscape/world';
 import Terrain from './Terrain';
 import Water from './Water';
-import Forest from './Forest';
-import Peaks from './Peaks';
+import Scenery from './Scenery';
 import Trails from './Trails';
 import Settlements from './Settlements';
 import Clouds from './Clouds';
 
 /**
  * The whole scene, drawn in painter's order: ocean, shelf, land, water bodies,
- * forest, spires, trails, settlements, then atmosphere on top.
+ * scenery (forest and mountains interleaved by depth), trails, settlements,
+ * then atmosphere on top.
  *
  * One `viewBox` over the world's fixed 1600×900 space means every coordinate the
  * generator emits is resolution-independent — the panel can be any size and the
@@ -83,8 +83,7 @@ export default function LandscapeMap(props: { world: World }) {
 
       <Terrain world={props.world} />
       <Water world={props.world} />
-      <Forest world={props.world} />
-      <Peaks world={props.world} />
+      <Scenery world={props.world} />
       <Trails world={props.world} />
       <Settlements world={props.world} />
       <Clouds world={props.world} />

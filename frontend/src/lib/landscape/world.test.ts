@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { generateWorld, linePath, ringPath, worldBiomeKinds, MAX_TREES, WORLD_H, WORLD_W } from './world';
+import {
+  generateWorld, linePath, ringPath, sceneryOrder, worldBiomeKinds,
+  MAX_CRAG, MAX_TREES, RIDGE_STEPS, WORLD_H, WORLD_W,
+} from './world';
 import { pointInPolygon, type Pt } from './geometry';
-import { BIOME_KINDS, BIOME_RAMPS, LAND, biomeColor } from './palette';
+import {
+  BIOME_KINDS, BIOME_RAMPS, GREY_ROCK, LAND, RED_ROCK, biomeColor, rockRamp, shade,
+} from './palette';
 import { peakShape, settlementShape, treeShape } from './shapes';
 import { isValidColor } from '../envColors';
 
@@ -77,12 +82,54 @@ describe('generateWorld structure', () => {
         expect(py).toEqual([...py].sort((a, b) => a - b));
       });
 
-      it('puts every peak on dry land and never snows on red rock', () => {
+      it('puts every peak on dry land, with a plausible profile', () => {
         expect(w.peaks.length).toBeGreaterThan(0);
         for (const p of w.peaks) {
           expect(pointInPolygon({ x: p.x, y: p.y }, w.coast)).toBe(true);
-          expect(p.height).toBeGreaterThan(p.baseR);
-          if (p.snow) expect(p.height).toBeGreaterThan(p.baseR * 2.2);
+          expect(p.height).toBeGreaterThan(p.baseR * 0.7);
+          expect(p.ridgeL).toHaveLength(RIDGE_STEPS);
+          expect(p.ridgeR).toHaveLength(RIDGE_STEPS);
+          expect(p.tone).toBeGreaterThanOrEqual(-1);
+          expect(p.tone).toBeLessThanOrEqual(1);
+          expect(p.snowline).toBeGreaterThan(0);
+          expect(p.snowline).toBeLessThan(1);
+          expect(p.scree.length).toBeGreaterThanOrEqual(2);
+        }
+      });
+
+      it('never snows on red rock', () => {
+        for (const p of w.peaks) {
+          if (p.red) expect(p.snow).toBe(false);
+          if (p.snow) expect(p.height).toBeGreaterThan(p.baseR * 2);
+        }
+      });
+
+      it('grows both grey and red mountains', () => {
+        expect(w.peaks.some((p) => p.red)).toBe(true);
+        expect(w.peaks.some((p) => !p.red)).toBe(true);
+      });
+
+      it('varies mountain scale rather than repeating one silhouette', () => {
+        const ratios = w.peaks.map((p) => p.height / p.baseR);
+        expect(Math.max(...ratios) - Math.min(...ratios)).toBeGreaterThan(0.5);
+        // Every ridge is its own; identical jitter across peaks would mean the
+        // generator stopped advancing the stream.
+        const fingerprints = new Set(w.peaks.map((p) => p.ridgeL.join(',')));
+        expect(fingerprints.size).toBe(w.peaks.length);
+      });
+
+      it('always gives the island a mountain-bearing biome', () => {
+        expect(w.biomes.some((b) => b.kind === 'highland' || b.kind === 'snowfield')).toBe(true);
+      });
+
+      it('keeps shoulders subordinate to the main summit', () => {
+        for (const p of w.peaks) {
+          for (const s of p.shoulders) {
+            expect([-1, 1]).toContain(s.side);
+            expect(s.h).toBeLessThan(1);
+            expect(s.at).toBeGreaterThan(0);
+            expect(s.at).toBeLessThan(1);
+          }
         }
       });
 
@@ -189,15 +236,100 @@ describe('path helpers', () => {
 describe('shapes', () => {
   const w = generateWorld(7);
 
-  it('builds a peak silhouette with a lit facet, and snow only when flagged', () => {
+  it('builds two facets and a crease for every mountain, with no NaN', () => {
     for (const peak of w.peaks) {
       const s = peakShape(peak);
-      expect(s.body).not.toContain('NaN');
-      expect(s.lit).not.toContain('NaN');
-      expect(s.base).not.toContain('NaN');
+      for (const d of [s.body, s.outline, s.lit, s.shade, s.crease]) {
+        expect(d).not.toContain('NaN');
+        expect(d.length).toBeGreaterThan(0);
+      }
       expect(s.body.endsWith('Z')).toBe(true);
+      expect(s.lit.endsWith('Z')).toBe(true);
+      expect(s.shade.endsWith('Z')).toBe(true);
+      expect(s.crease.startsWith('M')).toBe(true);
+      // The outline is the rim only: open, so stroking it leaves the base free.
+      expect(s.outline.startsWith('M')).toBe(true);
+      expect(s.outline.endsWith('Z')).toBe(false);
+      expect(s.shadow.rx).toBeGreaterThan(0);
+      expect(s.shadow.ry).toBeGreaterThan(0);
+      // Cast down-right, away from the light.
+      expect(s.shadow.cx).toBeGreaterThan(peak.x);
+      expect(s.shadow.cy).toBeGreaterThan(peak.y);
+      expect(s.scree).toHaveLength(peak.scree.length);
+      for (const block of s.scree) expect(block.r).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps every silhouette a function of height, left to right', () => {
+    // The one invariant that must hold: x runs monotonically from the left base
+    // corner, over the summit, to the right one. Break it and the outline
+    // crosses itself and the mountain renders as shattered glass.
+    for (const peak of w.peaks) {
+      const nums = (peakShape(peak).body.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+      const xs: number[] = [];
+      for (let i = 0; i < nums.length; i += 2) xs.push(nums[i]);
+      for (let i = 1; i < xs.length; i++) {
+        expect(xs[i], `peak at ${peak.x},${peak.y} vertex ${i}`).toBeGreaterThanOrEqual(xs[i - 1]);
+      }
+    }
+  });
+
+  it('gives each summit asymmetric flanks, so no two read alike', () => {
+    for (const peak of w.peaks) {
+      expect(Math.abs(peak.bowL)).toBeLessThanOrEqual(0.26);
+      expect(Math.abs(peak.bowR)).toBeLessThanOrEqual(0.26);
+      for (const j of [...peak.ridgeL, ...peak.ridgeR]) {
+        expect(Math.abs(j)).toBeLessThanOrEqual(MAX_CRAG);
+      }
+    }
+    const bows = new Set(w.peaks.map((p) => `${p.bowL},${p.bowR}`));
+    expect(bows.size).toBe(w.peaks.length);
+  });
+
+  it('gives every summit a ridged silhouette rather than a triangle', () => {
+    for (const peak of w.peaks) {
+      const s = peakShape(peak);
+      const vertices = (s.body.match(/[ML]/g) ?? []).length;
+      // Base corners + apex + both crag ridges — the flat-cone look came from
+      // this being 3.
+      expect(vertices).toBe(3 + RIDGE_STEPS * 2);
+    }
+  });
+
+  it('snows only when flagged, and shades the away-facing part of the cap', () => {
+    for (const peak of w.peaks) {
+      const s = peakShape(peak);
       expect(s.snow === null).toBe(!peak.snow);
-      if (s.snow) expect(s.snow).not.toContain('NaN');
+      if (peak.snow) {
+        expect(s.snow).not.toContain('NaN');
+        expect(s.snowShade).not.toBeNull();
+        expect(s.snowShade).not.toContain('NaN');
+      } else {
+        expect(s.snowShade).toBeNull();
+      }
+    }
+  });
+
+  it('keeps every mountain facet inside its own footprint', () => {
+    const numbers = (d: string): number[] =>
+      (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    for (const peak of w.peaks) {
+      const s = peakShape(peak);
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const d of [s.body, s.lit, s.shade, s.snow ?? '']) {
+        const n = numbers(d);
+        for (let i = 0; i < n.length; i += 2) {
+          xs.push(n[i]);
+          ys.push(n[i + 1]);
+        }
+      }
+      // Ridges and shoulders push outward, so allow a margin — but a facet must
+      // not wander off across the map, and nothing may poke below the base line.
+      expect(Math.min(...xs)).toBeGreaterThan(peak.x - peak.baseR * 1.6);
+      expect(Math.max(...xs)).toBeLessThan(peak.x + peak.baseR * 1.6);
+      expect(Math.min(...ys)).toBeGreaterThanOrEqual(peak.y - peak.height * 1.05);
+      expect(Math.max(...ys)).toBeLessThanOrEqual(peak.y + 0.01);
     }
   });
 
@@ -239,6 +371,100 @@ describe('palette', () => {
   it('clamps the ramp index instead of wrapping', () => {
     expect(biomeColor('grass', -3)).toBe(BIOME_RAMPS.grass[0]);
     expect(biomeColor('grass', 99)).toBe(BIOME_RAMPS.grass[2]);
+  });
+
+  it('separates the rock facet tones enough to read as volume', () => {
+    const luma = (hex: string): number => {
+      const n = parseInt(hex.slice(1), 16);
+      return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114;
+    };
+    for (const ramp of [GREY_ROCK, RED_ROCK]) {
+      expect(luma(ramp.light)).toBeGreaterThan(luma(ramp.mid));
+      expect(luma(ramp.mid)).toBeGreaterThan(luma(ramp.shade));
+      // The flat-cone look came from these two sitting a few percent apart.
+      expect(luma(ramp.light) - luma(ramp.mid)).toBeGreaterThan(40);
+      // ...and the sunlit facet must stay clearly darker than snow, or the cap
+      // disappears into the rock it sits on.
+      expect(luma(LAND.snow) - luma(ramp.light)).toBeGreaterThan(40);
+    }
+  });
+});
+
+describe('shade', () => {
+  const cases: [string, number, string][] = [
+    ['#000000', 1, '#ffffff'],
+    ['#ffffff', -1, '#000000'],
+    ['#808080', 0, '#808080'],
+    ['#000', 1, '#ffffff'],
+  ];
+  for (const [hex, amount, expected] of cases) {
+    it(`shade(${hex}, ${amount}) → ${expected}`, () => {
+      expect(shade(hex, amount)).toBe(expected);
+    });
+  }
+
+  it('lightens and darkens monotonically, staying in gamut', () => {
+    expect(shade('#7c848c', 0.2)).not.toBe('#7c848c');
+    for (const amount of [-2, -0.5, 0.5, 2]) {
+      const out = shade('#7c848c', amount);
+      expect(isValidColor(out)).toBe(true);
+    }
+  });
+
+  it('passes non-hex input straight through rather than emitting garbage', () => {
+    expect(shade('rebeccapurple', 0.5)).toBe('rebeccapurple');
+    expect(shade('', 0.5)).toBe('');
+  });
+});
+
+describe('rockRamp', () => {
+  it('is a no-op at tone 0 and always yields valid hex', () => {
+    expect(rockRamp(GREY_ROCK, 0)).toEqual(GREY_ROCK);
+    for (const tone of [-1, -0.4, 0.4, 1]) {
+      for (const ramp of [GREY_ROCK, RED_ROCK]) {
+        for (const value of Object.values(rockRamp(ramp, tone))) {
+          expect(isValidColor(value)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('moves every stop in the same direction', () => {
+    const lighter = rockRamp(GREY_ROCK, 1);
+    const darker = rockRamp(GREY_ROCK, -1);
+    expect(lighter.mid).not.toBe(darker.mid);
+    expect(parseInt(lighter.mid.slice(1), 16)).toBeGreaterThan(parseInt(darker.mid.slice(1), 16));
+  });
+});
+
+describe('sceneryOrder', () => {
+  const w = generateWorld(42);
+
+  it('covers every tree and peak exactly once', () => {
+    const order = sceneryOrder(w);
+    expect(order).toHaveLength(w.trees.length + w.peaks.length);
+    const trees = order.filter((i) => i.kind === 'tree').map((i) => i.index).sort((a, b) => a - b);
+    const peaks = order.filter((i) => i.kind === 'peak').map((i) => i.index).sort((a, b) => a - b);
+    expect(trees).toEqual(w.trees.map((_, i) => i));
+    expect(peaks).toEqual(w.peaks.map((_, i) => i));
+  });
+
+  it('runs strictly back to front', () => {
+    const ys = sceneryOrder(w).map((i) => i.y);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+  });
+
+  it('interleaves the two kinds rather than grouping them', () => {
+    const kinds = sceneryOrder(w).map((i) => i.kind);
+    let switches = 0;
+    for (let i = 1; i < kinds.length; i++) {
+      if (kinds[i] !== kinds[i - 1]) switches++;
+    }
+    expect(switches).toBeGreaterThan(2);
+  });
+
+  it('is stable for a given world', () => {
+    expect(sceneryOrder(w)).toEqual(sceneryOrder(generateWorld(42)));
   });
 });
 

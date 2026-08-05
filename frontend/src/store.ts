@@ -70,7 +70,7 @@ const [activeView, setActiveView] = createSignal<'commands' | 'dashboard' | 'dis
 
 // Discovery landscape. The seed lives here rather than in the panel so leaving
 // the view and coming back shows the same world instead of silently rerolling.
-const [discoverySeed, setDiscoverySeed] = createSignal('20260806');
+const [discoverySeed, setDiscoverySeed] = createSignal(20260806);
 const [discoveryMotion, setDiscoveryMotion] = createSignal(true);
 
 // Global settings modal (opened from View → Settings… / ⌘,)

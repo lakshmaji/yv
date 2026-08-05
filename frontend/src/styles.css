@@ -2520,25 +2520,14 @@
       gap: 12px;
     }
 
-    .disc-seed {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 3px 8px;
-    }
-    .disc-seed-label { font-size: 11px; color: var(--muted); }
-    .disc-seed-input {
-      width: 130px;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 3px 0;
+    /* On the Dashboard .dash-refresh is the only trailing control, so it carries
+       margin-left:auto as a spacer. Discovery has two buttons that belong
+       together at the left, so drop the spacer here and let the legend push. */
+    #main.discovery .dash-refresh { margin-left: 0; }
+    #main.discovery .dash-refresh.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(88,166,255,.1);
     }
 
     .disc-legend {

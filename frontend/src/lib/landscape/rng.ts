@@ -42,22 +42,3 @@ export function makeRng(seed: number): Rng {
   };
 }
 
-/**
- * FNV-1a over the string, so the seed box accepts words as well as numbers.
- * Returns a uint32 suitable for makeRng.
- */
-export function hashSeed(text: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/** Resolves whatever the UI holds — digits or a word — into a generator seed. */
-export function resolveSeed(input: string): number {
-  const trimmed = input.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed) >>> 0;
-  return hashSeed(trimmed);
-}
