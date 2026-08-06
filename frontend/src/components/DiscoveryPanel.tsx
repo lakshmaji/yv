@@ -1,8 +1,16 @@
-import { createMemo, createSignal, onCleanup, onMount, For } from 'solid-js';
-import { discoverySeed, setDiscoverySeed, discoveryMotion, setDiscoveryMotion } from '../store';
+import { createEffect, createMemo, createSignal, onCleanup, onMount, For } from 'solid-js';
+import {
+  appSettings,
+  discoverySeed,
+  setDiscoverySeed,
+  discoveryMotion,
+  setDiscoveryMotion,
+  setSettingsModalOpen,
+} from '../store';
 import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '../lib/landscape/world';
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
-import { dinoInsets, randomDinos } from '../lib/dino';
+import { clipForName, playClip, resetAudioCache, SESSION_SALT } from '../lib/audio';
+import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import LandscapeMap from './discovery/LandscapeMap';
 
@@ -82,6 +90,39 @@ export default function DiscoveryPanel() {
     }),
   );
 
+  // --- sound ---
+
+  const clips = () => appSettings().audioClips ?? [];
+  const soundOn = () => !appSettings().soundMuted;
+
+  // A clip the user removed must stop holding its base64 payload, and one they
+  // removed and re-added must be re-read rather than served from a stale entry.
+  createEffect<string | undefined>((previous) => {
+    const key = JSON.stringify(clips());
+    if (previous !== undefined && key !== previous) resetAudioCache();
+    return key;
+  });
+
+  /**
+   * Clicking a dinosaur plays the clip it was assigned for this session — the
+   * same one every time, so an animal has a recognisable voice until the app
+   * restarts. Nothing is awaited: the click is done, the roar catches up.
+   */
+  function handleSelect(dino: Dino): void {
+    if (!soundOn()) return;
+    const clip = clipForName(dino.name, clips(), SESSION_SALT);
+    if (!clip) return;
+    void playClip(clip);
+  }
+
+  /** Why the herd is silent, when it is — otherwise a click reads as broken. */
+  const soundStatus = () => {
+    if (!soundOn()) return { label: '♪ Sounds muted', action: true };
+    if (clips().length === 0) return { label: '♪ No sound clips yet', action: true };
+    const n = clips().length;
+    return { label: `♪ ${n} clip${n === 1 ? '' : 's'}`, action: false };
+  };
+
   function reroll(): void {
     // Picking a seed is a user action, not generation — Math.random is fine
     // here, and never reaches the generator itself.
@@ -93,7 +134,10 @@ export default function DiscoveryPanel() {
       <div id="dashboard-header">
         <div class="dash-heading">
           <span class="dash-title">Discovery</span>
-          <span class="dash-subtitle">A procedurally generated world — every seed is a different island</span>
+          <span class="dash-subtitle">
+            A procedurally generated world — every seed is a different island. Click a dinosaur to
+            hear it roar.
+          </span>
         </div>
       </div>
 
@@ -110,6 +154,22 @@ export default function DiscoveryPanel() {
           onClick={() => setDiscoveryMotion(!discoveryMotion())}
         >
           {discoveryMotion() ? '◉ Motion on' : '○ Motion off'}
+        </button>
+
+        {/* A button rather than a label when there is something to fix: the
+            answer to "why is it silent?" is always in Settings. */}
+        <button
+          type="button"
+          class="dash-refresh disc-sound-status"
+          classList={{ muted: soundStatus().action }}
+          title={
+            soundStatus().action
+              ? 'Open Settings to add your own sound clips'
+              : 'Click a dinosaur to hear it'
+          }
+          onClick={() => setSettingsModalOpen(true)}
+        >
+          {soundStatus().label}
         </button>
 
         <div class="disc-legend">
@@ -129,7 +189,7 @@ export default function DiscoveryPanel() {
         classList={{ 'no-motion': !discoveryMotion() }}
         ref={stageRef}
       >
-        <LandscapeMap world={world()} dinos={dinos()} />
+        <LandscapeMap world={world()} dinos={dinos()} onSelectDino={handleSelect} />
         <div class="landscape-meta">
           {/* The seed is shown but not editable — it is here so a world you like
               can be noted down and asked for again, not as a control. */}

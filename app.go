@@ -7,6 +7,7 @@ import (
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/audio"
 	"yv/internal/config"
 	"yv/internal/env"
 	"yv/internal/metrics"
@@ -219,6 +220,39 @@ func (a *App) SaveSettings(s models.Settings) string {
 		return "error: " + err.Error()
 	}
 	return "ok"
+}
+
+// --- Audio ---
+
+// PickAudioClips opens a native multi-select picker for sound files. Cancelling
+// and failing both yield an empty slice — never nil, so the frontend can spread
+// the result without a guard.
+func (a *App) PickAudioClips() []string {
+	paths, err := wailsRuntime.OpenMultipleFilesDialog(a.getCtx(), wailsRuntime.OpenDialogOptions{
+		Title: "Select sound clips",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Audio (" + audio.DialogPattern() + ")", Pattern: audio.DialogPattern()},
+		},
+	})
+	if err != nil {
+		log.Printf("[PickAudioClips] %v", err)
+		return []string{}
+	}
+	if paths == nil {
+		return []string{}
+	}
+	return paths
+}
+
+// GetAudioClip returns a clip as a data URL the webview can play, or "error: …".
+// The frontend caches the result per path, so this is called once per clip per
+// session rather than on every click.
+func (a *App) GetAudioClip(path string) string {
+	url, err := audio.Load(path)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return url
 }
 
 // --- Metrics delegation ---

@@ -5,7 +5,13 @@ import type { AppSettings, PanelId } from '../types';
 const ALL: PanelId[] = ['stats', 'memory', 'frequency', 'activity'];
 
 function settings(panels?: PanelId[]): AppSettings {
-  return { schemaVersion: 1, metricsEnabled: true, retentionDays: 365, panels: panels as PanelId[] };
+  return {
+    schemaVersion: 1,
+    metricsEnabled: true,
+    retentionDays: 365,
+    panels: panels as PanelId[],
+    soundMuted: false,
+  };
 }
 
 describe('PANELS', () => {

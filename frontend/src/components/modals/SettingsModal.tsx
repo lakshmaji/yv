@@ -2,6 +2,7 @@ import { createEffect, createSignal, For, Show } from 'solid-js';
 import { appSettings, setAppSettings, settingsModalOpen, setSettingsModalOpen } from '../../store';
 import { go } from '../../wails';
 import { PANELS, togglePanel } from '../../lib/dashboardPanels';
+import { addClips, clipLabel } from '../../lib/audio';
 import { formatBytes } from '../../lib/utils';
 import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
 
@@ -14,6 +15,8 @@ export default function SettingsModal() {
   const [enabled, setEnabled] = createSignal(false);
   const [retention, setRetention] = createSignal('365');
   const [panels, setPanels] = createSignal<PanelId[]>([]);
+  const [soundOn, setSoundOn] = createSignal(true);
+  const [clips, setClips] = createSignal<string[]>([]);
   const [storage, setStorage] = createSignal<MetricsStorageInfo | null>(null);
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -26,6 +29,8 @@ export default function SettingsModal() {
     setEnabled(current.metricsEnabled);
     setRetention(String(current.retentionDays));
     setPanels([...(current.panels || [])]);
+    setSoundOn(!current.soundMuted);
+    setClips([...(current.audioClips || [])]);
     setConfirmClear(false);
     setError('');
 
@@ -70,6 +75,8 @@ export default function SettingsModal() {
       metricsEnabled: enabled(),
       retentionDays: Number(retention()),
       panels: panels(),
+      soundMuted: !soundOn(),
+      audioClips: clips(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -87,6 +94,21 @@ export default function SettingsModal() {
     }
 
     close();
+  }
+
+  /** Multi-select, so a whole folder's worth of roars is one trip. */
+  async function handleAddClips() {
+    try {
+      const picked = await go.PickAudioClips();
+      if (picked.length === 0) return; // cancelled
+      setClips(addClips(clips(), picked));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function removeClip(path: string) {
+    setClips(clips().filter((p) => p !== path));
   }
 
   async function handleClear() {
@@ -195,6 +217,66 @@ export default function SettingsModal() {
                 </label>
               )}
             </For>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Dinosaur sounds</div>
+            <div class="settings-section-hint">
+              No audio ships with the app — add your own clips and each dinosaur in Discovery is
+              given one at random for the session.
+            </div>
+
+            <label class="settings-row settings-toggle">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Roar when a dinosaur is clicked</div>
+                <div class="settings-row-hint">
+                  Plays the clip once. Clicking the same dinosaur again replays the same clip.
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={soundOn()}
+                onChange={(e) => setSoundOn(e.currentTarget.checked)}
+              />
+            </label>
+
+            <div class="settings-row">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Sound clips</div>
+                <div class="settings-row-hint">
+                  {clips().length === 0
+                    ? 'None yet — the dinosaurs are silent until you add some.'
+                    : `${clips().length} clip${clips().length === 1 ? '' : 's'} in the pool.`}
+                </div>
+              </div>
+              <button type="button" onClick={handleAddClips}>
+                + Add clips…
+              </button>
+            </div>
+
+            <Show when={clips().length > 0}>
+              <div class="settings-clip-list">
+                <For each={clips()}>
+                  {(path) => (
+                    <div class="settings-clip-row">
+                      {/* The basename is what identifies a clip at a glance; the
+                          full path is one hover away when two share a name. */}
+                      <span class="settings-clip-name" title={path}>
+                        {clipLabel(path)}
+                      </span>
+                      <button
+                        type="button"
+                        class="settings-clip-remove"
+                        title="Remove this clip"
+                        onClick={() => removeClip(path)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
           </div>
 
           <Show when={error()}>

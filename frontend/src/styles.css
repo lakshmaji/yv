@@ -2511,6 +2511,52 @@
     .btn-danger { flex-shrink: 0; }
     .btn-danger:disabled { opacity: .35; cursor: default; }
 
+    /* The user's sound clips. Scrolls rather than growing, because the list has
+       no upper bound — they can add as many as they like. */
+    .settings-clip-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 148px;
+      overflow-y: auto;
+      margin: 2px 0 4px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(0,0,0,.15);
+    }
+
+    .settings-clip-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .settings-clip-row:hover { background: rgba(255,255,255,.05); }
+
+    .settings-clip-name {
+      flex: 1;
+      font-size: 11px;
+      font-family: var(--mono, ui-monospace, monospace);
+      /* Long filenames truncate at the tail so the extension stays visible —
+         it is what distinguishes an unplayable file from a playable one. */
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-clip-remove {
+      flex-shrink: 0;
+      padding: 0 5px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+    }
+    .settings-clip-remove:hover { color: var(--danger, #f85149); }
+
     /* ── Discovery landscape ─────────────────────────────── */
     /* Reuses #dashboard-header / .dash-toolbar / .dash-refresh, so the header
        and controls match the Dashboard without a second set of rules. */
@@ -2528,6 +2574,13 @@
       border-color: var(--accent);
       color: var(--accent);
       background: rgba(88,166,255,.1);
+    }
+
+    /* Why the herd is silent, when it is. Dimmed while there is nothing to hear,
+       so it reads as a note rather than an active control. */
+    .disc-sound-status.muted {
+      color: var(--muted);
+      border-style: dashed;
     }
 
     .disc-legend {
@@ -2648,6 +2701,13 @@
       86%           { transform: scaleY(1); }
     }
 
+    /* Everything painted over the herd is scenery, and scenery must not swallow a
+       click. The clouds and settlements are drawn after the dinosaurs so they
+       layer correctly, which without this would leave an animal under a fog bank
+       both unclickable and unnameable. */
+    .land-clouds,
+    .land-settlements { pointer-events: none; }
+
     .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }
     .land-swell.swell-b { animation-duration: 38s; animation-delay: -9s; }
     .land-swell.swell-c { animation-duration: 47s; animation-delay: -20s; }
@@ -2692,6 +2752,26 @@
       animation: land-dino-growl 5s ease-out infinite;
       pointer-events: none;
       will-change: opacity;
+    }
+
+    /* A clicked animal calls once, loudly: the arcs hold near full opacity for
+       most of the burst instead of the brief ambient blip, and the animation runs
+       finite so it settles back into the idle loop on its own.
+       This overrides the per-element duration the component sets inline, which is
+       why the shorthand names its own duration — the roar must not be stretched
+       to the species tempo.
+       Deliberately outside the reduced-motion and .no-motion exemptions below:
+       it is direct feedback for a click, like the hover lift, not ambient
+       motion, and it is the only cue when there are no clips or sound is off. */
+    .land-dino.roaring .land-dino-growl {
+      animation: land-dino-roar .9s ease-out 1 !important;
+    }
+
+    @keyframes land-dino-roar {
+      0%        { opacity: 0; }
+      8%        { opacity: 1; }
+      70%       { opacity: .9; }
+      100%      { opacity: 0; }
     }
 
     .land-dino-bob {

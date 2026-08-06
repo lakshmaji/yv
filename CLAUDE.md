@@ -754,3 +754,76 @@ Colours are validated as `#rgb` / `#rrggbb` (or empty) on **both** sides — `en
 ### Testing
 
 `make test` runs both suites: `make test-go` (Go, `./internal/...`) and `make test-frontend` (vitest).
+
+---
+
+## Implemented: Dinosaur sounds (click to roar)
+
+### Goal
+
+Clicking a dinosaur in the Discovery view plays a sound clip. Each dinosaur is
+assigned a clip at random **once per session**, so an animal has a recognisable
+voice — clicking it again replays the same clip — and a restart reshuffles the herd.
+
+### No audio ships with the app
+
+The clip pool is entirely user-supplied. `assets/audio/` holds development samples
+only and is gitignored; nothing is embedded and `go:embed` is untouched. With an
+empty pool the dinosaurs are silent, and the Discovery toolbar says so.
+
+### Delivery: why clips go through Go
+
+The Wails asset server serves the embedded frontend and nothing else, so a
+`file://` URL from an arbitrary user directory cannot be fetched. `GetAudioClip`
+reads the file in Go and returns a `data:<mime>;base64,…` URL, which the frontend
+caches per path for the session — a repeat click never re-reads the disk. The cache
+is cleared when the clip list changes, so a removed clip stops holding its payload.
+
+### Assignment is a pure function, not stored state
+
+`clipForName(name, clips, salt)` hashes the dinosaur's name (the same identity
+`randomDino` keys off — there is no dinosaur id) with `SESSION_SALT`, one
+`Math.random()` drawn at module load. Stable within a session, different across
+sessions, and nothing to keep in sync when the pool changes. `Math.random` never
+reaches the world generator, which stays seeded.
+
+### Settings
+
+`Settings` gains `SoundMuted bool` and `AudioClips []string`. The mute flag is
+stored **inverted** because of the zero-value-means-default contract on
+`models.Settings`: roars are on by default, so the field that persists is "muted".
+The Settings modal grows a **Dinosaur sounds** section — a toggle plus a clip list
+with `+ Add clips…` (native multi-select) and per-row removal.
+
+### Click feedback is independent of sound
+
+`Dinosaur` owns a local `roaring` signal for 900ms on click, which swaps the
+ambient growl loop for a single emphasised burst. It sits outside the
+`prefers-reduced-motion` and `.no-motion` exemptions on purpose: like the hover
+lift, it is a direct response to the pointer, not ambient motion — and it is the
+only acknowledgement a click gets when sound is muted or the pool is empty.
+
+### Also fixed
+
+`.land-clouds` and `.land-settlements` are now `pointer-events: none`. They are
+painted after the herd so they layer correctly, which meant an animal under a fog
+bank was neither clickable nor nameable on hover.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/audio/audio.go` | New package — `Load` (extension allowlist, 15 MB cap, data URL), `MimeType`, `NormalizePaths`, `ValidatePaths`, `DialogPattern` |
+| `internal/audio/audio_test.go` | New — table-driven, incl. a base64 round-trip decode and an over-cap file |
+| `internal/models/models.go` | `SoundMuted`, `AudioClips` on `Settings` |
+| `internal/settings/settings.go` | `Normalize` de-dupes clips; `Validate` rejects unsupported extensions |
+| `app.go` | `PickAudioClips()` (multi-select dialog), `GetAudioClip(path)` |
+| `frontend/src/lib/audio.ts` | New — pure `clipForName` / `clipLabel` / `addClips` + impure `playClip` / `resetAudioCache`; `wails` is imported dynamically because it reads `window` at module scope, which would throw in the node test env |
+| `frontend/src/lib/audio.test.ts` | New — 24 vitest cases (stability, reshuffle across salts, distribution, labels, de-dupe) |
+| `frontend/src/components/discovery/Dinosaur.tsx` | `onSelect` prop, click handler, `roaring` burst |
+| `frontend/src/components/discovery/LandscapeMap.tsx` | Forwards `onSelectDino` |
+| `frontend/src/components/DiscoveryPanel.tsx` | Plays the assigned clip on click; toolbar status chip that opens Settings |
+| `frontend/src/components/modals/SettingsModal.tsx` | Dinosaur sounds section |
+| `frontend/src/styles.css` | `.land-dino.roaring` burst, clip list rows, `.disc-sound-status`, scenery `pointer-events: none` |
+| `frontend/src/{types,wails,store}.ts` | New settings fields and bindings |
+| `.gitignore` | `assets/` — samples are local-only |

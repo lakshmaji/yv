@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { dinoShape, DINO_TEMPO, type Dino } from '../../lib/dino';
 import { shade } from '../../lib/landscape/palette';
 
@@ -33,15 +33,38 @@ function ringWeight(ring: number): number {
   return 1 + ring * 0.16;
 }
 
-export default function Dinosaur(props: { dino: Dino }) {
+/**
+ * How long a clicked animal stays in its emphasised roar, in ms. Long enough to
+ * read as a deliberate call rather than a flicker, short enough that clicking
+ * along a herd doesn't leave every animal shouting at once.
+ */
+const ROAR_MS = 900;
+
+export default function Dinosaur(props: { dino: Dino; onSelect?: (dino: Dino) => void }) {
   const shape = () => dinoShape(props.dino);
   const c = () => props.dino.colors;
   const legShade = () => shade(props.dino.colors.body, -0.18);
   const tempo = () => DINO_TEMPO[props.dino.species];
 
+  // The click feedback is visual and independent of sound: with no clips added,
+  // or with sound muted, a click still has to acknowledge itself.
+  const [roaring, setRoaring] = createSignal(false);
+  let roarTimer: number | undefined;
+
+  function handleClick(): void {
+    setRoaring(true);
+    clearTimeout(roarTimer);
+    roarTimer = setTimeout(() => setRoaring(false), ROAR_MS) as unknown as number;
+    props.onSelect?.(props.dino);
+  }
+
+  onCleanup(() => clearTimeout(roarTimer));
+
   return (
     <g
       class="land-dino"
+      classList={{ roaring: roaring() }}
+      onClick={handleClick}
       // The lift is a length, not a percentage: percentage translate resolves
       // against the transform-box, which is easy to get subtly wrong in SVG and
       // fails silently. A custom property keeps it exact and size-relative.

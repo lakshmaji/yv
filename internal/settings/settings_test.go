@@ -53,6 +53,26 @@ func TestNormalize(t *testing.T) {
 			in:   models.Settings{Panels: []string{PanelActivity}},
 			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: []string{PanelActivity}},
 		},
+		{
+			name: "audio clips keep their order",
+			in:   models.Settings{AudioClips: []string{"/b.mp3", "/a.wav"}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/b.mp3", "/a.wav"}},
+		},
+		{
+			name: "duplicate and unsupported clips are dropped",
+			in:   models.Settings{AudioClips: []string{"/a.mp3", "/a.mp3", "/notes.txt"}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/a.mp3"}},
+		},
+		{
+			name: "an all-invalid clip list normalises away",
+			in:   models.Settings{AudioClips: []string{"/notes.txt"}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all},
+		},
+		{
+			name: "sound is audible by default and mute is preserved",
+			in:   models.Settings{SoundMuted: true},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, SoundMuted: true},
+		},
 	}
 
 	for _, tt := range tests {
@@ -108,6 +128,9 @@ func TestValidate(t *testing.T) {
 		{"known panels", models.Settings{Panels: DefaultPanels}, false},
 		{"unknown panel", models.Settings{Panels: []string{"drop-tables"}}, true},
 		{"empty panels", models.Settings{Panels: []string{}}, false},
+		{"supported clips", models.Settings{AudioClips: []string{"/roar.mp3", "/growl.wav"}}, false},
+		{"unsupported clip", models.Settings{AudioClips: []string{"/roar.aiff"}}, true},
+		{"no clips", models.Settings{AudioClips: nil}, false},
 	}
 
 	for _, tt := range tests {
@@ -135,13 +158,25 @@ func TestStoreDefaultsWhenMissing(t *testing.T) {
 	if !reflect.DeepEqual(got.Panels, DefaultPanels) {
 		t.Errorf("Panels = %v, want %v", got.Panels, DefaultPanels)
 	}
+	if got.SoundMuted {
+		t.Error("sound should be audible by default")
+	}
+	if len(got.AudioClips) != 0 {
+		t.Errorf("AudioClips = %v, want none — no audio ships with the app", got.AudioClips)
+	}
 }
 
 func TestStoreRoundTrip(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	s := NewStore()
-	if _, err := s.Save(models.Settings{MetricsEnabled: true, RetentionDays: 30, Panels: []string{PanelMemory}}); err != nil {
+	if _, err := s.Save(models.Settings{
+		MetricsEnabled: true,
+		RetentionDays:  30,
+		Panels:         []string{PanelMemory},
+		SoundMuted:     true,
+		AudioClips:     []string{"/clips/roar.mp3"},
+	}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
@@ -155,6 +190,12 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Panels, []string{PanelMemory}) {
 		t.Errorf("Panels = %v, want [memory]", got.Panels)
+	}
+	if !got.SoundMuted {
+		t.Error("SoundMuted did not persist")
+	}
+	if !reflect.DeepEqual(got.AudioClips, []string{"/clips/roar.mp3"}) {
+		t.Errorf("AudioClips = %v, want [/clips/roar.mp3]", got.AudioClips)
 	}
 }
 

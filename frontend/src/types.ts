@@ -98,6 +98,10 @@ export interface AppSettings {
   metricsEnabled: boolean;
   retentionDays: number;
   panels: PanelId[];
+  /** Inverted on purpose: the Go zero value must mean the default, and roars are on. */
+  soundMuted: boolean;
+  /** The user's own sound files. Empty means the dinosaurs are silent. */
+  audioClips?: string[];
 }
 
 // --- metrics ---

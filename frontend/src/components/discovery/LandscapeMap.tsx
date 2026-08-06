@@ -19,7 +19,11 @@ import Clouds from './Clouds';
  * generator emits is resolution-independent — the panel can be any size and the
  * composition holds.
  */
-export default function LandscapeMap(props: { world: World; dinos?: Dino[] }) {
+export default function LandscapeMap(props: {
+  world: World;
+  dinos?: Dino[];
+  onSelectDino?: (dino: Dino) => void;
+}) {
   const coastPath = () => ringPath(props.world.coast);
 
   return (
@@ -90,7 +94,9 @@ export default function LandscapeMap(props: { world: World; dinos?: Dino[] }) {
       <Trails world={props.world} />
       {/* Above the trails so a dinosaur isn't crossed by a path, below the
           settlement labels so names stay readable. */}
-      <For each={props.dinos ?? []}>{(dino) => <Dinosaur dino={dino} />}</For>
+      <For each={props.dinos ?? []}>
+        {(dino) => <Dinosaur dino={dino} onSelect={props.onSelectDino} />}
+      </For>
       <Settlements world={props.world} />
       <Clouds world={props.world} />
 

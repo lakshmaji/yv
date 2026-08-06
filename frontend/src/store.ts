@@ -80,6 +80,8 @@ const [appSettings, setAppSettings] = createSignal<AppSettings>({
   metricsEnabled: false,
   retentionDays: 365,
   panels: ['stats', 'memory', 'frequency', 'activity'],
+  soundMuted: false,
+  audioClips: [],
 });
 
 // Dashboard controls. Memory vs CPU is not a toggle — both charts render, and

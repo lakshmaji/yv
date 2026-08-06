@@ -27,6 +27,10 @@ frontend/dist/
 frontend/package-lock.json
 frontend/package.json.md5
 
+# Local sound clips. No audio ships with the app — users add their own in
+# Settings, so these are samples for development only.
+assets/
+
 # Binary
 yv
 yv.exe

@@ -41,6 +41,10 @@ interface GoApp {
 
   GetSettings(): Promise<AppSettings>;
   SaveSettings(settings: AppSettings): Promise<string>;
+  /** Native multi-select picker for sound files. Empty when cancelled. */
+  PickAudioClips(): Promise<string[]>;
+  /** A clip as a data URL the webview can play, or an "error: …" string. */
+  GetAudioClip(path: string): Promise<string>;
   GetMetrics(req: MetricsQuery): Promise<MetricsResult>;
   GetUsageFrequency(req: MetricsQuery): Promise<FrequencyResult>;
   GetActivityHeatmap(days: number): Promise<ActivityHeatmap>;

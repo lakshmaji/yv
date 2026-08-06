@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"yv/internal/audio"
 	"yv/internal/models"
 )
 
@@ -201,6 +202,7 @@ func Normalize(in models.Settings) models.Settings {
 	}
 
 	out.Panels = NormalizePanels(out.Panels)
+	out.AudioClips = audio.NormalizePaths(out.AudioClips)
 	return out
 }
 
@@ -248,5 +250,5 @@ func Validate(in models.Settings) error {
 		sort.Strings(unknown)
 		return fmt.Errorf("unknown panel(s): %v", unknown)
 	}
-	return nil
+	return audio.ValidatePaths(in.AudioClips)
 }

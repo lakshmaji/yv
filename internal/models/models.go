@@ -114,6 +114,14 @@ type Settings struct {
 	MetricsEnabled bool     `json:"metricsEnabled"`
 	RetentionDays  int      `json:"retentionDays"`
 	Panels         []string `json:"panels"`
+
+	// SoundMuted silences the dinosaur roars in the Discovery view. Stored
+	// inverted — muted rather than enabled — because the zero value has to mean
+	// the default, and the default is audible.
+	SoundMuted bool `json:"soundMuted"`
+	// AudioClips are the user's own sound files, in the order they added them.
+	// No audio ships with the app, so an empty list means the roars are silent.
+	AudioClips []string `json:"audioClips,omitempty"`
 }
 
 // --- metrics: on-disk records ---
