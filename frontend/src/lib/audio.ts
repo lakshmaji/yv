@@ -158,18 +158,90 @@ export function resetAudioCache(): void {
  */
 export const FAN_VOLUME = 0.32;
 
+/**
+ * Why a loop might not be sounding.
+ *
+ * 'blocked' is the interesting one and the common one: the webview refuses to
+ * start audio that no user gesture asked for. A one-off roar is safe because it
+ * *is* a click, but this loop starts because a drone took off, and by the time the
+ * clip has been read off disk the gesture that opened the view is long expired. So
+ * a blocked loop is not a failure — it is armed, and the user's next click
+ * anywhere starts it.
+ */
+export type LoopStatus = 'stopped' | 'playing' | 'blocked' | 'failed';
+
 let loopEl: HTMLAudioElement | null = null;
 let loopPath: string | null = null;
+let loopStatus: LoopStatus = 'stopped';
+let loopVolume = FAN_VOLUME;
 /**
  * Monotonic, because loading a clip is async: two starts in quick succession
  * would otherwise both reach `play()` and layer two hums over each other. The
  * newest ticket wins and the older load discards itself.
  */
 let loopTicket = 0;
+/** Removes the armed gesture listeners, if any are waiting. */
+let disarm: (() => void) | null = null;
+let statusListener: ((status: LoopStatus) => void) | null = null;
 
 /** Which clip is currently looping, if any. */
 export function loopingClip(): string | null {
   return loopPath;
+}
+
+export function clipLoopStatus(): LoopStatus {
+  return loopStatus;
+}
+
+/**
+ * Watches the loop's status, so a UI can explain a hum that isn't sounding.
+ * One listener at a time — there is one loop.
+ */
+export function onClipLoopStatus(cb: (status: LoopStatus) => void): () => void {
+  statusListener = cb;
+  cb(loopStatus);
+  return () => {
+    if (statusListener === cb) statusListener = null;
+  };
+}
+
+function setStatus(next: LoopStatus): void {
+  if (loopStatus === next) return;
+  loopStatus = next;
+  statusListener?.(next);
+}
+
+/**
+ * Waits for any click or keypress and then starts the loop from inside that
+ * handler — synchronously, which is the whole point: the element is already
+ * loaded, so nothing awaits between the gesture and `play()`.
+ */
+function armGesture(el: HTMLAudioElement): void {
+  disarm?.();
+  const onGesture = () => {
+    // A stop, or a different clip, landed while we were waiting.
+    if (loopEl !== el) {
+      disarm?.();
+      return;
+    }
+    void el
+      .play()
+      .then(() => {
+        disarm?.();
+        setStatus('playing');
+      })
+      .catch(() => {
+        /* Still refused — stay armed for the next gesture. */
+      });
+  };
+
+  window.addEventListener('pointerdown', onGesture);
+  window.addEventListener('keydown', onGesture);
+  disarm = () => {
+    window.removeEventListener('pointerdown', onGesture);
+    window.removeEventListener('keydown', onGesture);
+    disarm = null;
+  };
 }
 
 /**
@@ -179,50 +251,63 @@ export function loopingClip(): string | null {
  * anything about the drone changes, and a hum that restarted from the top on
  * every re-plan would stutter every time a device appeared.
  */
-export async function startClipLoop(
-  path: string,
-  volume = FAN_VOLUME,
-): Promise<HTMLAudioElement | null> {
+export async function startClipLoop(path: string, volume = FAN_VOLUME): Promise<LoopStatus> {
+  loopVolume = volume;
   if (loopPath === path && loopEl) {
     loopEl.volume = volume;
-    return loopEl;
+    return loopStatus;
   }
 
   const ticket = ++loopTicket;
   stopClipLoop();
+  loopTicket = ticket; // stopClipLoop bumped it; this start is still the newest.
 
   const url = await clipUrl(path);
-  if (!url || ticket !== loopTicket) return null;
+  if (!url) {
+    setStatus('failed');
+    return 'failed';
+  }
+  if (ticket !== loopTicket) return loopStatus;
 
   const el = new Audio(url);
   el.loop = true;
-  el.volume = volume;
+  el.volume = loopVolume;
   el.preload = 'auto';
+
+  // Registered before play() resolves, so a stop arriving mid-attempt still finds
+  // the element to pause.
+  loopEl = el;
+  loopPath = path;
 
   try {
     await el.play();
   } catch (e) {
-    console.warn('[audio] fan loop failed', path, e);
-    return null;
-  }
-  // A newer start may have landed while this one was waiting on play().
-  if (ticket !== loopTicket) {
-    el.pause();
-    return null;
+    if (ticket !== loopTicket) return loopStatus;
+    // Not an error worth shouting about: the usual cause is autoplay policy, and
+    // the fix is the user's next click rather than anything the app can do.
+    console.info('[audio] loop waiting for a user gesture', path, e);
+    armGesture(el);
+    setStatus('blocked');
+    return 'blocked';
   }
 
-  loopEl = el;
-  loopPath = path;
-  return el;
+  if (ticket !== loopTicket) {
+    el.pause();
+    return loopStatus;
+  }
+  setStatus('playing');
+  return 'playing';
 }
 
 /** Stops the loop and drops the element. Safe to call when nothing is looping. */
 export function stopClipLoop(): void {
   loopTicket++;
+  disarm?.();
   if (loopEl) {
     loopEl.pause();
     loopEl.src = '';
   }
   loopEl = null;
   loopPath = null;
+  setStatus('stopped');
 }

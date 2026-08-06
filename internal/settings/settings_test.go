@@ -138,6 +138,8 @@ func TestValidate(t *testing.T) {
 		{"supported fan clip", models.Settings{DroneFanClip: "/fan.mp3"}, false},
 		{"unsupported fan clip", models.Settings{DroneFanClip: "/fan.aiff"}, true},
 		{"no fan clip", models.Settings{DroneFanClip: ""}, false},
+		{"supported crash clip", models.Settings{DroneCrashClip: "/boom.wav"}, false},
+		{"unsupported crash clip", models.Settings{DroneCrashClip: "/boom.aiff"}, true},
 	}
 
 	for _, tt := range tests {
@@ -418,11 +420,18 @@ func TestValidateDroneVariant(t *testing.T) {
 }
 
 func TestNormalizeTrimsDroneFields(t *testing.T) {
-	got := Normalize(models.Settings{DroneVariant: "  hexscout ", DroneFanClip: " /fan.mp3 "})
+	got := Normalize(models.Settings{
+		DroneVariant:   "  hexscout ",
+		DroneFanClip:   " /fan.mp3 ",
+		DroneCrashClip: " /boom.wav ",
+	})
 	if got.DroneVariant != "hexscout" {
 		t.Errorf("DroneVariant = %q, want %q", got.DroneVariant, "hexscout")
 	}
 	if got.DroneFanClip != "/fan.mp3" {
 		t.Errorf("DroneFanClip = %q, want %q", got.DroneFanClip, "/fan.mp3")
+	}
+	if got.DroneCrashClip != "/boom.wav" {
+		t.Errorf("DroneCrashClip = %q, want %q", got.DroneCrashClip, "/boom.wav")
 	}
 }

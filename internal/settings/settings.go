@@ -214,6 +214,7 @@ func Normalize(in models.Settings) models.Settings {
 	out.AudioClips = audio.NormalizePaths(out.AudioClips)
 	out.DroneVariant = strings.TrimSpace(out.DroneVariant)
 	out.DroneFanClip = strings.TrimSpace(out.DroneFanClip)
+	out.DroneCrashClip = strings.TrimSpace(out.DroneCrashClip)
 	// Trimmed on the way in so a stray space cannot make a stored PIN
 	// impossible to type correctly.
 	out.SharePIN = strings.TrimSpace(out.SharePIN)
@@ -270,10 +271,15 @@ func Validate(in models.Settings) error {
 	if err := ValidateDroneVariant(in.DroneVariant); err != nil {
 		return err
 	}
-	// The fan clip is one more audio path, so it answers to the same extension
-	// allowlist as the roars rather than a rule of its own.
-	if err := audio.ValidatePaths([]string{in.DroneFanClip}); in.DroneFanClip != "" && err != nil {
-		return err
+	// The drone's own clips are audio paths like any other, so they answer to the
+	// same extension allowlist as the roars rather than a rule of their own.
+	for _, clip := range []string{in.DroneFanClip, in.DroneCrashClip} {
+		if clip == "" {
+			continue
+		}
+		if err := audio.ValidatePaths([]string{clip}); err != nil {
+			return err
+		}
 	}
 	return audio.ValidatePaths(in.AudioClips)
 }

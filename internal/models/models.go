@@ -132,6 +132,10 @@ type Settings struct {
 	// is patrolling. Empty means silent: no audio ships with the app, the same as
 	// for the roars.
 	DroneFanClip string `json:"droneFanClip,omitempty"`
+	// DroneCrashClip is played once when a drone bursts after finding nothing.
+	// Separate from the hum because they are different sounds doing different
+	// jobs — one is ambient and looped, the other is the end of the sweep.
+	DroneCrashClip string `json:"droneCrashClip,omitempty"`
 
 	// SharePIN gates incoming config shares. Empty — the zero value, and so the
 	// default — means any nearby peer may ask, which is still safe because the

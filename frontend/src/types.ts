@@ -112,6 +112,8 @@ export interface AppSettings {
    * Empty means silent: no audio ships with the app, as with the roars.
    */
   droneFanClip?: string;
+  /** Played once when a drone bursts after an empty sweep. Empty means silent. */
+  droneCrashClip?: string;
   /**
    * Gates incoming config shares. Empty — the default — means any nearby peer
    * may ask, which is still safe because an incoming share has to be accepted

@@ -21,6 +21,7 @@ export default function SettingsModal() {
   // The Discovery drone: which airframe goes out, and the clip its rotors hum.
   const [variantId, setVariantId] = createSignal('');
   const [fanClip, setFanClip] = createSignal('');
+  const [crashClip, setCrashClip] = createSignal('');
   const [storage, setStorage] = createSignal<MetricsStorageInfo | null>(null);
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -49,6 +50,7 @@ export default function SettingsModal() {
     setClips([...(current.audioClips || [])]);
     setVariantId(variantById(current.droneVariant).id);
     setFanClip(current.droneFanClip || '');
+    setCrashClip(current.droneCrashClip || '');
     setSharePIN(current.sharePIN || '');
     setConfirmClear(false);
     setError('');
@@ -169,6 +171,7 @@ export default function SettingsModal() {
       sharePIN: sharePIN().trim(),
       droneVariant: variantId(),
       droneFanClip: fanClip().trim(),
+      droneCrashClip: crashClip().trim(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -212,19 +215,90 @@ export default function SettingsModal() {
   }
 
   /**
-   * One clip for the rotor hum.
+   * Picks one clip, for a setting that holds a single file.
    *
-   * The picker is multi-select — it is the same dialog the roars use — so the
-   * first file wins rather than the choice being rejected for having too many.
+   * The dialog is multi-select — it is the same one the roars use — so the first
+   * file wins rather than the choice being rejected for having too many.
    */
-  async function handlePickFanClip() {
+  async function pickSingleClip(assign: (path: string) => void) {
     try {
       const picked = await go.PickAudioClips();
       if (picked.length === 0) return; // cancelled
-      setFanClip(picked[0]);
+      assign(picked[0]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  /**
+   * A settings row holding one clip: the pick/change control and, once there is a
+   * file, a preview row identical to the ones in the roar pool.
+   *
+   * Local to this modal because it closes over the shared preview state — the
+   * rotor hum and the crash share `playing`, so only one of them can sound at a
+   * time, which is what you want when auditioning two clips against each other.
+   */
+  function SingleClipRow(props: {
+    label: string;
+    hint: string;
+    path: string;
+    onPick: () => void;
+    onClear: () => void;
+  }) {
+    return (
+      <>
+        <div class="settings-row settings-clip-header">
+          <div class="settings-row-main">
+            <div class="settings-row-label">{props.label}</div>
+            <div class="settings-row-hint">{props.hint}</div>
+          </div>
+          <span class="settings-row-control">
+            <Show when={props.path}>
+              <button type="button" class="settings-clip-clear" onClick={props.onClear}>
+                Remove
+              </button>
+            </Show>
+            <button type="button" onClick={props.onPick}>
+              {props.path ? 'Change…' : '+ Choose clip…'}
+            </button>
+          </span>
+        </div>
+
+        <Show when={props.path}>
+          {(path) => (
+            <div class="settings-clip-list">
+              <div
+                class="settings-clip-row"
+                classList={{ playing: playing() === path(), broken: broken().includes(path()) }}
+              >
+                {/* A hum or a crash is even harder to identify from a filename
+                    than a roar is — worth hearing before it plays itself. */}
+                <button
+                  type="button"
+                  class="settings-clip-play"
+                  title={playing() === path() ? 'Pause' : 'Play this clip'}
+                  aria-label={playing() === path() ? 'Pause' : 'Play this clip'}
+                  onClick={() => void togglePreview(path())}
+                >
+                  {playing() === path() ? '❚❚' : '▶'}
+                </button>
+                <span class="settings-clip-main" title={path()}>
+                  <span class="settings-clip-name">{clipLabel(path())}</span>
+                  <Show when={clipDir(path())}>
+                    {(dir) => <span class="settings-clip-path">{dir()}</span>}
+                  </Show>
+                </span>
+                <Show when={broken().includes(path())}>
+                  <span class="settings-clip-broken" title="This file could not be played">
+                    unplayable
+                  </span>
+                </Show>
+              </div>
+            </div>
+          )}
+        </Show>
+      </>
+    );
   }
 
   async function handleClear() {
@@ -461,63 +535,29 @@ export default function SettingsModal() {
               </span>
             </div>
 
-            <div class="settings-row settings-clip-header">
-              <div class="settings-row-main">
-                <div class="settings-row-label">Rotor sound</div>
-                <div class="settings-row-hint">
-                  {fanClip()
-                    ? 'Loops quietly while a drone is patrolling.'
-                    : 'None yet — the drone flies silently until you add a clip.'}
-                </div>
-              </div>
-              <span class="settings-row-control">
-                <Show when={fanClip()}>
-                  <button type="button" class="settings-clip-clear" onClick={() => setFanClip('')}>
-                    Remove
-                  </button>
-                </Show>
-                <button type="button" onClick={handlePickFanClip}>
-                  {fanClip() ? 'Change…' : '+ Choose clip…'}
-                </button>
-              </span>
-            </div>
+            <SingleClipRow
+              label="Rotor sound"
+              hint={
+                fanClip()
+                  ? 'Loops quietly while a drone is patrolling.'
+                  : 'None yet — the drone flies silently until you add a clip.'
+              }
+              path={fanClip()}
+              onPick={() => void pickSingleClip(setFanClip)}
+              onClear={() => setFanClip('')}
+            />
 
-            <Show when={fanClip()}>
-              {(path) => (
-                <div class="settings-clip-list">
-                  <div
-                    class="settings-clip-row"
-                    classList={{
-                      playing: playing() === path(),
-                      broken: broken().includes(path()),
-                    }}
-                  >
-                    {/* A hum is even harder to identify from a filename than a
-                        roar, and this one plays on a loop — worth hearing first. */}
-                    <button
-                      type="button"
-                      class="settings-clip-play"
-                      title={playing() === path() ? 'Pause' : 'Play this clip'}
-                      aria-label={playing() === path() ? 'Pause' : 'Play this clip'}
-                      onClick={() => void togglePreview(path())}
-                    >
-                      {playing() === path() ? '❚❚' : '▶'}
-                    </button>
-                    <span class="settings-clip-main" title={path()}>
-                      <span class="settings-clip-name">{clipLabel(path())}</span>
-                      <Show when={clipDir(path())}>
-                        {(dir) => <span class="settings-clip-path">{dir()}</span>}
-                      </Show>
-                    </span>
-                    <Show when={broken().includes(path())}>
-                      <span class="settings-clip-broken" title="This file could not be played">
-                        unplayable
-                      </span>
-                    </Show>
-                  </div>
-                </div>
-              )}
-            </Show>
+            <SingleClipRow
+              label="Crash sound"
+              hint={
+                crashClip()
+                  ? 'Plays once when a drone comes down after an empty sweep.'
+                  : 'None yet — a drone comes down silently until you add a clip.'
+              }
+              path={crashClip()}
+              onPick={() => void pickSingleClip(setCrashClip)}
+              onClear={() => setCrashClip('')}
+            />
           </div>
 
           <div class="settings-section">

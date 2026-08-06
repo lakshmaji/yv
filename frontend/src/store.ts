@@ -162,6 +162,9 @@ const droneVariant = createMemo(() => variantById(appSettings().droneVariant));
 /** The user's rotor-hum clip, or null when they haven't picked one. */
 const droneFanClip = createMemo(() => appSettings().droneFanClip?.trim() || null);
 
+/** The user's clip for a drone coming down, or null. */
+const droneCrashClip = createMemo(() => appSettings().droneCrashClip?.trim() || null);
+
 // Dashboard controls. Memory vs CPU is not a toggle — both charts render, and
 // the Settings panel list is what turns either off.
 const [dashGroupBy, setDashGroupBy] = createSignal<MetricGroupBy>('command');
@@ -378,7 +381,7 @@ export {
   discoveryMotion, setDiscoveryMotion,
   droneState, setDroneState,
   droneLaunch, launchDrone,
-  droneVariant, droneFanClip,
+  droneVariant, droneFanClip, droneCrashClip,
   noDevicesOpen, setNoDevicesOpen,
   peers, setPeers, peerByName,
   sharePeer, setSharePeer,

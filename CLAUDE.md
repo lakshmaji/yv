@@ -997,8 +997,24 @@ diverged from what gets sent would be worse than no preview.
 ### Sound
 
 `Settings.DroneFanClip` — one user-chosen clip, looped while a drone is patrolling.
-**No audio ships with the app**, exactly as with the roars: empty means silent, and
-both the dialog and Settings say so rather than leaving it a mystery.
+`Settings.DroneCrashClip` — one played once when a drone comes down. Separate
+settings because they are different sounds doing different jobs: one is ambient and
+looped, the other marks the end of the sweep. **No audio ships with the app**,
+exactly as with the roars: empty means silent, and both the dialog and Settings say
+so rather than leaving it a mystery.
+
+**Why the hum needed a gesture.** A picked clip did not play at all. WebKit will not
+start audio that no user gesture asked for — a roar is safe because it *is* a click,
+but this loop starts because a drone took off, and `startClipLoop` awaits a disk read
+first, so any gesture window is long gone by the time `play()` runs. Wails never sets
+`mediaTypesRequiringUserActionForPlayback` and exposes no option for it, so the fix
+is in the app: a refused loop is not a failure, it is **armed** — the element stays
+loaded and a one-shot `pointerdown`/`keydown` listener starts it synchronously inside
+the user's next click anywhere. `LoopStatus` ('playing' | 'blocked' | 'failed') is
+published through `onClipLoopStatus`, and the Discovery toolbar says *which* it is:
+"Click to start rotor sound" versus "Rotor clip unplayable" versus
+"Silent — no drone in the air". Those three look identical from the outside, and
+telling them apart is the difference between a bug report and a click.
 
 `startClipLoop` is idempotent on the path, because its caller is an effect that
 re-runs whenever anything about the drone changes — a hum that restarted from the top
@@ -1025,14 +1041,14 @@ allowlist as the roars (`audio.ValidatePaths`) rather than a rule of its own.
 |---|---|
 | `frontend/src/lib/drone.ts` | `DRONE_VARIANTS`, `variantById`, `rotorMounts`, `bladeAngles`, `droneExtent`, `burstShards`; `droneShape` follows the variant |
 | `frontend/src/lib/drone.test.ts` | 94 cases — fleet integrity, per-variant extent fit incl. tilt, quad/hexa layout, burst debris |
-| `frontend/src/lib/audio.ts` | `startClipLoop` / `stopClipLoop` / `loopingClip`, `FAN_VOLUME` |
+| `frontend/src/lib/audio.ts` | `startClipLoop` / `stopClipLoop` / `loopingClip`, `FAN_VOLUME`, `LoopStatus` + gesture-armed retry, `onClipLoopStatus` |
 | `frontend/src/components/discovery/DroneGlyph.tsx` | New — the airframe alone, shared by the map and the picker |
 | `frontend/src/components/discovery/Drone.tsx` | Burst state, `commitStyles` freeze, variant colours |
 | `frontend/src/components/modals/NoDevicesModal.tsx` | New — the dialog, fleet picker, ↻ Send another drone |
 | `frontend/src/components/DiscoveryPanel.tsx` | Sweep/burst/gone state machine, fan loop, status chip reopens the dialog, map overlay now only for a discovery failure |
-| `frontend/src/components/modals/SettingsModal.tsx` | Survey drone section: airframe select + rotor clip with preview |
+| `frontend/src/components/modals/SettingsModal.tsx` | Survey drone section: airframe select + rotor and crash clips, via a local `SingleClipRow` sharing the roar pool's preview state |
 | `frontend/src/store.ts` | `droneState`, `droneLaunch`, `launchDrone`, `droneVariant`, `droneFanClip`, `noDevicesOpen` |
-| `internal/models/models.go`, `internal/settings/settings.go` | `DroneVariant`, `DroneFanClip`, `ValidateDroneVariant` |
+| `internal/models/models.go`, `internal/settings/settings.go` | `DroneVariant`, `DroneFanClip`, `DroneCrashClip`, `ValidateDroneVariant` |
 | `frontend/src/styles.css` | Burst keyframes, `.nodev-*` dialog and picker tiles; share-PIN row fix |
 
 ### Fixed along the way: the share-PIN row in Settings

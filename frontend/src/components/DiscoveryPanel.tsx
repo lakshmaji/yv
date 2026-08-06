@@ -5,6 +5,7 @@ import {
   setDiscoverySeed,
   discoveryMotion,
   setDiscoveryMotion,
+  droneCrashClip,
   droneFanClip,
   droneLaunch,
   droneState,
@@ -25,11 +26,13 @@ import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '..
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
 import {
   clipForName,
+  onClipLoopStatus,
   playClip,
   resetAudioCache,
   SESSION_SALT,
   startClipLoop,
   stopClipLoop,
+  type LoopStatus,
 } from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
 import { DRONE_SIZE, dronePatrol, droneInsets } from '../lib/drone';
@@ -192,6 +195,12 @@ export default function DiscoveryPanel() {
   /** …then vanish and hand over to the dialog. */
   createEffect(() => {
     if (droneState() !== 'bursting') return;
+
+    // The crash is its own clip, not the hum: it happens once, at a moment that
+    // means something, and the hum has just stopped to make room for it.
+    const crash = droneCrashClip();
+    if (crash && soundOn()) void playClip(crash);
+
     const timer = setTimeout(() => {
       setDroneState('gone');
       setNoDevicesOpen(true);
@@ -217,6 +226,9 @@ export default function DiscoveryPanel() {
    * Tied to the panel, so leaving Discovery stops it. Tied to the motion toggle
    * too: with the map frozen, a hum over stationary rotors is incoherent.
    */
+  const [fanStatus, setFanStatus] = createSignal<LoopStatus>('stopped');
+  onMount(() => onCleanup(onClipLoopStatus(setFanStatus)));
+
   createEffect(() => {
     const clip = droneFanClip();
     const audible = droneState() === 'flying' && soundOn() && discoveryMotion() && clip !== null;
@@ -308,9 +320,23 @@ export default function DiscoveryPanel() {
     return { label: `◉ ${found} device${found === 1 ? '' : 's'} nearby`, warn: false };
   };
 
-  /** Why the herd is silent, when it is — otherwise a click reads as broken. */
+  /**
+   * Why the herd is silent, when it is — otherwise a click reads as broken.
+   *
+   * The blocked case earns its own line because it is the one that looks like a
+   * bug: the user picked a clip, everything is configured, and nothing plays. The
+   * webview will not start a loop that no gesture asked for, and the fix is a
+   * click — so the chip asks for one instead of leaving them to guess.
+   */
   const soundStatus = () => {
     if (!soundOn()) return { label: '♪ Sounds muted', action: true };
+    if (fanStatus() === 'blocked') return { label: '♪ Click to start rotor sound', action: false };
+    if (fanStatus() === 'failed') return { label: '♪ Rotor clip unplayable', action: true };
+    // The other way the rotor clip can be silent with everything configured: no
+    // drone is up to hum. Worth saying, or a working clip reads as a broken one.
+    if (droneFanClip() && droneState() !== 'flying') {
+      return { label: '♪ Silent — no drone in the air', action: false };
+    }
     if (clips().length === 0) return { label: '♪ No sound clips yet', action: true };
     const n = clips().length;
     return { label: `♪ ${n} clip${n === 1 ? '' : 's'}`, action: false };
@@ -386,9 +412,11 @@ export default function DiscoveryPanel() {
           class="dash-refresh disc-sound-status"
           classList={{ muted: soundStatus().action }}
           title={
-            soundStatus().action
-              ? 'Open Settings to add your own sound clips'
-              : 'Click a dinosaur to hear it'
+            fanStatus() === 'blocked'
+              ? 'The webview will not start looping audio until you interact with the window — click anywhere'
+              : soundStatus().action
+                ? 'Open Settings to add your own sound clips'
+                : 'Click a dinosaur to hear it'
           }
           onClick={() => setSettingsModalOpen(true)}
         >
