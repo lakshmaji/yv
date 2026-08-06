@@ -2628,11 +2628,15 @@
       50%      { transform: rotate(1.6deg); }
     }
 
-    /* Open nearly all the time — a blink is what makes a face look like it is
-       looking back, and it only works if it is rare. */
+    /* A double blink, then a rest.
+       Two things make a blink readable on a 4px eye: it has to be quick — each
+       shut here lasts about 4% of the cycle, roughly the 120ms of a real one —
+       and it has to happen twice, because a single one at this scale is over
+       before the eye has been drawn to it. */
     @keyframes land-dino-blink {
-      0%, 91%, 100% { transform: scaleY(1); }
-      95%           { transform: scaleY(0.08); }
+      0%, 78%, 100% { transform: scaleY(1); }
+      82%, 90%      { transform: scaleY(0.06); }
+      86%           { transform: scaleY(1); }
     }
 
     .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }

@@ -91,9 +91,10 @@ export default function Dinosaur(props: { dino: Dino }) {
           <g
             class="land-dino-eye"
             style={{
-              // Long gap, quick shut. Blinks are rare enough that a shared
-              // duration would still land at different moments per animal.
-              'animation-duration': `${(tempo() * 1.9).toFixed(2)}s`,
+              // Roughly every 3–4.5s depending on species. The first pass ran at
+              // tempo * 1.9 — a blink every 6–10s, which is lifelike and, on an
+              // eye a few pixels across, entirely invisible.
+              'animation-duration': `${(tempo() * 0.85).toFixed(2)}s`,
               'animation-delay': `${(-props.dino.phase * tempo() * 3).toFixed(2)}s`,
             }}
           >
