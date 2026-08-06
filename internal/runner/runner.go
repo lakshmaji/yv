@@ -31,12 +31,35 @@ var (
 	loginPathValue string
 )
 
+// shellFallbacks are tried in order when $SHELL is unset, which happens for an
+// app launched from a desktop entry rather than a terminal.
+//
+// zsh first preserves the macOS behaviour this was written for — it is the
+// default shell there and the one whose login files hold the user's PATH. bash
+// and sh follow for Linux, where zsh usually is not installed at all: without
+// them, a GUI launch with no $SHELL would fail every single command with
+// "executable file not found".
+var shellFallbacks = []string{"zsh", "bash", "sh"}
+
+// defaultShell resolves the shell to run commands with. $SHELL is honoured as-is
+// when set — it is the user's own choice and may be a path we would not guess.
+func defaultShell() string {
+	if sh := os.Getenv("SHELL"); sh != "" {
+		return sh
+	}
+	for _, name := range shellFallbacks {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	// Nothing found. /bin/sh is required by POSIX, so it is the least-worst
+	// guess and gives a clearer failure than an empty string.
+	return "/bin/sh"
+}
+
 func resolveLoginPath() string {
 	loginPathOnce.Do(func() {
-		shell := os.Getenv("SHELL")
-		if shell == "" {
-			shell = "zsh"
-		}
+		shell := defaultShell()
 		// stderr goes to /dev/null so the brew CWD warning is never visible.
 		cmd := exec.Command(shell, "-l", "-i", "-c", "echo $PATH")
 		cmd.Stderr = nil
@@ -440,10 +463,7 @@ func (r *Runner) runShellCommand(cmdID, shellCmd, workDir string, environ []stri
 // environ is the fully-resolved "KEY=value" environment (see buildEnv); an empty
 // slice falls back to buildEnv with no extra variables.
 func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDir string, environ []string, emit func(string)) (exitCode int, err error) {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "zsh"
-	}
+	shell := defaultShell()
 	// Use a non-login shell so ~/.zprofile is never sourced during command
 	// execution — that's what triggered the brew CWD warning in terminal output.
 	c := exec.Command(shell, "-c", shellCmd)

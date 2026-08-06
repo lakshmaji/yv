@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=yv
+GenericName=Dev Command Runner
+Comment=Run per-project dev commands with inline terminals
+Exec=yv
+Icon=yv
+Terminal=false
+# Development is the only main category on purpose: listing Utility as well
+# makes the app appear twice in some application menus.
+Categories=Development;Building;
+Keywords=developer;commands;terminal;runner;
+StartupWMClass=yv

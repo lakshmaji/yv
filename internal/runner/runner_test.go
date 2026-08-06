@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"os"
+	"path/filepath"
 	"yv/internal/models"
 )
 
@@ -473,5 +475,43 @@ func TestRunShellCommandUsesEnv(t *testing.T) {
 				t.Errorf("output %q does not contain %q", joined, tc.wantOut)
 			}
 		})
+	}
+}
+
+func TestDefaultShellPrefersEnv(t *testing.T) {
+	t.Setenv("SHELL", "/opt/custom/fish")
+	if got := defaultShell(); got != "/opt/custom/fish" {
+		t.Errorf("defaultShell() = %q, want the value of $SHELL", got)
+	}
+}
+
+// The fallback matters for a GUI launch: a desktop entry does not necessarily
+// export SHELL, and the old hardcoded "zsh" does not exist on a stock Ubuntu.
+func TestDefaultShellFallsBackToSomethingReal(t *testing.T) {
+	t.Setenv("SHELL", "")
+
+	got := defaultShell()
+	if got == "" {
+		t.Fatal("defaultShell() returned empty")
+	}
+	if !filepath.IsAbs(got) {
+		t.Errorf("defaultShell() = %q, want an absolute path so exec cannot miss it", got)
+	}
+	if _, err := os.Stat(got); err != nil {
+		t.Errorf("defaultShell() = %q, which does not exist: %v", got, err)
+	}
+}
+
+// The resolved shell has to actually be able to run a command, on whatever
+// platform the test is running on.
+func TestDefaultShellCanRunACommand(t *testing.T) {
+	t.Setenv("SHELL", "")
+
+	out, err := exec.Command(defaultShell(), "-c", "echo ok").Output()
+	if err != nil {
+		t.Fatalf("running through %q: %v", defaultShell(), err)
+	}
+	if strings.TrimSpace(string(out)) != "ok" {
+		t.Errorf("got %q, want %q", strings.TrimSpace(string(out)), "ok")
 	}
 }

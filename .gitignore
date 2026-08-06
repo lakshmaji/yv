@@ -1,5 +1,7 @@
-# Wails build output
-build/
+# Wails build output. Only the compiled artifacts — build/ also holds real
+# source: the app icon, the macOS Info.plist templates, and the Linux desktop
+# entry and packaging script, all of which a fresh clone needs to build.
+build/bin/
 
 # Wails dev mode generated files
 wailsjs/

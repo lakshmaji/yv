@@ -8,125 +8,98 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# Read-only by default; only the release job widens this.
+permissions:
+  contents: read
+
 env:
   GO_VERSION: "1.25.0"
   NODE_VERSION: "20"
 
 jobs:
-  build-macos:
-    name: Build macOS (arm64)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compute short SHA
-        id: vars
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package.json
-
-      - name: Determine Wails CLI version
-        id: wails_version
-        run: |
-          WAILS_VERSION=$(grep 'github.com/wailsapp/wails/v2 ' go.mod | awk '{print $2}')
-          echo "version=$WAILS_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ steps.wails_version.outputs.version }}
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm install
-
-      - name: Build app (unsigned)
-        run: ~/go/bin/wails build -platform darwin/arm64
-
-      - name: Package DMG (unsigned)
-        run: |
-          mkdir -p /tmp/yv-dmg
-          cp -r build/bin/yv.app /tmp/yv-dmg/
-          hdiutil create -volname "yv" -srcfolder /tmp/yv-dmg -ov -format UDZO yv.dmg
-          rm -rf /tmp/yv-dmg
-
-      - name: Rename artifact
-        run: mv yv.dmg "yv-macos-arm64-${{ steps.vars.outputs.sha }}.dmg"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: yv-macos-arm64
-          path: yv-macos-arm64-${{ steps.vars.outputs.sha }}.dmg
-          if-no-files-found: error
-
-  build-windows:
-    name: Build Windows (amd64)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compute short SHA
-        id: vars
-        shell: bash
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package.json
-
-      - name: Determine Wails CLI version
-        id: wails_version
-        shell: bash
-        run: |
-          WAILS_VERSION=$(grep 'github.com/wailsapp/wails/v2 ' go.mod | awk '{print $2}')
-          echo "version=$WAILS_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ steps.wails_version.outputs.version }}
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm install
-
-      - name: Build app (unsigned)
-        shell: bash
-        run: |
-          export PATH="$PATH:$(go env GOPATH)/bin"
-          wails build -platform windows/amd64
-
-      - name: Rename artifact
-        shell: bash
-        run: cp build/bin/yv.exe "yv-windows-amd64-${{ steps.vars.outputs.sha }}.exe"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: yv-windows-amd64
-          path: yv-windows-amd64-${{ steps.vars.outputs.sha }}.exe
-          if-no-files-found: error
-
-  build-linux:
-    name: Build Linux (amd64)
+  # ── Tests ───────────────────────────────────────────────────────────────
+  #
+  # Gates the builds, so a broken commit cannot produce a downloadable artifact
+  # that looks legitimate.
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compute short SHA
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Go vet
+        run: go vet ./...
+
+      # -short skips the two tests that need real multicast (mDNS peer
+      # discovery). They pass locally and are the right way to verify discovery,
+      # but multicast on a hosted runner is not something to gate a release on.
+      # `make test` runs them.
+      - name: Go tests
+        run: go test -short ./...
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm run test
+
+  # ── Builds ──────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.name }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide whether the others are fine.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            os: macos-latest
+            platform: darwin/arm64
+            tags: ""
+          - name: windows-amd64
+            os: windows-latest
+            platform: windows/amd64
+            tags: ""
+          - name: linux-amd64
+            os: ubuntu-latest
+            platform: linux/amd64
+            # ubuntu-latest is 24.04, which ships webkit2gtk 4.1 and has dropped
+            # 4.0. Wails still targets 4.0 unless told otherwise, so without this
+            # tag the cgo build fails with "Package webkit2gtk-4.0 was not found".
+            tags: webkit2_41
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tag builds are named for the tag; everything else for the commit, so a
+      # downloaded artifact can always be traced back to what produced it.
+      - name: Compute version label
         id: vars
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-go@v5
         with:
@@ -137,15 +110,21 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y \
+            libgtk-3-dev libwebkit2gtk-4.1-dev \
+            dpkg-dev fakeroot
 
+      # Pinned to whatever the module requires, so the CLI and the library can
+      # never drift apart.
       - name: Determine Wails CLI version
         id: wails_version
+        shell: bash
         run: |
           WAILS_VERSION=$(grep 'github.com/wailsapp/wails/v2 ' go.mod | awk '{print $2}')
           echo "version=$WAILS_VERSION" >> "$GITHUB_OUTPUT"
@@ -155,21 +134,88 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: Build app (unsigned)
+        shell: bash
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          wails build -platform linux/amd64
+          if [[ -n "${{ matrix.tags }}" ]]; then
+            wails build -platform ${{ matrix.platform }} -tags ${{ matrix.tags }}
+          else
+            wails build -platform ${{ matrix.platform }}
+          fi
 
-      - name: Package tar.gz
+      # ── Packaging, one step per platform ──────────────────────────────
+      - name: Package DMG
+        if: matrix.name == 'macos-arm64'
         run: |
-          cd build/bin
-          tar -czf "../../yv-linux-amd64-${{ steps.vars.outputs.sha }}.tar.gz" yv
-          cd ../..
+          mkdir -p /tmp/yv-dmg dist
+          cp -r build/bin/yv.app /tmp/yv-dmg/
+          hdiutil create -volname "yv" -srcfolder /tmp/yv-dmg -ov -format UDZO \
+            "dist/yv-macos-arm64-${{ steps.vars.outputs.version }}.dmg"
+          rm -rf /tmp/yv-dmg
+
+      - name: Package Windows executable
+        if: matrix.name == 'windows-amd64'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/bin/yv.exe "dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.exe"
+
+      # The .deb is what makes this installable on Ubuntu; the tarball is for
+      # anyone who just wants the binary. Both come from the same build.
+      - name: Package .deb and tarball
+        if: matrix.name == 'linux-amd64'
+        run: |
+          mkdir -p dist
+          bash build/linux/package-deb.sh
+          cp build/bin/yv_*.deb dist/
+          tar -C build/bin -czf \
+            "dist/yv-linux-amd64-${{ steps.vars.outputs.version }}.tar.gz" yv
+
+      - name: Show what was produced
+        shell: bash
+        run: ls -lh dist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: yv-linux-amd64
-          path: yv-linux-amd64-${{ steps.vars.outputs.sha }}.tar.gz
+          name: yv-${{ matrix.name }}
+          path: dist/*
           if-no-files-found: error
+          # Long enough to be useful for a bug report, short enough not to hoard.
+          retention-days: 30
+
+  # ── Release ─────────────────────────────────────────────────────────────
+  #
+  # Tag pushes additionally get a GitHub Release with every artifact attached, so
+  # there is a stable download URL rather than one that expires with the run.
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # merge-multiple flattens the three per-platform artifacts into one dir.
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh dist
+
+      # The gh CLI rather than a third-party action: it is preinstalled, and this
+      # avoids trusting an external action with a write-scoped token.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            --title "${GITHUB_REF#refs/tags/}" \
+            --generate-notes \
+            --verify-tag \
+            dist/*
