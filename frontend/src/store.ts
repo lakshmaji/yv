@@ -16,6 +16,7 @@ import type {
   PeerInfo,
   IncomingShare,
 } from './types';
+import { variantById } from './lib/drone';
 
 const DEFAULT_CMD_STATE: CmdState = {
   lines: [], collapsed: true, exitCode: null, stopped: false, running: false, trimmedCount: 0,
@@ -75,6 +76,37 @@ const [activeView, setActiveView] = createSignal<'commands' | 'dashboard' | 'dis
 const [discoverySeed, setDiscoverySeed] = createSignal(20260806);
 const [discoveryMotion, setDiscoveryMotion] = createSignal(true);
 
+/**
+ * The scanning drone's life.
+ *
+ * 'flying' → it is out looking. 'bursting' → the sweep came up empty and it is
+ * going up in smoke. 'gone' → nothing on the map, and the no-devices dialog is
+ * what the user sees instead.
+ *
+ * Here rather than in the panel because the dialog outlives a single sweep: the
+ * user picks the next airframe in it, and that choice has to survive the panel
+ * re-rendering around it.
+ */
+type DroneState = 'flying' | 'bursting' | 'gone';
+const [droneState, setDroneState] = createSignal<DroneState>('flying');
+
+/**
+ * Bumped every time a drone is launched, and mixed into the route seed — so
+ * "send another drone" flies a genuinely new circuit rather than repeating the
+ * one that just failed.
+ */
+const [droneLaunch, setDroneLaunch] = createSignal(0);
+
+/** The no-devices dialog. Dismissible: the map is worth looking at regardless. */
+const [noDevicesOpen, setNoDevicesOpen] = createSignal(false);
+
+/** Sends a new drone out, with whatever variant is currently chosen. */
+function launchDrone(): void {
+  setNoDevicesOpen(false);
+  setDroneLaunch((n) => n + 1);
+  setDroneState('flying');
+}
+
 // Nearby yv instances. Each one is a dinosaur on the Discovery map; an empty
 // list means an empty island, which is the honest thing to show.
 const [peers, setPeers] = createSignal<PeerInfo[]>([]);
@@ -120,6 +152,15 @@ const [appSettings, setAppSettings] = createSignal<AppSettings>({
   soundMuted: false,
   audioClips: [],
 });
+
+/**
+ * The airframe the next drone will be. Declared here rather than beside the other
+ * drone state because a memo runs on creation, and this one reads appSettings.
+ */
+const droneVariant = createMemo(() => variantById(appSettings().droneVariant));
+
+/** The user's rotor-hum clip, or null when they haven't picked one. */
+const droneFanClip = createMemo(() => appSettings().droneFanClip?.trim() || null);
 
 // Dashboard controls. Memory vs CPU is not a toggle — both charts render, and
 // the Settings panel list is what turns either off.
@@ -335,6 +376,10 @@ export {
   activeView, setActiveView,
   discoverySeed, setDiscoverySeed,
   discoveryMotion, setDiscoveryMotion,
+  droneState, setDroneState,
+  droneLaunch, launchDrone,
+  droneVariant, droneFanClip,
+  noDevicesOpen, setNoDevicesOpen,
   peers, setPeers, peerByName,
   sharePeer, setSharePeer,
   shareBusy, setShareBusy,

@@ -39,6 +39,9 @@ const (
 	MinPINLen = 4
 	MaxPINLen = 12
 
+	// MaxVariantIDLen bounds a stored drone variant id. Slugs, not prose.
+	MaxVariantIDLen = 32
+
 	schemaVersion = 1
 )
 
@@ -209,6 +212,8 @@ func Normalize(in models.Settings) models.Settings {
 
 	out.Panels = NormalizePanels(out.Panels)
 	out.AudioClips = audio.NormalizePaths(out.AudioClips)
+	out.DroneVariant = strings.TrimSpace(out.DroneVariant)
+	out.DroneFanClip = strings.TrimSpace(out.DroneFanClip)
 	// Trimmed on the way in so a stray space cannot make a stored PIN
 	// impossible to type correctly.
 	out.SharePIN = strings.TrimSpace(out.SharePIN)
@@ -262,7 +267,39 @@ func Validate(in models.Settings) error {
 	if err := ValidateSharePIN(in.SharePIN); err != nil {
 		return err
 	}
+	if err := ValidateDroneVariant(in.DroneVariant); err != nil {
+		return err
+	}
+	// The fan clip is one more audio path, so it answers to the same extension
+	// allowlist as the roars rather than a rule of its own.
+	if err := audio.ValidatePaths([]string{in.DroneFanClip}); in.DroneFanClip != "" && err != nil {
+		return err
+	}
 	return audio.ValidatePaths(in.AudioClips)
+}
+
+// ValidateDroneVariant accepts an empty id — the default — or a short slug.
+//
+// The list of airframes lives in the frontend, because a variant is a drawing;
+// duplicating it here would give two places to add a drone and one of them would
+// be forgotten. So this checks only the shape of the id, and the frontend falls
+// back to the default for anything it does not recognise.
+func ValidateDroneVariant(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	if len(id) > MaxVariantIDLen {
+		return fmt.Errorf("drone variant id must be at most %d characters", MaxVariantIDLen)
+	}
+	for _, r := range id {
+		lower := r >= 'a' && r <= 'z'
+		digit := r >= '0' && r <= '9'
+		if !lower && !digit && r != '-' {
+			return fmt.Errorf("drone variant id must be lowercase letters, digits or dashes")
+		}
+	}
+	return nil
 }
 
 // ValidateSharePIN accepts an empty PIN — the default, meaning none — or 4 to 12

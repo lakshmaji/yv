@@ -1,13 +1,12 @@
-import { createEffect, createSignal, onCleanup, onMount, For } from 'solid-js';
-import { bankFrames, droneShape, patrolFrames, type Drone as DroneData } from '../../lib/drone';
+import { createEffect, createSignal, onCleanup, onMount, For, Show } from 'solid-js';
+import { bankFrames, burstShards, patrolFrames, type Drone as DroneData } from '../../lib/drone';
 import { LAND } from '../../lib/landscape/palette';
+import DroneGlyph from './DroneGlyph';
 
 /**
- * The survey drone: a quadcopter flying a circuit over the island while the app
- * looks for nearby devices.
- *
- * A projection of `droneShape`, the way Dinosaur.tsx projects `dinoShape` — the
- * geometry is data so it can be tested; this file is colour, layering and motion.
+ * A drone in flight: the airframe from DroneGlyph, plus everything about being
+ * airborne — travel, tilt, hover jitter, the ground shadow, and going up in smoke
+ * when the sweep finds nothing.
  *
  * The nesting is the animation, as in Dinosaur.tsx — one transform per layer,
  * because an element can only run one at a time:
@@ -15,7 +14,7 @@ import { LAND } from '../../lib/landscape/palette';
  *   .land-drone         travel between waypoints   (JS, from the route data)
  *   .land-drone-bank    tilt into the turn         (JS, same track)
  *   .land-drone-hover   rotor wash jitter          (CSS)
- *   .land-drone-rotor   blade spin                 (CSS)
+ *   .land-drone-rotor   blade spin                 (CSS, in DroneGlyph)
  *
  * Travel is driven by element.animate() rather than CSS because the route is
  * data: the waypoints come from `dronePatrol`, and a static `@keyframes` rule can
@@ -27,23 +26,19 @@ import { LAND } from '../../lib/landscape/palette';
  * expressed as offsets from a drawn origin.
  */
 
-/**
- * Rotor periods in seconds, per mount.
- *
- * All four deliberately different: four discs turning in lockstep read as one
- * rigid ornament, whereas a spread of periods reads as four motors.
- */
-const ROTOR_SPIN = [0.3, 0.34, 0.32, 0.37];
-
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
 }
 
-export default function Drone(props: { drone: DroneData; locked: boolean; motion?: boolean }) {
-  const shape = () => droneShape(props.drone);
-
+export default function Drone(props: {
+  drone: DroneData;
+  locked: boolean;
+  motion?: boolean;
+  /** Mid-explosion: the airframe is gone and only the burst is drawn. */
+  bursting?: boolean;
+}) {
   let rootRef!: SVGGElement;
   let bankRef!: SVGGElement;
 
@@ -59,19 +54,37 @@ export default function Drone(props: { drone: DroneData; locked: boolean; motion
   });
 
   let running: Animation[] = [];
-  function stop(): void {
-    running.forEach((animation) => animation.cancel());
+
+  /**
+   * Stops the travel animations, optionally leaving the drone where they had it.
+   *
+   * `commitStyles` is what makes the explosion happen *there* rather than back at
+   * the route's origin: it writes the animation's current transform to the
+   * element before the animation — and with it the transform — disappears.
+   */
+  function stop(freeze = false): void {
+    for (const animation of running) {
+      if (freeze) {
+        try {
+          animation.commitStyles();
+        } catch {
+          // Only cosmetic: the burst then plays at the drawn origin instead.
+        }
+      }
+      animation.cancel();
+    }
     running = [];
   }
 
   createEffect(() => {
     const drone = props.drone;
+    const bursting = props.bursting === true;
     const flying = props.motion !== false && !reduced();
 
     // A re-planned route restarts the lap, which is correct: a drone told about a
     // new device should head for it rather than finish the circuit it was on.
-    stop();
-    if (!flying || typeof rootRef.animate !== 'function') return;
+    stop(bursting);
+    if (bursting || !flying || typeof rootRef.animate !== 'function') return;
 
     const timing = { duration: drone.duration * 1000, iterations: Infinity } as const;
     running = [
@@ -80,12 +93,12 @@ export default function Drone(props: { drone: DroneData; locked: boolean; motion
     ];
   });
 
-  onCleanup(stop);
+  onCleanup(() => stop());
 
   return (
     <g
       class="land-drone"
-      classList={{ locked: props.locked }}
+      classList={{ locked: props.locked, bursting: props.bursting }}
       ref={rootRef}
       // The two light colours live in the map palette like every other colour on
       // this screen, but the swap between them is a state change on `.locked`,
@@ -95,72 +108,74 @@ export default function Drone(props: { drone: DroneData; locked: boolean; motion
         '--drone-light-locked': LAND.droneLightLocked,
       }}
     >
-      <title>{props.locked ? 'Survey drone — devices found' : 'Survey drone — scanning'}</title>
+      <title>
+        {props.bursting
+          ? 'Survey drone — lost'
+          : props.locked
+            ? 'Survey drone — devices found'
+            : 'Survey drone — scanning'}
+      </title>
 
       {/* Outside the tilt and the hover, so the shadow tracks the drone across the
-          ground without rolling or bobbing with the airframe. */}
-      <ellipse {...shape().shadow} fill={LAND.shadow} opacity="0.2" />
+          ground without rolling or bobbing with the airframe. Gone during the
+          burst: there is no longer anything up there to cast it. */}
+      <Show when={!props.bursting}>
+        <ellipse
+          cx={props.drone.origin.x}
+          cy={props.drone.origin.y + props.drone.size * 2.3}
+          rx={props.drone.size * (props.drone.variant.bodyW + 0.26)}
+          ry={props.drone.size * 0.17}
+          fill={LAND.shadow}
+          opacity="0.2"
+        />
+      </Show>
 
       <g class="land-drone-bank" ref={bankRef}>
-        <g class="land-drone-hover">
-          {/* Arms first, so the body sits over the four roots. */}
-          <For each={shape().arms}>
-            {(arm) => (
-              <rect
-                {...arm.rect}
-                fill={LAND.droneShellDark}
-                transform={`rotate(${arm.angle} ${shape().origin.x} ${shape().origin.y})`}
+        <Show
+          when={!props.bursting}
+          fallback={
+            /* The end. A flash, a shockwave ring and debris thrown outward — then
+               the panel unmounts the whole group, so nothing is left behind. */
+            <g class="land-drone-burst">
+              <circle
+                class="land-drone-flash"
+                cx={props.drone.origin.x}
+                cy={props.drone.origin.y}
+                r={props.drone.size * 0.7}
+                fill={LAND.droneBurstCore}
               />
-            )}
-          </For>
-
-          <For each={shape().skids}>
-            {(skid) => <rect {...skid} fill={LAND.droneShellDark} opacity="0.85" />}
-          </For>
-
-          <rect {...shape().body} fill={LAND.droneShell} />
-          <ellipse {...shape().canopy} fill={LAND.shadow} opacity="0.55" />
-          <circle {...shape().camera} fill={LAND.droneShellDark} />
-
-          <For each={shape().rotors}>
-            {(rotor, i) => (
-              <>
-                <circle {...rotor.pod} fill={LAND.droneShellDark} />
-
-                <g
-                  class="land-drone-rotor"
-                  style={{ 'animation-duration': `${ROTOR_SPIN[i() % ROTOR_SPIN.length]}s` }}
-                >
-                  {/* The disc is the blur a spinning rotor actually reads as; the
-                      two blades on top are what make it read as spinning rather
-                      than as a painted ring. */}
-                  <circle {...rotor.disc} fill={LAND.droneBlade} opacity="0.14" />
+              <circle
+                class="land-drone-wave"
+                cx={props.drone.origin.x}
+                cy={props.drone.origin.y}
+                r={props.drone.size * 1.5}
+                fill="none"
+                stroke={LAND.droneBurstEdge}
+                stroke-width={props.drone.size * 0.09}
+              />
+              <For each={burstShards(props.drone)}>
+                {(shard) => (
                   <circle
-                    {...rotor.disc}
-                    fill="none"
-                    stroke={LAND.droneBlade}
-                    stroke-width={props.drone.size * 0.02}
-                    opacity="0.3"
+                    class="land-drone-shard"
+                    cx={props.drone.origin.x}
+                    cy={props.drone.origin.y}
+                    r={shard.r}
+                    fill={shard.hot ? LAND.droneBurstEdge : props.drone.variant.shellDark}
+                    style={{
+                      '--shard-x': `${shard.dx.toFixed(2)}px`,
+                      '--shard-y': `${shard.dy.toFixed(2)}px`,
+                      'animation-delay': `${shard.delay.toFixed(3)}s`,
+                    }}
                   />
-                  <ellipse {...rotor.blade} fill={LAND.droneBlade} opacity="0.8" />
-                  <ellipse
-                    {...rotor.blade}
-                    fill={LAND.droneBlade}
-                    opacity="0.8"
-                    transform={`rotate(90 ${rotor.blade.cx} ${rotor.blade.cy})`}
-                  />
-                  <circle {...rotor.cap} fill={LAND.droneShell} />
-                </g>
-
-                {/* Status lights, one per pod. Amber while searching, green once
-                    devices are found — the colour swap is CSS on `.locked`, so it
-                    never interrupts the patrol. */}
-                <circle class="land-drone-light-glow" {...rotor.glow} />
-                <circle class="land-drone-light" {...rotor.light} />
-              </>
-            )}
-          </For>
-        </g>
+                )}
+              </For>
+            </g>
+          }
+        >
+          <g class="land-drone-hover">
+            <DroneGlyph drone={props.drone} />
+          </g>
+        </Show>
       </g>
     </g>
   );

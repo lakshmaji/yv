@@ -63,6 +63,10 @@ export const LAND = {
   droneLightIdle: '#f5a524',
   droneLightLocked: '#3fd97f',
 
+  /** The end of a drone: a white-hot core and a warm shockwave. */
+  droneBurstCore: '#fff4d6',
+  droneBurstEdge: '#ff9d3c',
+
   /** Shared shading. */
   shadow: '#04121e',
   fog: '#dce8f2',

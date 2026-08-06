@@ -13,7 +13,7 @@
 // scanning indicator, so a world where no sampled point is acceptable still gets
 // a circuit — a plain ring inside the bounds.
 
-import { makeRng, type Rng } from './landscape/rng';
+import { hashText, makeRng, type Rng } from './landscape/rng';
 import { centroid, dist, type Pt } from './landscape/geometry';
 import type { Insets, Rect } from './viewbox';
 
@@ -63,43 +63,205 @@ export const MAX_BANK = 9;
 export const DRONE_SIZE = 34;
 
 /**
- * Rotor hub offsets from the airframe's centre, in units of `size`.
+ * An airframe the user can pick from.
  *
- * A quadcopter, so four of them in an X — front pair slightly wider than the rear
- * so the aircraft has a nose from above, which is what lets the tilt read as
- * banking into a turn rather than as the whole drawing wobbling.
+ * The fleet exists so "send another drone" is a real choice rather than a reroll:
+ * a hexacopter with six-blade fans is recognisably a different machine from the
+ * little two-blade scout, not the same drawing in another colour. Colours are
+ * literals here rather than in the map palette because a variant is a *set* of
+ * them, and splitting the set across two files is how they drift apart.
  */
-export const ROTOR_MOUNTS = [
-  { x: -0.86, y: -0.62 },
-  { x: 0.86, y: -0.62 },
-  { x: -0.8, y: 0.66 },
-  { x: 0.8, y: 0.66 },
-] as const;
+export interface DroneVariant {
+  id: string;
+  label: string;
+  /** One line in the picker, so a choice is more than a shape. */
+  blurb: string;
+  /** 4 (X layout) or 6 (evenly spread). */
+  rotors: 4 | 6;
+  /** Blades per fan. Even, because a blade is drawn as a two-ended ellipse. */
+  blades: 2 | 4 | 6;
+  /** Hub distance from the airframe's centre, in units of `size`. */
+  reach: number;
+  /** Rotor disc radius, in units of `size`. */
+  discR: number;
+  /** Body half-extents, in units of `size`. */
+  bodyW: number;
+  bodyH: number;
+  shell: string;
+  shellDark: string;
+  blade: string;
+}
 
-/** Rotor disc radius, in units of `size`. */
-const ROTOR_R = 0.42;
+export const DRONE_VARIANTS: readonly DroneVariant[] = [
+  {
+    id: 'scout',
+    label: 'Scout',
+    blurb: 'Quad · 2-blade · light and quick',
+    rotors: 4,
+    blades: 2,
+    reach: 1.07,
+    discR: 0.42,
+    bodyW: 0.4,
+    bodyH: 0.34,
+    shell: '#cfd8e0',
+    shellDark: '#78838f',
+    blade: '#e8eef4',
+  },
+  {
+    id: 'surveyor',
+    label: 'Surveyor',
+    blurb: 'Quad · 4-blade · steady platform',
+    rotors: 4,
+    blades: 4,
+    reach: 1.14,
+    discR: 0.46,
+    bodyW: 0.44,
+    bodyH: 0.4,
+    shell: '#9fc0dc',
+    shellDark: '#4f6b85',
+    blade: '#dff0fb',
+  },
+  {
+    id: 'hauler',
+    label: 'Hauler',
+    blurb: 'Quad · 6-blade · heavy lifter',
+    rotors: 4,
+    blades: 6,
+    reach: 1.2,
+    discR: 0.5,
+    bodyW: 0.5,
+    bodyH: 0.44,
+    shell: '#8d8f96',
+    shellDark: '#4a4d54',
+    blade: '#f0b45c',
+  },
+  {
+    id: 'hexscout',
+    label: 'Hex Scout',
+    blurb: 'Hexa · 2-blade · wide sweep',
+    rotors: 6,
+    blades: 2,
+    reach: 1.02,
+    discR: 0.36,
+    bodyW: 0.36,
+    bodyH: 0.36,
+    shell: '#bfeadf',
+    shellDark: '#3f7f73',
+    blade: '#eafaf5',
+  },
+  {
+    id: 'courier',
+    label: 'Courier',
+    blurb: 'Hexa · 4-blade · long range',
+    rotors: 6,
+    blades: 4,
+    reach: 1.1,
+    discR: 0.4,
+    bodyW: 0.42,
+    bodyH: 0.38,
+    shell: '#e5cfa8',
+    shellDark: '#8a6a3f',
+    blade: '#fff0d2',
+  },
+];
+
+/** The airframe sent out when the user has not chosen one. */
+export const DEFAULT_VARIANT = DRONE_VARIANTS[0];
 
 /**
- * How far the drone reaches from its centre, in units of `size`.
+ * A variant by id, falling back to the default.
  *
- * Set by the rotor discs, not the airframe: a hub sits ~1.07 out along the
- * diagonal and its disc spans 0.42 more, and the tilt swings that corner further
- * still. Down is by far the largest, because the ground shadow is drawn well
- * below the aircraft — clipping that at the panel edge is what gives away that
- * the drone is a drawing rather than something flying over the island.
+ * Never throws: the id is persisted in settings, so a build that renamed or
+ * dropped a variant would otherwise leave the map with no drone at all.
  */
-export const DRONE_EXTENT = { left: 1.45, right: 1.45, top: 1.3, bottom: 2.6 } as const;
+export function variantById(id: string | undefined | null): DroneVariant {
+  return DRONE_VARIANTS.find((v) => v.id === id) ?? DEFAULT_VARIANT;
+}
+
+/**
+ * Rotor hub offsets from the airframe's centre, in units of `size`.
+ *
+ * A quad is an X with the front pair slightly wider than the rear, so the
+ * aircraft has a nose from above — that is what lets the tilt read as banking
+ * into a turn rather than as the whole drawing wobbling. A hexa is six evenly
+ * spread, offset half a step so none of them sits dead ahead and hides the nose.
+ */
+export function rotorMounts(variant: DroneVariant): Pt[] {
+  if (variant.rotors === 4) {
+    return [
+      { x: -0.8, y: -0.58 },
+      { x: 0.8, y: -0.58 },
+      { x: -0.75, y: 0.62 },
+      { x: 0.75, y: 0.62 },
+    ].map((m) => ({ x: m.x * variant.reach, y: m.y * variant.reach }));
+  }
+  return Array.from({ length: variant.rotors }, (_, i) => {
+    const angle = (-90 + 30 + i * (360 / variant.rotors)) * (Math.PI / 180);
+    return { x: Math.cos(angle) * variant.reach, y: Math.sin(angle) * variant.reach };
+  });
+}
+
+/**
+ * Blade angles for one fan, in degrees.
+ *
+ * A blade is drawn as a two-ended ellipse through the hub, so a 6-blade fan is
+ * three ellipses 60° apart rather than six.
+ */
+export function bladeAngles(variant: DroneVariant): number[] {
+  const spokes = variant.blades / 2;
+  return Array.from({ length: spokes }, (_, i) => (i * 180) / spokes);
+}
+
+/** How far below the airframe the ground shadow is drawn, in units of `size`. */
+const SHADOW_DROP = 2.3;
+const SHADOW_RY = 0.17;
+
+/**
+ * How far a variant reaches from its centre, in units of `size`.
+ *
+ * Derived rather than declared, which is the point: the placement bounds are
+ * inset by this, so a number that lagged the drawing would clip a rotor at the
+ * panel edge exactly when the drone flew out there — and it is set by the rotor
+ * discs and the tilt swing, not by the airframe, which is easy to get wrong by
+ * hand. Down is by far the largest, because of the shadow.
+ */
+export function droneExtent(variant: DroneVariant = DEFAULT_VARIANT): Required<Insets> {
+  const rad = (MAX_BANK * Math.PI) / 180;
+  let side = 0;
+  let up = 0;
+  let down = 0;
+
+  for (const mount of rotorMounts(variant)) {
+    for (const sign of [1, -1]) {
+      const x = mount.x * Math.cos(sign * rad) - mount.y * Math.sin(sign * rad);
+      const y = mount.x * Math.sin(sign * rad) + mount.y * Math.cos(sign * rad);
+      side = Math.max(side, Math.abs(x) + variant.discR);
+      up = Math.max(up, -y + variant.discR);
+      down = Math.max(down, y + variant.discR);
+    }
+  }
+
+  // A little air, so a drone at the very edge of its bounds doesn't graze it.
+  const pad = 0.08;
+  return {
+    left: side + pad,
+    right: side + pad,
+    top: up + pad,
+    bottom: Math.max(down, SHADOW_DROP + SHADOW_RY) + pad,
+  };
+}
 
 /**
  * Bounds insets that keep the whole drone — including the ground shadow it
  * drags along under itself — inside a rect.
  */
-export function droneInsets(size = DRONE_SIZE): Required<Insets> {
+export function droneInsets(size = DRONE_SIZE, variant: DroneVariant = DEFAULT_VARIANT): Required<Insets> {
+  const extent = droneExtent(variant);
   return {
-    left: DRONE_EXTENT.left * size,
-    right: DRONE_EXTENT.right * size,
-    top: DRONE_EXTENT.top * size,
-    bottom: DRONE_EXTENT.bottom * size,
+    left: extent.left * size,
+    right: extent.right * size,
+    top: extent.top * size,
+    bottom: extent.bottom * size,
   };
 }
 
@@ -125,6 +287,8 @@ export interface Drone {
   duration: number;
   /** True when the route was planned around dinosaurs rather than open ground. */
   visiting: boolean;
+  /** The airframe flying it. */
+  variant: DroneVariant;
 }
 
 export interface DroneOptions {
@@ -137,6 +301,8 @@ export interface DroneOptions {
   /** Dinosaur positions to visit. Empty means "still searching". */
   targets?: readonly Pt[];
   size?: number;
+  /** Which airframe is flying. Defaults to the Scout. */
+  variant?: DroneVariant;
 }
 
 /** One animation step: a transform at a point in the lap. */
@@ -335,6 +501,7 @@ export function dronePatrol(opts: DroneOptions = {}): Drone {
     allow,
     targets = [],
     size = DRONE_SIZE,
+    variant = DEFAULT_VARIANT,
   } = opts;
 
   const rng = makeRng(seed);
@@ -350,6 +517,7 @@ export function dronePatrol(opts: DroneOptions = {}): Drone {
     size,
     duration: durationFor(route),
     visiting: targets.length > 0,
+    variant,
   };
 }
 
@@ -387,7 +555,7 @@ export interface DroneRotor {
   pod: Circle;
   /** The wash a spinning rotor reads as. */
   disc: Circle;
-  /** One blade; the renderer draws a second at 90° about the pod. */
+  /** One two-ended blade; the renderer draws it once per `bladeAngles` entry. */
   blade: Ellipse;
   cap: Circle;
   light: Circle;
@@ -406,8 +574,10 @@ export interface DroneShape {
   /** Downward camera: the reason a survey drone is out here at all. */
   camera: Circle;
   skids: RoundRect[];
-  /** Four rotors, in `ROTOR_MOUNTS` order. */
+  /** One per `rotorMounts` entry: four for a quad, six for a hexa. */
   rotors: DroneRotor[];
+  /** Blade angles within each fan, in degrees. */
+  blades: number[];
 }
 
 /**
@@ -426,11 +596,13 @@ export interface DroneShape {
 export function droneShape(drone: Drone): DroneShape {
   const s = drone.size;
   const { x, y } = drone.origin;
+  const v = drone.variant ?? DEFAULT_VARIANT;
+  const mounts = rotorMounts(v);
 
   return {
     origin: { x, y },
-    shadow: { cx: x, cy: y + s * 2.3, rx: s * 0.66, ry: s * 0.17 },
-    arms: ROTOR_MOUNTS.map((mount) => {
+    shadow: { cx: x, cy: y + s * SHADOW_DROP, rx: s * (v.bodyW + 0.26), ry: s * SHADOW_RY },
+    arms: mounts.map((mount) => {
       const reach = Math.hypot(mount.x, mount.y) * s;
       return {
         // Drawn along +x from just behind the centre, then turned to its rotor —
@@ -446,38 +618,78 @@ export function droneShape(drone: Drone): DroneShape {
       };
     }),
     body: {
-      x: x - s * 0.4,
-      y: y - s * 0.34,
-      width: s * 0.8,
-      height: s * 0.68,
-      rx: s * 0.22,
+      x: x - s * v.bodyW,
+      y: y - s * v.bodyH,
+      width: s * v.bodyW * 2,
+      height: s * v.bodyH * 2,
+      rx: s * Math.min(v.bodyW, v.bodyH) * 0.65,
     },
     // Forward of centre, so the airframe has a nose from above.
-    canopy: { cx: x, cy: y - s * 0.13, rx: s * 0.22, ry: s * 0.14 },
+    canopy: { cx: x, cy: y - s * v.bodyH * 0.38, rx: s * v.bodyW * 0.55, ry: s * v.bodyH * 0.42 },
     // Gimbal, slung under the tail end.
-    camera: { cx: x, cy: y + s * 0.16, r: s * 0.11 },
+    camera: { cx: x, cy: y + s * v.bodyH * 0.47, r: s * v.bodyH * 0.32 },
     // Landing legs, fore and aft, reading as being underneath the body.
     skids: [-1, 1].map((side) => ({
-      x: x - s * 0.42,
-      y: y + side * s * 0.4 - s * 0.03,
-      width: s * 0.84,
+      x: x - s * v.bodyW * 1.05,
+      y: y + side * s * (v.bodyH + 0.06) - s * 0.03,
+      width: s * v.bodyW * 2.1,
       height: s * 0.06,
       rx: s * 0.03,
     })),
-    rotors: ROTOR_MOUNTS.map((mount) => {
+    rotors: mounts.map((mount) => {
       const cx = x + mount.x * s;
       const cy = y + mount.y * s;
       return {
-        pod: { cx, cy, r: s * 0.14 },
-        disc: { cx, cy, r: s * ROTOR_R },
-        blade: { cx, cy, rx: s * (ROTOR_R - 0.02), ry: s * 0.05 },
-        cap: { cx, cy, r: s * 0.07 },
-        // Under the pod, clear of the disc, so four lights ring the aircraft.
-        light: { cx, cy: cy + s * 0.24, r: s * 0.09 },
-        glow: { cx, cy: cy + s * 0.24, r: s * 0.18 },
+        pod: { cx, cy, r: s * v.discR * 0.33 },
+        disc: { cx, cy, r: s * v.discR },
+        blade: { cx, cy, rx: s * (v.discR - 0.02), ry: s * v.discR * 0.12 },
+        cap: { cx, cy, r: s * v.discR * 0.17 },
+        // Under the pod, clear of the disc, so the lights ring the aircraft.
+        light: { cx, cy: cy + s * v.discR * 0.58, r: s * 0.09 },
+        glow: { cx, cy: cy + s * v.discR * 0.58, r: s * 0.18 },
       };
     }),
+    blades: bladeAngles(v),
   };
+}
+
+/** One piece of a drone that didn't come home. */
+export interface BurstShard {
+  /** Where it ends up, relative to the drone's centre. */
+  dx: number;
+  dy: number;
+  r: number;
+  /** Seconds into the burst before it starts moving. */
+  delay: number;
+  /** Hot pieces are drawn in the burst colour, the rest in the airframe's. */
+  hot: boolean;
+}
+
+/** How many pieces a drone comes apart into. */
+export const BURST_SHARDS = 11;
+
+/**
+ * The debris of a burst, seeded from the drone's own route.
+ *
+ * Seeded rather than random so the same failed sweep always breaks up the same
+ * way — which is what makes it a drawing rather than a particle system, and keeps
+ * it testable. A ring of shards thrown outward at uneven angles and speeds: even
+ * spacing reads as a flower, not an explosion.
+ */
+export function burstShards(drone: Drone): BurstShard[] {
+  const rng = makeRng(hashText(`burst:${drone.duration}:${drone.origin.x}:${drone.origin.y}`));
+  const s = drone.size;
+  return Array.from({ length: BURST_SHARDS }, (_, i) => {
+    const angle = ((i + rng.range(0.15, 0.85)) / BURST_SHARDS) * Math.PI * 2;
+    const throwR = s * rng.range(1.1, 2.4);
+    return {
+      dx: Math.cos(angle) * throwR,
+      dy: Math.sin(angle) * throwR,
+      r: s * rng.range(0.05, 0.13),
+      delay: rng.range(0, 0.09),
+      hot: rng.chance(0.35),
+    };
+  });
 }
 
 /**

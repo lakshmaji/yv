@@ -28,6 +28,8 @@ export default function LandscapeMap(props: {
   drone?: DroneData;
   /** Devices found: the drone's lights go green. */
   droneLocked?: boolean;
+  /** The sweep came up empty and the drone is going up in smoke. */
+  droneBursting?: boolean;
   /**
    * Whether ambient motion is on. Only the drone needs telling — everything else
    * is stopped by the `.no-motion` class on the stage, but the drone's travel is
@@ -114,7 +116,12 @@ export default function LandscapeMap(props: {
           which is the only thing on the map above it. */}
       <Show when={props.drone}>
         {(drone) => (
-          <Drone drone={drone()} locked={props.droneLocked ?? false} motion={props.motion} />
+          <Drone
+            drone={drone()}
+            locked={props.droneLocked ?? false}
+            bursting={props.droneBursting}
+            motion={props.motion}
+          />
         )}
       </Show>
 

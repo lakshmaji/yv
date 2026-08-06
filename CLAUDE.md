@@ -919,3 +919,128 @@ the herd swallowing a click is a bug this codebase has already had once.
 | `frontend/src/components/DiscoveryPanel.tsx` | `droneBounds` + `drone` memos; passes `peers().length > 0` and `discoveryMotion()` |
 | `frontend/src/lib/landscape/palette.ts` | `droneShell`, `droneShellDark`, `droneBlade`, `droneLightIdle`, `droneLightLocked` |
 | `frontend/src/styles.css` | Rotor/hover/blink keyframes, light state on `.locked`, `pointer-events: none`, both motion opt-out lists |
+
+---
+
+## Implemented: The fleet, the burst, and the no-devices dialog
+
+### Goal
+
+Three things the first drone was missing:
+
+1. **"No devices nearby" was unreadable.** It was a caption laid over the terrain,
+   competing with mountains and settlement labels. It is now a dialog.
+2. **A failed sweep had no ending.** The drone circled forever over an empty island.
+   Now it **bursts and leaves no trace**, and the dialog takes over.
+3. **One airframe.** There are now five, and the user picks which one goes out.
+
+### The sequence
+
+```
+launch → flying (amber lights, rotor hum)
+   ├─ device found  → lights green, route re-plans to visit the dinosaurs
+   └─ 14s, nothing  → bursting (flash + shockwave + debris, 900ms)
+                        → gone (nothing on the map at all)
+                          → NoDevicesModal: pick an airframe, ↻ Send another drone
+```
+
+`droneState` lives in the **store**, not the panel: the dialog outlives a sweep, and
+the airframe chosen in it has to survive the panel re-rendering around it. A device
+appearing cancels everything — even mid-burst the drone comes back, because now
+there is something to go and look at.
+
+14 seconds is not a discovery timeout (mDNS answers in well under a second when
+anything is there). It is how long the flight is worth watching before the app
+admits there is nobody about.
+
+`droneLaunch` is a counter mixed into the route seed, so a replacement drone flies a
+genuinely new circuit rather than repeating the sweep that just failed.
+
+### Why the burst needs `commitStyles`
+
+The travel is a script animation, so cancelling it would snap the drone back to its
+drawn origin and explode it there. `animation.commitStyles()` writes the current
+transform to the element first, so the burst happens **where the drone actually
+was**. Wrapped in try/catch — if it ever throws the burst is merely in the wrong
+place, which is not worth failing over.
+
+The burst is deliberately **exempt from both motion opt-out lists**, like the
+dinosaur's roar: it is a one-off event that means something (the sweep failed), and
+suppressing it would make the drone vanish between frames with no explanation.
+
+`burstShards` is seeded from the drone's own route, so a given failed sweep always
+breaks up the same way — a drawing, not a particle system, and therefore testable.
+Angles are deliberately uneven: evenly spaced debris reads as a flower.
+
+### The fleet
+
+`DRONE_VARIANTS` — Scout (quad, 2-blade), Surveyor (quad, 4-blade), Hauler (quad,
+6-blade), Hex Scout (hexa, 2-blade), Courier (hexa, 4-blade). Each carries its own
+rotor count, blades per fan, reach, disc radius, body proportions and three colours.
+Colours are literals in the variant rather than in `LAND` because a variant is a
+*set* of them, and a set split across two files drifts.
+
+`rotorMounts` gives a quad an X (front pair wider, so it has a nose) and a hexa six
+evenly spread, offset half a step so none sits dead ahead. `bladeAngles` spaces
+blades over a **half** turn — each ellipse already covers both sides of the hub, so
+a 6-blade fan is three ellipses at 60°.
+
+`droneExtent(variant)` replaced the hand-written `DRONE_EXTENT` constant. It is
+derived from the variant's own mounts, disc radius and the tilt swing, which kills
+the whole class of bug the constant had: five airframes with hand-maintained extents
+would have been five chances to clip a rotor at the panel edge.
+
+`DroneGlyph` was split out of `Drone` so the picker tiles draw the *same* aircraft
+the map does, built through `dronePatrol` with zero-size bounds. A preview that
+diverged from what gets sent would be worse than no preview.
+
+### Sound
+
+`Settings.DroneFanClip` — one user-chosen clip, looped while a drone is patrolling.
+**No audio ships with the app**, exactly as with the roars: empty means silent, and
+both the dialog and Settings say so rather than leaving it a mystery.
+
+`startClipLoop` is idempotent on the path, because its caller is an effect that
+re-runs whenever anything about the drone changes — a hum that restarted from the top
+every time a device appeared would stutter. It keeps a monotonic ticket, since two
+starts in quick succession would otherwise both reach `play()` and layer two hums.
+`resetAudioCache` deliberately does **not** stop the loop: the clip list changing is
+not a reason for the drone to fall silent, and nothing would restart it.
+
+The hum follows the Motion toggle too — a hum over stationary rotors is incoherent.
+
+### Go side
+
+`Settings.DroneVariant` and `Settings.DroneFanClip`, both `omitempty` with
+zero-value-means-default. `ValidateDroneVariant` checks only the *shape* of the id
+(lowercase slug, ≤32 chars): the fleet is a set of drawings and lives in the
+frontend, so duplicating the list in Go would give two places to add a drone and one
+of them would be forgotten. Unknown ids fall back via `variantById`, which is why a
+renamed variant cannot ground the fleet. The fan clip answers to the same extension
+allowlist as the roars (`audio.ValidatePaths`) rather than a rule of its own.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/drone.ts` | `DRONE_VARIANTS`, `variantById`, `rotorMounts`, `bladeAngles`, `droneExtent`, `burstShards`; `droneShape` follows the variant |
+| `frontend/src/lib/drone.test.ts` | 94 cases — fleet integrity, per-variant extent fit incl. tilt, quad/hexa layout, burst debris |
+| `frontend/src/lib/audio.ts` | `startClipLoop` / `stopClipLoop` / `loopingClip`, `FAN_VOLUME` |
+| `frontend/src/components/discovery/DroneGlyph.tsx` | New — the airframe alone, shared by the map and the picker |
+| `frontend/src/components/discovery/Drone.tsx` | Burst state, `commitStyles` freeze, variant colours |
+| `frontend/src/components/modals/NoDevicesModal.tsx` | New — the dialog, fleet picker, ↻ Send another drone |
+| `frontend/src/components/DiscoveryPanel.tsx` | Sweep/burst/gone state machine, fan loop, status chip reopens the dialog, map overlay now only for a discovery failure |
+| `frontend/src/components/modals/SettingsModal.tsx` | Survey drone section: airframe select + rotor clip with preview |
+| `frontend/src/store.ts` | `droneState`, `droneLaunch`, `launchDrone`, `droneVariant`, `droneFanClip`, `noDevicesOpen` |
+| `internal/models/models.go`, `internal/settings/settings.go` | `DroneVariant`, `DroneFanClip`, `ValidateDroneVariant` |
+| `frontend/src/styles.css` | Burst keyframes, `.nodev-*` dialog and picker tiles; share-PIN row fix |
+
+### Fixed along the way: the share-PIN row in Settings
+
+The PIN field filled its whole row and squeezed its own label to one word per line.
+`.modal-box input { width: 100% }` is a class *plus* an element, so it outranks the
+lone `.settings-pin-input` class no matter what order they appear in — the retention
+field escaped the same fate only because `.settings-row-control input[type="number"]`
+happens to be more specific. Fixed by naming the ancestor
+(`.modal-box .settings-pin-input`) and giving `.settings-row-main` `flex: 1`, so a
+control that turns out wider than expected can no longer collapse the label column.

@@ -123,6 +123,16 @@ type Settings struct {
 	// No audio ships with the app, so an empty list means the roars are silent.
 	AudioClips []string `json:"audioClips,omitempty"`
 
+	// DroneVariant is the airframe the Discovery view sends out, by id. Empty —
+	// the zero value, and so the default — means the first of the fleet. An id
+	// this build no longer knows falls back the same way, so a renamed variant
+	// cannot leave the map without a drone.
+	DroneVariant string `json:"droneVariant,omitempty"`
+	// DroneFanClip is the user's own clip for the rotor hum, looped while a drone
+	// is patrolling. Empty means silent: no audio ships with the app, the same as
+	// for the roars.
+	DroneFanClip string `json:"droneFanClip,omitempty"`
+
 	// SharePIN gates incoming config shares. Empty — the zero value, and so the
 	// default — means any nearby peer may ask, which is still safe because the
 	// receiver has to accept the transfer explicitly either way. Stored in the

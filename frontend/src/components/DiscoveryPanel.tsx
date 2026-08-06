@@ -5,6 +5,14 @@ import {
   setDiscoverySeed,
   discoveryMotion,
   setDiscoveryMotion,
+  droneFanClip,
+  droneLaunch,
+  droneState,
+  droneVariant,
+  launchDrone,
+  noDevicesOpen,
+  setDroneState,
+  setNoDevicesOpen,
   setSettingsModalOpen,
   peers,
   setPeers,
@@ -15,13 +23,21 @@ import {
 } from '../store';
 import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '../lib/landscape/world';
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
-import { clipForName, playClip, resetAudioCache, SESSION_SALT } from '../lib/audio';
+import {
+  clipForName,
+  playClip,
+  resetAudioCache,
+  SESSION_SALT,
+  startClipLoop,
+  stopClipLoop,
+} from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
 import { DRONE_SIZE, dronePatrol, droneInsets } from '../lib/drone';
 import { hashText } from '../lib/landscape/rng';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import { go } from '../wails';
 import LandscapeMap from './discovery/LandscapeMap';
+import NoDevicesModal from './modals/NoDevicesModal';
 import ShareModal from './modals/ShareModal';
 
 const BIOME_LABELS: Record<BiomeKind, string> = {
@@ -122,18 +138,21 @@ export default function DiscoveryPanel() {
    */
   const droneBounds = createMemo(() => {
     const visible = visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize());
-    return insetRect(quantizeRect(visible, 40), droneInsets(DRONE_SIZE));
+    return insetRect(quantizeRect(visible, 40), droneInsets(DRONE_SIZE, droneVariant()));
   });
 
   const drone = createMemo(() =>
     dronePatrol({
       bounds: droneBounds(),
-      seed: world().seed,
+      // The launch counter is in the seed so a replacement drone flies a new
+      // circuit rather than repeating the sweep that just came up empty.
+      seed: world().seed ^ hashText(`launch:${droneLaunch()}`),
       // Over land: a survey drone circling the open sea is looking in the wrong
       // place. Once it is visiting animals the route follows them instead.
       allow: openGround(world(), 40),
       targets: dinos().map((d) => ({ x: d.x, y: d.y })),
       size: DRONE_SIZE,
+      variant: droneVariant(),
     }),
   );
 
@@ -149,6 +168,62 @@ export default function DiscoveryPanel() {
     if (previous !== undefined && key !== previous) resetAudioCache();
     return key;
   });
+
+  // --- the sweep, and how it ends ---
+
+  /**
+   * How long a drone searches before giving up.
+   *
+   * Generous: mDNS answers in well under a second when anything is there, so this
+   * is not a discovery timeout — it is how long the flight is worth watching
+   * before the app admits there is nobody about.
+   */
+  const SWEEP_MS = 14_000;
+  /** Length of the burst. Must match the CSS, which owns the animation. */
+  const BURST_MS = 900;
+
+  /** The empty sweep: fly for a while, find nothing, come apart. */
+  createEffect(() => {
+    if (droneState() !== 'flying' || peers().length > 0) return;
+    const timer = setTimeout(() => setDroneState('bursting'), SWEEP_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
+  /** …then vanish and hand over to the dialog. */
+  createEffect(() => {
+    if (droneState() !== 'bursting') return;
+    const timer = setTimeout(() => {
+      setDroneState('gone');
+      setNoDevicesOpen(true);
+    }, BURST_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+
+  /**
+   * A device turning up cancels all of that.
+   *
+   * Even mid-burst: the drone reappears rather than exploding pointlessly, which
+   * is the right story — there is something out there to go and look at.
+   */
+  createEffect(() => {
+    if (peers().length === 0) return;
+    setNoDevicesOpen(false);
+    if (droneState() !== 'flying') launchDrone();
+  });
+
+  /**
+   * The rotor hum, while a drone is actually up.
+   *
+   * Tied to the panel, so leaving Discovery stops it. Tied to the motion toggle
+   * too: with the map frozen, a hum over stationary rotors is incoherent.
+   */
+  createEffect(() => {
+    const clip = droneFanClip();
+    const audible = droneState() === 'flying' && soundOn() && discoveryMotion() && clip !== null;
+    if (audible && clip) void startClipLoop(clip);
+    else stopClipLoop();
+  });
+  onCleanup(stopClipLoop);
 
   /**
    * Clicking a dinosaur roars and then opens the share flow.
@@ -218,6 +293,12 @@ export default function DiscoveryPanel() {
     if (discoveryError()) return { label: '⚠ Discovery unavailable', warn: true };
 
     const found = peers().length;
+    // Two ways of having nobody: still out looking, or the drone is down. The
+    // second is a dead end the user can act on, so it says so and reopens the
+    // dialog — the drone leaves no trace behind to click on.
+    if (found === 0 && droneState() === 'gone') {
+      return { label: '◌ No devices found', warn: true };
+    }
     if (found === 0) return { label: '◌ Searching for nearby devices…', warn: false };
 
     const shown = dinos().length;
@@ -255,17 +336,34 @@ export default function DiscoveryPanel() {
       <div class="dash-toolbar">
         {/* Leftmost because it is the only thing on this screen that reports
             something outside the app. */}
-        <span
-          class="dash-refresh disc-peer-status"
-          classList={{ muted: peerStatus().warn, searching: peers().length === 0 && !discoveryError() }}
-          title={
-            discoveryError()
-              ? `Discovery could not start: ${discoveryError()}`
-              : 'Devices on your network running yv, discovered over mDNS'
+        <Show
+          when={peers().length === 0 && droneState() === 'gone' && !discoveryError()}
+          fallback={
+            <span
+              class="dash-refresh disc-peer-status"
+              classList={{
+                muted: peerStatus().warn,
+                searching: peers().length === 0 && !discoveryError(),
+              }}
+              title={
+                discoveryError()
+                  ? `Discovery could not start: ${discoveryError()}`
+                  : 'Devices on your network running yv, discovered over mDNS'
+              }
+            >
+              {peerStatus().label}
+            </span>
           }
         >
-          {peerStatus().label}
-        </span>
+          <button
+            type="button"
+            class="dash-refresh disc-peer-status muted"
+            title="The sweep found nothing — send another drone"
+            onClick={() => setNoDevicesOpen(true)}
+          >
+            {peerStatus().label}
+          </button>
+        </Show>
 
         <button type="button" class="dash-refresh" onClick={reroll}>
           ↻ Regenerate
@@ -318,21 +416,19 @@ export default function DiscoveryPanel() {
           world={world()}
           dinos={dinos()}
           onSelectDino={handleSelect}
-          drone={drone()}
+          drone={droneState() === 'gone' ? undefined : drone()}
           droneLocked={peers().length > 0}
+          droneBursting={droneState() === 'bursting'}
           motion={discoveryMotion()}
         />
 
-        {/* An empty island reads as a broken screen without a word of
-            explanation, and this is the common case for someone working alone. */}
-        <Show when={peers().length === 0}>
+        {/* Discovery failing to start is not the same as nobody being there: no
+            drone will help, so it stays on the map rather than becoming a dialog
+            offering to send one. */}
+        <Show when={discoveryError()}>
           <div class="landscape-empty">
-            <span class="landscape-empty-title">No devices nearby</span>
-            <span class="landscape-empty-hint">
-              {discoveryError()
-                ? 'Discovery could not start on this machine.'
-                : 'Open yv on another laptop on this network and it will appear here.'}
-            </span>
+            <span class="landscape-empty-title">Discovery unavailable</span>
+            <span class="landscape-empty-hint">Discovery could not start on this machine.</span>
           </div>
         </Show>
 
@@ -350,6 +446,12 @@ export default function DiscoveryPanel() {
 
       <Show when={sharePeer()}>
         <ShareModal />
+      </Show>
+
+      {/* Never both: a share dialog means a device was found, which closes this
+          one anyway. Ordered so that if they ever did overlap, the share wins. */}
+      <Show when={noDevicesOpen() && !sharePeer()}>
+        <NoDevicesModal />
       </Show>
     </main>
   );

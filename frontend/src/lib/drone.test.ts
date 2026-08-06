@@ -1,18 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
   bankFrames,
+  bladeAngles,
+  BURST_SHARDS,
+  burstShards,
   DEFAULT_BOUNDS,
-  DRONE_EXTENT,
+  DEFAULT_VARIANT,
   DRONE_SIZE,
+  DRONE_VARIANTS,
   dronePatrol,
+  droneExtent,
   droneInsets,
   droneShape,
   MAX_BANK,
   MAX_VISITS,
   patrolFrames,
   PATROL_STOPS,
+  rotorMounts,
+  variantById,
   type Drone,
   type DroneShape,
+  type DroneVariant,
 } from './drone';
 import { insetRect, type Rect } from './viewbox';
 import type { Pt } from './landscape/geometry';
@@ -46,11 +54,99 @@ const HERD: Pt[] = [
   { x: 420, y: 640 },
 ];
 
+describe('the fleet', () => {
+  it('has unique ids and a default that is one of them', () => {
+    const ids = DRONE_VARIANTS.map((v) => v.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(DRONE_VARIANTS).toContain(DEFAULT_VARIANT);
+  });
+
+  it('is worth choosing between: shapes and colours actually differ', () => {
+    // The whole point of "send another drone" is that it is a different machine,
+    // not a reroll of the same drawing.
+    const shapes = DRONE_VARIANTS.map((v) => `${v.rotors}x${v.blades}`);
+    expect(new Set(shapes).size).toBe(shapes.length);
+    const shells = DRONE_VARIANTS.map((v) => v.shell);
+    expect(new Set(shells).size).toBe(shells.length);
+    expect(new Set(DRONE_VARIANTS.map((v) => v.rotors))).toEqual(new Set([4, 6]));
+  });
+
+  it('describes every airframe for the picker', () => {
+    for (const v of DRONE_VARIANTS) {
+      expect(v.label.length).toBeGreaterThan(0);
+      expect(v.blurb.length).toBeGreaterThan(0);
+      expect(v.shell).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(v.shellDark).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(v.blade).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it('only has even blade counts, since a blade is a two-ended ellipse', () => {
+    for (const v of DRONE_VARIANTS) {
+      expect(v.blades % 2).toBe(0);
+      expect(bladeAngles(v)).toHaveLength(v.blades / 2);
+    }
+  });
+
+  it('spaces the blades evenly over a half turn', () => {
+    // A half turn, not a full one: each ellipse already covers both sides of the
+    // hub, so spacing them over 360° would draw every blade twice.
+    for (const v of DRONE_VARIANTS) {
+      const angles = bladeAngles(v);
+      expect(angles[0]).toBe(0);
+      for (let i = 1; i < angles.length; i++) {
+        expect(angles[i] - angles[i - 1]).toBeCloseTo(180 / angles.length);
+      }
+      expect(angles[angles.length - 1]).toBeLessThan(180);
+    }
+  });
+
+  it('mounts one rotor per arm, spread around the airframe', () => {
+    for (const v of DRONE_VARIANTS) {
+      const mounts = rotorMounts(v);
+      expect(mounts).toHaveLength(v.rotors);
+      // None on top of another, and all roughly at the variant's reach.
+      for (let i = 0; i < mounts.length; i++) {
+        for (let j = i + 1; j < mounts.length; j++) {
+          expect(Math.hypot(mounts[i].x - mounts[j].x, mounts[i].y - mounts[j].y)).toBeGreaterThan(0.3);
+        }
+        const r = Math.hypot(mounts[i].x, mounts[i].y);
+        expect(r).toBeGreaterThan(v.reach * 0.7);
+        expect(r).toBeLessThanOrEqual(v.reach * 1.05);
+      }
+    }
+  });
+
+  it('keeps a hexa clear of dead ahead, so the nose still reads', () => {
+    for (const v of DRONE_VARIANTS.filter((x) => x.rotors === 6)) {
+      for (const mount of rotorMounts(v)) {
+        expect(Math.abs(mount.x)).toBeGreaterThan(0.1);
+      }
+    }
+  });
+
+  it('falls back rather than leaving the map droneless', () => {
+    // The id is persisted in settings, so a renamed or dropped variant must not
+    // be able to ground the whole fleet.
+    expect(variantById('scout').id).toBe('scout');
+    expect(variantById('does-not-exist')).toBe(DEFAULT_VARIANT);
+    expect(variantById(undefined)).toBe(DEFAULT_VARIANT);
+    expect(variantById(null)).toBe(DEFAULT_VARIANT);
+    expect(variantById('')).toBe(DEFAULT_VARIANT);
+  });
+});
+
 describe('droneInsets', () => {
   it('scales with the drone and covers its whole reach', () => {
     const insets = droneInsets(40);
-    expect(insets.left).toBeCloseTo(DRONE_EXTENT.left * 40);
-    expect(insets.bottom).toBeCloseTo(DRONE_EXTENT.bottom * 40);
+    expect(insets.left).toBeCloseTo(droneExtent().left * 40);
+    expect(insets.bottom).toBeCloseTo(droneExtent().bottom * 40);
+  });
+
+  it('follows the variant: a wider airframe needs more room', () => {
+    const scout = DRONE_VARIANTS.find((v) => v.id === 'scout')!;
+    const hauler = DRONE_VARIANTS.find((v) => v.id === 'hauler')!;
+    expect(droneInsets(DRONE_SIZE, hauler).left).toBeGreaterThan(droneInsets(DRONE_SIZE, scout).left);
   });
 
   it('defaults to the standard size', () => {
@@ -66,7 +162,7 @@ describe('droneInsets', () => {
   });
 });
 
-describe('droneShape / DRONE_EXTENT', () => {
+describe('droneShape / droneExtent', () => {
   /** Every drawn primitive's bounding box, which is all the extent is about. */
   function boxes(shape: DroneShape): Rect[] {
     const out: Rect[] = [];
@@ -112,35 +208,46 @@ describe('droneShape / DRONE_EXTENT', () => {
       circle(rotor.cap);
       circle(rotor.light);
       circle(rotor.glow);
-      // A blade is drawn twice, the second turned 90° about the pod, so its reach
-      // counts in both axes.
+      // A blade is drawn once per angle around the hub, so its reach counts in
+      // both axes.
       const { cx, cy, rx } = rotor.blade;
       circle({ cx, cy, r: rx });
     }
     return out;
   }
 
-  it('is finite everywhere, for any size', () => {
-    for (const size of [12, 34, 90]) {
-      const drone = dronePatrol({ bounds: BOUNDS, seed: 3, size });
+  /** One drone of each variant, at a few sizes — the whole matrix. */
+  function fleet(): { drone: Drone; variant: DroneVariant; size: number }[] {
+    const out: { drone: Drone; variant: DroneVariant; size: number }[] = [];
+    for (const variant of DRONE_VARIANTS) {
+      for (const size of [12, 34, 90]) {
+        out.push({ drone: dronePatrol({ bounds: BOUNDS, seed: 3, size, variant }), variant, size });
+      }
+    }
+    return out;
+  }
+
+  it('is finite everywhere, for every variant and size', () => {
+    for (const { drone } of fleet()) {
       for (const box of boxes(droneShape(drone))) {
         for (const n of [box.x, box.y, box.width, box.height]) expect(Number.isFinite(n)).toBe(true);
       }
     }
   });
 
-  it('actually fits inside DRONE_EXTENT — the point of the constant', () => {
-    // The placement bounds are inset by DRONE_EXTENT, so anything drawn beyond it
+  it('actually fits inside droneExtent — the point of the function', () => {
+    // The placement bounds are inset by droneExtent, so anything drawn beyond it
     // is clipped by the panel edge exactly when the drone flies out there. The
-    // rotors reach further sideways than the airframe does, which is the trap.
-    for (const size of [12, 34, 90]) {
-      const drone = dronePatrol({ bounds: BOUNDS, seed: 3, size });
+    // rotors reach further sideways than the airframe does, which is the trap,
+    // and every variant moves its rotors somewhere different.
+    for (const { drone, variant, size } of fleet()) {
+      const extent = droneExtent(variant);
       const { x, y } = drone.origin;
       for (const box of boxes(droneShape(drone))) {
-        expect(x - box.x).toBeLessThanOrEqual(DRONE_EXTENT.left * size);
-        expect(box.x + box.width - x).toBeLessThanOrEqual(DRONE_EXTENT.right * size);
-        expect(y - box.y).toBeLessThanOrEqual(DRONE_EXTENT.top * size);
-        expect(box.y + box.height - y).toBeLessThanOrEqual(DRONE_EXTENT.bottom * size);
+        expect(x - box.x).toBeLessThanOrEqual(extent.left * size);
+        expect(box.x + box.width - x).toBeLessThanOrEqual(extent.right * size);
+        expect(y - box.y).toBeLessThanOrEqual(extent.top * size);
+        expect(box.y + box.height - y).toBeLessThanOrEqual(extent.bottom * size);
       }
     }
   });
@@ -149,36 +256,56 @@ describe('droneShape / DRONE_EXTENT', () => {
     // The airframe rolls up to MAX_BANK about its own centre, which throws a
     // corner rotor beyond where the level drawing reaches — the tilt is the part
     // of the extent that is easiest to forget.
-    const size = 34;
-    const drone = dronePatrol({ bounds: BOUNDS, seed: 3, size });
-    const shape = droneShape(drone);
     const rad = (MAX_BANK * Math.PI) / 180;
-
-    for (const sign of [1, -1]) {
-      for (const rotor of shape.rotors) {
-        const dx = rotor.disc.cx - shape.origin.x;
-        const dy = rotor.disc.cy - shape.origin.y;
-        const rx = dx * Math.cos(sign * rad) - dy * Math.sin(sign * rad);
-        const ry = dx * Math.sin(sign * rad) + dy * Math.cos(sign * rad);
-        expect(Math.abs(rx) + rotor.disc.r).toBeLessThanOrEqual(DRONE_EXTENT.left * size);
-        expect(-ry + rotor.disc.r).toBeLessThanOrEqual(DRONE_EXTENT.top * size);
-        expect(ry + rotor.disc.r).toBeLessThanOrEqual(DRONE_EXTENT.bottom * size);
+    for (const { drone, variant, size } of fleet()) {
+      const extent = droneExtent(variant);
+      const shape = droneShape(drone);
+      for (const sign of [1, -1]) {
+        for (const rotor of shape.rotors) {
+          const dx = rotor.disc.cx - shape.origin.x;
+          const dy = rotor.disc.cy - shape.origin.y;
+          const rx = dx * Math.cos(sign * rad) - dy * Math.sin(sign * rad);
+          const ry = dx * Math.sin(sign * rad) + dy * Math.cos(sign * rad);
+          expect(Math.abs(rx) + rotor.disc.r).toBeLessThanOrEqual(extent.left * size);
+          expect(-ry + rotor.disc.r).toBeLessThanOrEqual(extent.top * size);
+          expect(ry + rotor.disc.r).toBeLessThanOrEqual(extent.bottom * size);
+        }
       }
     }
   });
 
-  it('is a quadcopter: four rotors, each on its own arm', () => {
-    const shape = droneShape(dronePatrol({ bounds: BOUNDS, seed: 3 }));
-    expect(shape.rotors).toHaveLength(4);
-    expect(shape.arms).toHaveLength(4);
+  it('draws one rotor per mount and one arm per rotor, for every variant', () => {
+    for (const variant of DRONE_VARIANTS) {
+      const shape = droneShape(dronePatrol({ bounds: BOUNDS, seed: 3, variant }));
+      expect(shape.rotors).toHaveLength(variant.rotors);
+      expect(shape.arms).toHaveLength(variant.rotors);
+      expect(shape.blades).toEqual(bladeAngles(variant));
+    }
+  });
 
-    // One rotor per quadrant, or it isn't an X.
-    const quadrants = new Set(
-      shape.rotors.map(
-        (r) => `${Math.sign(r.pod.cx - shape.origin.x)},${Math.sign(r.pod.cy - shape.origin.y)}`,
-      ),
-    );
-    expect(quadrants.size).toBe(4);
+  it('lays a quad out as an X: one rotor per quadrant', () => {
+    for (const variant of DRONE_VARIANTS.filter((v) => v.rotors === 4)) {
+      const shape = droneShape(dronePatrol({ bounds: BOUNDS, seed: 3, variant }));
+      const quadrants = new Set(
+        shape.rotors.map(
+          (r) => `${Math.sign(r.pod.cx - shape.origin.x)},${Math.sign(r.pod.cy - shape.origin.y)}`,
+        ),
+      );
+      expect(quadrants.size).toBe(4);
+    }
+  });
+
+  it('spreads a hexa so no two rotors overlap', () => {
+    for (const variant of DRONE_VARIANTS.filter((v) => v.rotors === 6)) {
+      const shape = droneShape(dronePatrol({ bounds: BOUNDS, seed: 3, variant }));
+      for (let i = 0; i < shape.rotors.length; i++) {
+        for (let j = i + 1; j < shape.rotors.length; j++) {
+          const a = shape.rotors[i].pod;
+          const b = shape.rotors[j].pod;
+          expect(Math.hypot(a.cx - b.cx, a.cy - b.cy)).toBeGreaterThan(a.r * 2);
+        }
+      }
+    }
   });
 
   it('points each arm at its own rotor', () => {
@@ -399,6 +526,61 @@ describe('lap timing', () => {
       targets: [{ x: 260, y: 260 }, { x: 1340, y: 640 }],
     });
     expect(wide.duration).toBeGreaterThan(tight.duration);
+  });
+});
+
+describe('burst debris', () => {
+  const drone = dronePatrol({ bounds: BOUNDS, seed: 42 });
+
+  it('is seeded, so the same failed sweep always breaks up the same way', () => {
+    expect(burstShards(drone)).toEqual(burstShards(drone));
+  });
+
+  it('throws the full count of pieces outward', () => {
+    const shards = burstShards(drone);
+    expect(shards).toHaveLength(BURST_SHARDS);
+    for (const shard of shards) {
+      const throwR = Math.hypot(shard.dx, shard.dy);
+      expect(throwR).toBeGreaterThan(drone.size);
+      expect(shard.r).toBeGreaterThan(0);
+      expect(shard.delay).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('scatters unevenly — even spacing reads as a flower, not an explosion', () => {
+    const angles = burstShards(drone)
+      .map((s) => Math.atan2(s.dy, s.dx))
+      .sort((a, b) => a - b);
+    const gaps: number[] = [];
+    for (let i = 1; i < angles.length; i++) gaps.push(angles[i] - angles[i - 1]);
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeGreaterThan(0.05);
+    // But still all the way round, rather than bunched on one side.
+    expect(Math.max(...gaps)).toBeLessThan(Math.PI);
+  });
+
+  it('goes in every direction', () => {
+    const shards = burstShards(drone);
+    expect(shards.some((s) => s.dx > 0)).toBe(true);
+    expect(shards.some((s) => s.dx < 0)).toBe(true);
+    expect(shards.some((s) => s.dy > 0)).toBe(true);
+    expect(shards.some((s) => s.dy < 0)).toBe(true);
+  });
+
+  it('mixes hot pieces with airframe-coloured ones', () => {
+    // Every shard the same colour reads as confetti; the split is what makes it
+    // look like something burning apart.
+    const shards = DRONE_VARIANTS.flatMap((variant) =>
+      burstShards(dronePatrol({ bounds: BOUNDS, seed: 7, variant })),
+    );
+    expect(shards.some((s) => s.hot)).toBe(true);
+    expect(shards.some((s) => !s.hot)).toBe(true);
+  });
+
+  it('scales with the airframe', () => {
+    const small = burstShards(dronePatrol({ bounds: BOUNDS, seed: 42, size: 10 }));
+    const large = burstShards(dronePatrol({ bounds: BOUNDS, seed: 42, size: 100 }));
+    const reach = (shards: typeof small) => Math.max(...shards.map((s) => Math.hypot(s.dx, s.dy)));
+    expect(reach(large)).toBeGreaterThan(reach(small) * 5);
   });
 });
 

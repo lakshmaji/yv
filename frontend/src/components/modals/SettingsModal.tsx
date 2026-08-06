@@ -3,6 +3,7 @@ import { appSettings, setAppSettings, settingsModalOpen, setSettingsModalOpen } 
 import { go } from '../../wails';
 import { PANELS, togglePanel } from '../../lib/dashboardPanels';
 import { addClips, clipDir, clipLabel, playClip } from '../../lib/audio';
+import { DRONE_VARIANTS, variantById } from '../../lib/drone';
 import { formatBytes } from '../../lib/utils';
 import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
 
@@ -17,6 +18,9 @@ export default function SettingsModal() {
   const [panels, setPanels] = createSignal<PanelId[]>([]);
   const [soundOn, setSoundOn] = createSignal(true);
   const [clips, setClips] = createSignal<string[]>([]);
+  // The Discovery drone: which airframe goes out, and the clip its rotors hum.
+  const [variantId, setVariantId] = createSignal('');
+  const [fanClip, setFanClip] = createSignal('');
   const [storage, setStorage] = createSignal<MetricsStorageInfo | null>(null);
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -43,6 +47,8 @@ export default function SettingsModal() {
     setPanels([...(current.panels || [])]);
     setSoundOn(!current.soundMuted);
     setClips([...(current.audioClips || [])]);
+    setVariantId(variantById(current.droneVariant).id);
+    setFanClip(current.droneFanClip || '');
     setSharePIN(current.sharePIN || '');
     setConfirmClear(false);
     setError('');
@@ -161,6 +167,8 @@ export default function SettingsModal() {
       soundMuted: !soundOn(),
       audioClips: clips(),
       sharePIN: sharePIN().trim(),
+      droneVariant: variantId(),
+      droneFanClip: fanClip().trim(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -201,6 +209,22 @@ export default function SettingsModal() {
     stopPreview();
     setClips([]);
     setBroken([]);
+  }
+
+  /**
+   * One clip for the rotor hum.
+   *
+   * The picker is multi-select — it is the same dialog the roars use — so the
+   * first file wins rather than the choice being rejected for having too many.
+   */
+  async function handlePickFanClip() {
+    try {
+      const picked = await go.PickAudioClips();
+      if (picked.length === 0) return; // cancelled
+      setFanClip(picked[0]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function handleClear() {
@@ -411,6 +435,88 @@ export default function SettingsModal() {
                   )}
                 </For>
               </div>
+            </Show>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Survey drone</div>
+            <div class="settings-section-hint">
+              A drone sweeps the Discovery map looking for nearby devices. If it finds nothing it
+              comes down, and you can send another one out.
+            </div>
+
+            <div class="settings-row settings-clip-header">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Airframe</div>
+                <div class="settings-row-hint">
+                  {variantById(variantId()).blurb} · also pickable when a sweep comes up empty.
+                </div>
+              </div>
+              <span class="settings-row-control">
+                <select value={variantId()} onChange={(e) => setVariantId(e.currentTarget.value)}>
+                  <For each={DRONE_VARIANTS}>
+                    {(v) => <option value={v.id}>{v.label}</option>}
+                  </For>
+                </select>
+              </span>
+            </div>
+
+            <div class="settings-row settings-clip-header">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Rotor sound</div>
+                <div class="settings-row-hint">
+                  {fanClip()
+                    ? 'Loops quietly while a drone is patrolling.'
+                    : 'None yet — the drone flies silently until you add a clip.'}
+                </div>
+              </div>
+              <span class="settings-row-control">
+                <Show when={fanClip()}>
+                  <button type="button" class="settings-clip-clear" onClick={() => setFanClip('')}>
+                    Remove
+                  </button>
+                </Show>
+                <button type="button" onClick={handlePickFanClip}>
+                  {fanClip() ? 'Change…' : '+ Choose clip…'}
+                </button>
+              </span>
+            </div>
+
+            <Show when={fanClip()}>
+              {(path) => (
+                <div class="settings-clip-list">
+                  <div
+                    class="settings-clip-row"
+                    classList={{
+                      playing: playing() === path(),
+                      broken: broken().includes(path()),
+                    }}
+                  >
+                    {/* A hum is even harder to identify from a filename than a
+                        roar, and this one plays on a loop — worth hearing first. */}
+                    <button
+                      type="button"
+                      class="settings-clip-play"
+                      title={playing() === path() ? 'Pause' : 'Play this clip'}
+                      aria-label={playing() === path() ? 'Pause' : 'Play this clip'}
+                      onClick={() => void togglePreview(path())}
+                    >
+                      {playing() === path() ? '❚❚' : '▶'}
+                    </button>
+                    <span class="settings-clip-main" title={path()}>
+                      <span class="settings-clip-name">{clipLabel(path())}</span>
+                      <Show when={clipDir(path())}>
+                        {(dir) => <span class="settings-clip-path">{dir()}</span>}
+                      </Show>
+                    </span>
+                    <Show when={broken().includes(path())}>
+                      <span class="settings-clip-broken" title="This file could not be played">
+                        unplayable
+                      </span>
+                    </Show>
+                  </div>
+                </div>
+              )}
             </Show>
           </div>
 

@@ -103,6 +103,16 @@ export interface AppSettings {
   /** The user's own sound files. Empty means the dinosaurs are silent. */
   audioClips?: string[];
   /**
+   * Which airframe the Discovery view sends out, by id. Empty — the default —
+   * means the first of the fleet, and so does an id this build doesn't know.
+   */
+  droneVariant?: string;
+  /**
+   * The user's own clip for the rotor hum, looped while a drone is patrolling.
+   * Empty means silent: no audio ships with the app, as with the roars.
+   */
+  droneFanClip?: string;
+  /**
    * Gates incoming config shares. Empty — the default — means any nearby peer
    * may ask, which is still safe because an incoming share has to be accepted
    * explicitly either way.

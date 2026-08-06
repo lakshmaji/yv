@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"yv/internal/models"
@@ -131,6 +132,12 @@ func TestValidate(t *testing.T) {
 		{"supported clips", models.Settings{AudioClips: []string{"/roar.mp3", "/growl.wav"}}, false},
 		{"unsupported clip", models.Settings{AudioClips: []string{"/roar.aiff"}}, true},
 		{"no clips", models.Settings{AudioClips: nil}, false},
+		{"no drone variant", models.Settings{DroneVariant: ""}, false},
+		{"drone variant slug", models.Settings{DroneVariant: "hex-scout-2"}, false},
+		{"drone variant with spaces", models.Settings{DroneVariant: "hex scout"}, true},
+		{"supported fan clip", models.Settings{DroneFanClip: "/fan.mp3"}, false},
+		{"unsupported fan clip", models.Settings{DroneFanClip: "/fan.aiff"}, true},
+		{"no fan clip", models.Settings{DroneFanClip: ""}, false},
 	}
 
 	for _, tt := range tests {
@@ -380,5 +387,42 @@ func TestNormalizeTrimsSharePIN(t *testing.T) {
 func TestZeroSettingsHasNoSharePIN(t *testing.T) {
 	if got := Normalize(models.Settings{}); got.SharePIN != "" {
 		t.Errorf("SharePIN = %q, want empty for zero settings", got.SharePIN)
+	}
+}
+
+func TestValidateDroneVariant(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string
+		wantErr bool
+	}{
+		{"empty means the default", "", false},
+		{"plain slug", "scout", false},
+		{"dashes and digits", "hex-scout-2", false},
+		{"padded is trimmed, not rejected", "  scout  ", false},
+		{"uppercase", "Scout", true},
+		{"spaces inside", "hex scout", true},
+		{"path separator", "../etc/passwd", true},
+		{"too long", strings.Repeat("a", MaxVariantIDLen+1), true},
+		{"at the length limit", strings.Repeat("a", MaxVariantIDLen), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDroneVariant(tt.id)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateDroneVariant(%q) error = %v, wantErr %v", tt.id, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNormalizeTrimsDroneFields(t *testing.T) {
+	got := Normalize(models.Settings{DroneVariant: "  hexscout ", DroneFanClip: " /fan.mp3 "})
+	if got.DroneVariant != "hexscout" {
+		t.Errorf("DroneVariant = %q, want %q", got.DroneVariant, "hexscout")
+	}
+	if got.DroneFanClip != "/fan.mp3" {
+		t.Errorf("DroneFanClip = %q, want %q", got.DroneFanClip, "/fan.mp3")
 	}
 }

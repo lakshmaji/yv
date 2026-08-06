@@ -138,9 +138,91 @@ export async function playClip(path: string): Promise<HTMLAudioElement | null> {
  * Forgets cached URLs and players. Called when the clip list changes so a path
  * the user removed and re-added is re-read, and so removed clips stop holding
  * their base64 payload in memory.
+ *
+ * Deliberately does not touch the fan loop. The loop is owned by whoever started
+ * it — stopping it from here would silence the drone until some unrelated signal
+ * happened to restart it, since the clip list changing is not a reason for the
+ * drone to stop flying.
  */
 export function resetAudioCache(): void {
   urlCache.clear();
   players.clear();
   failed.clear();
+}
+
+// --- looping playback (impure) ---
+
+/**
+ * The rotor hum is background, not an event: it plays under whatever else is
+ * happening, so it sits well below the roars, which are deliberate one-offs.
+ */
+export const FAN_VOLUME = 0.32;
+
+let loopEl: HTMLAudioElement | null = null;
+let loopPath: string | null = null;
+/**
+ * Monotonic, because loading a clip is async: two starts in quick succession
+ * would otherwise both reach `play()` and layer two hums over each other. The
+ * newest ticket wins and the older load discards itself.
+ */
+let loopTicket = 0;
+
+/** Which clip is currently looping, if any. */
+export function loopingClip(): string | null {
+  return loopPath;
+}
+
+/**
+ * Starts a clip looping, or leaves it alone if that clip is already looping.
+ *
+ * Idempotent on purpose: the caller is a reactive effect that re-runs whenever
+ * anything about the drone changes, and a hum that restarted from the top on
+ * every re-plan would stutter every time a device appeared.
+ */
+export async function startClipLoop(
+  path: string,
+  volume = FAN_VOLUME,
+): Promise<HTMLAudioElement | null> {
+  if (loopPath === path && loopEl) {
+    loopEl.volume = volume;
+    return loopEl;
+  }
+
+  const ticket = ++loopTicket;
+  stopClipLoop();
+
+  const url = await clipUrl(path);
+  if (!url || ticket !== loopTicket) return null;
+
+  const el = new Audio(url);
+  el.loop = true;
+  el.volume = volume;
+  el.preload = 'auto';
+
+  try {
+    await el.play();
+  } catch (e) {
+    console.warn('[audio] fan loop failed', path, e);
+    return null;
+  }
+  // A newer start may have landed while this one was waiting on play().
+  if (ticket !== loopTicket) {
+    el.pause();
+    return null;
+  }
+
+  loopEl = el;
+  loopPath = path;
+  return el;
+}
+
+/** Stops the loop and drops the element. Safe to call when nothing is looping. */
+export function stopClipLoop(): void {
+  loopTicket++;
+  if (loopEl) {
+    loopEl.pause();
+    loopEl.src = '';
+  }
+  loopEl = null;
+  loopPath = null;
 }

@@ -2481,7 +2481,10 @@
     .settings-row:last-child { border-bottom: none; }
     .settings-toggle { cursor: pointer; }
 
-    .settings-row-main { min-width: 0; }
+    /* Takes the space the control doesn't. Without `flex: 1` the label column is
+       sized by its content and is the first thing to give when a control turns out
+       wider than expected — which reads as broken text, not as a wide control. */
+    .settings-row-main { flex: 1; min-width: 0; }
     .settings-row-label { font-size: 12px; color: var(--text); }
     .settings-row-hint {
       font-size: 11px;
@@ -2497,6 +2500,15 @@
       flex-shrink: 0;
     }
     .settings-row-control input[type="number"] { width: 72px; }
+    .settings-row-control select {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+    .settings-row-control select:focus { outline: none; border-color: var(--accent); }
     .settings-unit { font-size: 11px; color: var(--muted); }
 
     .settings-toggle input[type="checkbox"] {
@@ -2857,6 +2869,30 @@
       50%      { opacity: 1; }
     }
 
+    /* The end of a sweep that found nothing. Three parts on one clock: a flash
+       that is over almost immediately, a shockwave that keeps expanding as it
+       fades, and debris thrown outward under gravity. Nothing settles — the
+       component unmounts the group afterwards, so there is no wreckage left on
+       the island to explain. */
+    @keyframes land-drone-flash {
+      0%   { transform: scale(.2); opacity: 1; }
+      35%  { transform: scale(1.5); opacity: .85; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    @keyframes land-drone-wave {
+      0%   { transform: scale(.1); opacity: .9; }
+      100% { transform: scale(1.9); opacity: 0; }
+    }
+    @keyframes land-drone-shard {
+      0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+      /* Past its thrown position and falling: the drop is what stops the debris
+         reading as a firework going up. */
+      100% {
+        transform: translate(var(--shard-x, 0), calc(var(--shard-y, 0) + 14px)) scale(.35);
+        opacity: 0;
+      }
+    }
+
     /* Everything painted over the herd is scenery, and scenery must not swallow a
        click. The clouds, settlements and drone are drawn after the dinosaurs so
        they layer correctly, which without this would leave an animal under a fog
@@ -3000,6 +3036,26 @@
     .land-drone.locked .land-drone-light { opacity: 1; }
     .land-drone.locked .land-drone-light-glow { opacity: .26; }
 
+    /* The burst. Deliberately outside both opt-out lists below, like the
+       dinosaur's roar: it is a one-off event with a meaning — the sweep failed —
+       and with it suppressed the drone would vanish between frames with no
+       explanation. It is brief, finite, and never loops. */
+    .land-drone-flash {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: land-drone-flash .5s ease-out 1 forwards;
+    }
+    .land-drone-wave {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: land-drone-wave .9s cubic-bezier(.2,.7,.3,1) 1 forwards;
+    }
+    .land-drone-shard {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: land-drone-shard .85s cubic-bezier(.15,.6,.4,1) 1 forwards;
+    }
+
     .landscape-stage.no-motion .land-swell,
     .landscape-stage.no-motion .land-cloud,
     .landscape-stage.no-motion .land-river-glint,
@@ -3032,6 +3088,73 @@
          ambient motion, and it is the only cue that names the animal. */
       .land-dino { transition: none; }
     }
+
+    /* ── No devices dialog ────────────────────────────────── */
+
+    /* Wide enough for the fleet to sit in one row of five: the airframes are only
+       worth choosing between if they can be compared side by side. */
+    .nodev-modal { width: 560px; }
+
+    .nodev-lead {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .nodev-fleet {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .nodev-variant {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 8px 4px 9px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+    .nodev-variant:hover { border-color: var(--accent); }
+    .nodev-variant.selected {
+      border-color: var(--accent);
+      background: rgba(88,166,255,.10);
+    }
+
+    /* The tile is a photograph of the machine, so it gets the map's water as a
+       backdrop rather than the panel's — against --card the pale airframes
+       disappear. */
+    .nodev-variant-art {
+      width: 100%;
+      height: 52px;
+      background: #0a2036;
+      border-radius: 6px;
+    }
+
+    .nodev-variant-name { font-size: 12px; font-weight: 600; }
+    .nodev-variant-detail {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .nodev-sound-hint {
+      align-self: flex-start;
+      padding: 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .nodev-sound-hint:hover { color: var(--accent); }
 
     /* ── Peer sharing modals ──────────────────────────────── */
 
@@ -3123,7 +3246,12 @@
 
     /* Share PIN, in Settings. Narrow and monospaced: it is a short code read
        aloud or typed on another machine, not free text. */
-    .settings-pin-input {
+    /* `.modal-box input` sets width: 100% and, as a class plus an element, outranks
+       a lone class — so this selector has to name the ancestor too or the field
+       fills the whole row and squeezes its own label down to one word per line.
+       The retention field only escapes the same fate because
+       `.settings-row-control input[type="number"]` happens to be more specific. */
+    .modal-box .settings-pin-input {
       flex-shrink: 0;
       width: 108px;
       background: var(--card);
@@ -3136,5 +3264,5 @@
       letter-spacing: 2px;
       text-align: center;
     }
-    .settings-pin-input:focus { outline: none; border-color: var(--accent); }
+    .modal-box .settings-pin-input:focus { outline: none; border-color: var(--accent); }
     .settings-pin-input::placeholder { letter-spacing: 0; font-family: var(--sans, inherit); }
