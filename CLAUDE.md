@@ -682,7 +682,7 @@ Search remains pure functions in `frontend/src/lib/search.ts`. `searchAllProject
 | `frontend/src/components/Sidebar.tsx` | `⌕ Search ⌘K` trigger above the project list; icon-only when collapsed |
 | `frontend/src/components/CommandRow.tsx` | `.revealed` flash class + scroll-into-view for the revealed row |
 | `frontend/src/styles.css` | Spotlight overlay/panel/row/footer styles, sidebar trigger (plus collapsed variant), `cmd-reveal` keyframes; `#project-path` is `flex: 1` so header controls sit right |
-| `frontend/vite.config.js` / `package.json` | vitest config (`node` environment) + `npm run test` |
+| `frontend/vite.config.js` / `package.json` | vitest config (`node` environment) + `bun run test` |
 
 
 ---

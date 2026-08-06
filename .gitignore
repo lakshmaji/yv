@@ -23,9 +23,12 @@ frontend/wailsjs/
 *.swp
 *.swo
 
-# Frontend
+# Frontend. bun.lock is deliberately *not* ignored — CI installs with
+# `bun install --frozen-lockfile`, which needs it committed. package-lock.json is,
+# so that a stray `npm install` can't land a second lockfile beside it.
 frontend/node_modules/
 frontend/dist/
+frontend/package-lock.json
 frontend/package.json.md5
 
 # Local sound clips. No audio ships with the app — users add their own in

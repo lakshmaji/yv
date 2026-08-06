@@ -14,7 +14,7 @@ permissions:
 
 env:
   GO_VERSION: "1.25.0"
-  NODE_VERSION: "24"
+  BUN_VERSION: "1.3.9"
 
 jobs:
   # ── Tests ───────────────────────────────────────────────────────────────
@@ -32,11 +32,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Go vet
         run: go vet ./...
@@ -48,17 +46,19 @@ jobs:
       - name: Go tests
         run: go test -short ./...
 
+      # --frozen-lockfile is bun's `npm ci`: it fails rather than silently
+      # re-resolving if bun.lock and package.json have drifted apart.
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Typecheck frontend
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: bunx tsc --noEmit
 
       - name: Frontend tests
         working-directory: frontend
-        run: npm run test
+        run: bun run test
 
   # ── Builds ──────────────────────────────────────────────────────────────
   build:
@@ -106,11 +106,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -134,7 +132,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build app (unsigned)
         shell: bash

@@ -50,7 +50,7 @@ test-go:
 	go test ./... -v
 
 test-frontend:
-	cd frontend && npm run test
+	cd frontend && bun run test
 
 build: $(WAILS)
 	$(WAILS) build -platform darwin/arm64
@@ -92,7 +92,7 @@ deps-linux:
 	@echo
 	@echo "System libraries installed."
 	@command -v go   >/dev/null || echo "  ! Go is not installed — needs $$(sed -n 's/^go //p' go.mod). The apt version is usually too old; see https://go.dev/dl/"
-	@command -v node >/dev/null || echo "  ! Node.js is not installed — see https://github.com/nodesource/distributions"
+	@command -v bun  >/dev/null || echo "  ! Bun is not installed — run 'curl -fsSL https://bun.sh/install | bash'"
 
 # Reports whether this machine can build, and what it would build against.
 # Cheaper to run than a failed build with a confusing cgo error.
@@ -100,8 +100,7 @@ doctor-linux:
 	@echo "os:      $$(. /etc/os-release; echo $$PRETTY_NAME)"
 	@echo "arch:    $(GOARCH)"
 	@echo "go:      $$(go version 2>/dev/null || echo 'MISSING')"
-	@echo "node:    $$(node --version 2>/dev/null || echo 'MISSING')"
-	@echo "npm:     $$(npm --version 2>/dev/null || echo 'MISSING')"
+	@echo "bun:     $$(bun --version 2>/dev/null || echo 'MISSING')"
 	@echo "gtk3:    $$(pkg-config --modversion gtk+-3.0 2>/dev/null || echo 'MISSING')"
 	@# An if rather than && || chaining: the latter prints both branches, because
 	@# the echo that follows a successful match succeeds too and re-triggers the
