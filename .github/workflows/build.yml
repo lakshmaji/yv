@@ -36,6 +36,21 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # --frozen-lockfile is bun's `npm ci`: it fails rather than silently
+      # re-resolving if bun.lock and package.json have drifted apart.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      # Must come before any Go step. main.go has `//go:embed all:frontend/dist`,
+      # and frontend/dist is a build artifact that is not committed — so on a
+      # fresh checkout the embed pattern matches nothing and every Go command on
+      # the root package fails before it compiles anything. Locally this is
+      # invisible: a previous `wails build` has always left a dist behind.
+      - name: Build frontend
+        working-directory: frontend
+        run: bun run build
+
       - name: Go vet
         run: go vet ./...
 
@@ -45,12 +60,6 @@ jobs:
       # `make test` runs them.
       - name: Go tests
         run: go test -short ./...
-
-      # --frozen-lockfile is bun's `npm ci`: it fails rather than silently
-      # re-resolving if bun.lock and package.json have drifted apart.
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: bun install --frozen-lockfile
 
       - name: Typecheck frontend
         working-directory: frontend
