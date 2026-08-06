@@ -285,6 +285,21 @@ const PROFILES: Record<DinoSpecies, DinoProfile> = {
 /** How many distinct looks exist. A herd larger than this must repeat. */
 export const DINO_PALETTE_COUNT = PALETTES.length;
 
+/**
+ * Seconds per idle cycle, by species.
+ *
+ * Deliberately different per species and mutually non-harmonic: a herd moving at
+ * one tempo reads as a single animated texture, whereas distinct rhythms make
+ * each animal legible as its own thing out of the corner of your eye. Small
+ * bodies move faster, which is also what the eye expects.
+ */
+export const DINO_TEMPO: Record<DinoSpecies, number> = {
+  sauropod: 5.3,
+  theropod: 3.1,
+  stegosaur: 4.7,
+  triceratops: 3.9,
+};
+
 function colorsAt(index: number): DinoColors {
   const base = PALETTES[((index % PALETTES.length) + PALETTES.length) % PALETTES.length];
   return {

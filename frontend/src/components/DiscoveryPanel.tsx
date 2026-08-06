@@ -27,6 +27,9 @@ const DINO_NAMES = ['Rexy', 'Bronte', 'Spike', 'Trixie', 'Dot', 'Nessa'];
 const DINO_MIN_SIZE = 44;
 const DINO_MAX_SIZE = 72;
 
+/** Headroom for the hover name label, which is drawn above the animal. */
+const DINO_LABEL_ROOM = 24;
+
 export default function DiscoveryPanel() {
   // One memo is the whole regeneration mechanism: writing the seed rebuilds the
   // world, and Solid diffs the SVG for us.
@@ -57,7 +60,14 @@ export default function DiscoveryPanel() {
    */
   const dinoBounds = createMemo(() => {
     const visible = visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize());
-    return insetRect(quantizeRect(visible, 40), dinoInsets(DINO_MAX_SIZE));
+    const insets = dinoInsets(DINO_MAX_SIZE);
+    return insetRect(quantizeRect(visible, 40), {
+      ...insets,
+      // The hover name sits above the animal, past its own reach, so the top
+      // needs a little more room or the label clips for a dinosaur near the
+      // upper edge — exactly when you are pointing at it.
+      top: insets.top + DINO_LABEL_ROOM,
+    });
   });
 
   // The dinosaur utility knows nothing about islands or panels; it takes bounds
@@ -96,7 +106,7 @@ export default function DiscoveryPanel() {
           type="button"
           class="dash-refresh"
           classList={{ active: discoveryMotion() }}
-          title="Water shimmer, drifting fog and canopy sway"
+          title="Water shimmer, drifting fog, canopy sway and dinosaur idles"
           onClick={() => setDiscoveryMotion(!discoveryMotion())}
         >
           {discoveryMotion() ? '◉ Motion on' : '○ Motion off'}

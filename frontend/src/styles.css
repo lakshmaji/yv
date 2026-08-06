@@ -2614,11 +2614,25 @@
       50%      { transform: rotate(1.1deg); }
     }
 
-    /* A slow breathing bob. Deliberately not a walk cycle — at this scale
-       vertical motion reads as alive, whereas translation reads as sliding. */
+    /* Breathing, not a walk cycle: at this scale vertical motion reads as alive
+       whereas translation reads as the whole animal sliding across the map.
+       The squash is anti-correlated with the lift, as a real body would be. */
     @keyframes land-dino-bob {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50%      { transform: translateY(-1.5px) scale(1.012); }
+      0%, 100% { transform: translateY(0) scaleY(1); }
+      50%      { transform: translateY(calc(var(--dino-bob, 2px) * -1)) scaleY(1.03); }
+    }
+
+    /* Weight shifting from foot to foot. */
+    @keyframes land-dino-sway {
+      0%, 100% { transform: rotate(-1.6deg); }
+      50%      { transform: rotate(1.6deg); }
+    }
+
+    /* Open nearly all the time — a blink is what makes a face look like it is
+       looking back, and it only works if it is rare. */
+    @keyframes land-dino-blink {
+      0%, 91%, 100% { transform: scaleY(1); }
+      95%           { transform: scaleY(0.08); }
     }
 
     .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }
@@ -2638,19 +2652,65 @@
       will-change: transform;
     }
 
+    /* One transform per layer: an element can only run one at a time, so the
+       hover lift would otherwise cancel the idle loop. Durations and delays come
+       from the component, derived from species tempo and the animal's phase. */
     .land-dino {
       transform-box: fill-box;
       transform-origin: bottom center;
-      animation: land-dino-bob 4s ease-in-out infinite;
+      cursor: pointer;
+      transition: transform .18s ease-out;
+    }
+    .land-dino:hover {
+      transform: translateY(calc(var(--dino-bob, 2px) * -1.5)) scale(1.08);
+    }
+
+    .land-dino-bob,
+    .land-dino-sway,
+    .land-dino-eye {
+      transform-box: fill-box;
       will-change: transform;
     }
+
+    .land-dino-bob {
+      transform-origin: bottom center;
+      animation: land-dino-bob 4s ease-in-out infinite;
+    }
+
+    .land-dino-sway {
+      transform-origin: bottom center;
+      animation: land-dino-sway 7s ease-in-out infinite;
+    }
+
+    .land-dino-eye {
+      transform-origin: center;
+      animation: land-dino-blink 6s ease-in-out infinite;
+    }
+
+    /* Named only on hover — a permanent label on every animal would compete with
+       the settlement names the map already carries. */
+    .land-dino-name {
+      font-family: var(--mono);
+      font-size: 12px;
+      fill: #f4f8fb;
+      stroke: rgba(4,18,30,.85);
+      stroke-width: 3.5px;
+      paint-order: stroke fill;
+      letter-spacing: .2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease-out;
+    }
+    .land-dino:hover .land-dino-name { opacity: 1; }
 
     .landscape-stage.no-motion .land-swell,
     .landscape-stage.no-motion .land-cloud,
     .landscape-stage.no-motion .land-river-glint,
     .landscape-stage.no-motion .land-foam,
     .landscape-stage.no-motion .land-tree,
-    .landscape-stage.no-motion .land-dino { animation: none; }
+    .landscape-stage.no-motion .land-dino-bob,
+    .landscape-stage.no-motion .land-dino-sway,
+    .landscape-stage.no-motion .land-dino-eye { animation: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
@@ -2658,5 +2718,10 @@
       .land-river-glint,
       .land-foam,
       .land-tree,
-      .land-dino { animation: none; }
+      .land-dino-bob,
+      .land-dino-sway,
+      .land-dino-eye { animation: none; }
+      /* Hover feedback stays: it is a direct response to the pointer, not
+         ambient motion, and it is the only cue that names the animal. */
+      .land-dino { transition: none; }
     }

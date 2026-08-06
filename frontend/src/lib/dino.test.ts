@@ -4,6 +4,7 @@ import {
   DINO_EXTENT,
   DINO_PALETTE_COUNT,
   DINO_SPECIES,
+  DINO_TEMPO,
   dinoInsets,
   dinoShape,
   randomDino,
@@ -208,6 +209,32 @@ describe('randomDinos', () => {
 
   it('is still deterministic with colour de-duplication on', () => {
     expect(randomDinos(NAMES, { minGap: 60 })).toEqual(randomDinos(NAMES, { minGap: 60 }));
+  });
+});
+
+describe('DINO_TEMPO', () => {
+  it('covers every species with a sane cycle length', () => {
+    for (const species of DINO_SPECIES) {
+      const tempo = DINO_TEMPO[species];
+      expect(tempo, species).toBeGreaterThan(1);
+      expect(tempo, species).toBeLessThan(12);
+    }
+    expect(Object.keys(DINO_TEMPO).sort()).toEqual([...DINO_SPECIES].sort());
+  });
+
+  it('gives each species its own rhythm', () => {
+    // A herd sharing one tempo reads as a single animated texture rather than
+    // as individual animals, which is the whole reason this exists.
+    const tempos = DINO_SPECIES.map((s) => DINO_TEMPO[s]);
+    expect(new Set(tempos).size).toBe(tempos.length);
+    // Non-harmonic: no pair may be a near-exact multiple, or they resynchronise.
+    for (let i = 0; i < tempos.length; i++) {
+      for (let j = i + 1; j < tempos.length; j++) {
+        const ratio = Math.max(tempos[i], tempos[j]) / Math.min(tempos[i], tempos[j]);
+        expect(Math.abs(ratio - Math.round(ratio)), `${tempos[i]}/${tempos[j]}`)
+          .toBeGreaterThan(0.08);
+      }
+    }
   });
 });
 
