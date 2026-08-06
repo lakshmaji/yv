@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, For } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from 'solid-js';
 import {
   appSettings,
   discoverySeed,
@@ -6,13 +6,22 @@ import {
   discoveryMotion,
   setDiscoveryMotion,
   setSettingsModalOpen,
+  peers,
+  setPeers,
+  peerByName,
+  setSharePeer,
+  setShareError,
+  sharePeer,
 } from '../store';
 import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '../lib/landscape/world';
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
 import { clipForName, playClip, resetAudioCache, SESSION_SALT } from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
+import { hashText } from '../lib/landscape/rng';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
+import { go } from '../wails';
 import LandscapeMap from './discovery/LandscapeMap';
+import ShareModal from './modals/ShareModal';
 
 const BIOME_LABELS: Record<BiomeKind, string> = {
   grass: 'Lowland',
@@ -20,12 +29,6 @@ const BIOME_LABELS: Record<BiomeKind, string> = {
   redrock: 'Red canyon',
   snowfield: 'Snowfield',
 };
-
-/**
- * The names this screen asks for. randomDino seeds from the name, so Rexy is
- * always the same animal — the world seed only decides where the herd stands.
- */
-const DINO_NAMES = ['Rexy', 'Bronte', 'Spike', 'Trixie', 'Dot', 'Nessa'];
 
 /**
  * Sizes are deliberately modest: a tree is only ~15px tall and a summit 50–130,
@@ -78,16 +81,31 @@ export default function DiscoveryPanel() {
     });
   });
 
-  // The dinosaur utility knows nothing about islands or panels; it takes bounds
-  // and a predicate, and finding somewhere to stand is the caller's business.
+  /**
+   * The herd is the network: one dinosaur per nearby yv instance, named for its
+   * hostname. randomDino seeds from that name, so a given laptop is always the
+   * same animal with the same voice — recognisable rather than decorative.
+   *
+   * The dinosaur utility knows nothing about islands or panels; it takes bounds
+   * and a predicate, and finding somewhere to stand is the caller's business.
+   */
   const dinos = createMemo(() =>
-    randomDinos(DINO_NAMES, {
-      bounds: dinoBounds(),
-      allow: openGround(world(), 30),
-      variant: world().seed,
-      minSize: DINO_MIN_SIZE,
-      maxSize: DINO_MAX_SIZE,
-    }),
+    randomDinos(
+      peers().map((p) => p.name),
+      {
+        bounds: dinoBounds(),
+        allow: openGround(world(), 30),
+        // Hostnames are not unique — two "MacBook-Pro"s would otherwise draw as
+        // one animal — so the peer id is mixed in. The world seed is folded in
+        // too, so regenerating still reshuffles the herd.
+        variantFor: (name) => {
+          const peer = peerByName().get(name);
+          return world().seed ^ hashText(peer?.id ?? name);
+        },
+        minSize: DINO_MIN_SIZE,
+        maxSize: DINO_MAX_SIZE,
+      },
+    ),
   );
 
   // --- sound ---
@@ -104,16 +122,81 @@ export default function DiscoveryPanel() {
   });
 
   /**
-   * Clicking a dinosaur plays the clip it was assigned for this session — the
-   * same one every time, so an animal has a recognisable voice until the app
-   * restarts. Nothing is awaited: the click is done, the roar catches up.
+   * Clicking a dinosaur roars and then opens the share flow.
+   *
+   * The roar comes first and is never awaited: the animal answers the pointer
+   * immediately, and the modal does not wait on an audio file being read off
+   * disk. Sound and sharing are independent — a muted herd still shares.
    */
   function handleSelect(dino: Dino): void {
+    roar(dino);
+
+    const peer = peerByName().get(dino.name);
+    // A dinosaur with no peer behind it means the herd is mid-update; ignoring
+    // the click is better than opening a modal that cannot send anything.
+    if (peer) {
+      setShareError(null);
+      setSharePeer(peer);
+    }
+  }
+
+  function roar(dino: Dino): void {
     if (!soundOn()) return;
     const clip = clipForName(dino.name, clips(), SESSION_SALT);
     if (!clip) return;
     void playClip(clip);
   }
+
+  // --- discovery lifecycle ---
+
+  // Set when the libp2p host cannot start at all — a different message from
+  // "nobody is nearby", and the user cannot act on it the same way.
+  const [discoveryError, setDiscoveryError] = createSignal<string | null>(null);
+
+  onMount(() => {
+    void (async () => {
+      try {
+        const res = await go.StartDiscovery();
+        if (res.startsWith('error:')) {
+          setDiscoveryError(res.slice(6).trim());
+          return;
+        }
+      } catch (e) {
+        setDiscoveryError(String(e));
+        return;
+      }
+
+      // Re-sync from Go. App.tsx keeps the peer list current from the moment the
+      // app starts, so this matters only when the frontend has been reloaded out
+      // from under a still-running node — the dev hot reload — where the store is
+      // fresh but the node already knows the herd.
+      try {
+        const known = await go.GetPeers();
+        if (known?.length) setPeers(known);
+      } catch { /* events will fill it in */ }
+    })();
+  });
+
+  /**
+   * What the toolbar says about the network.
+   *
+   * randomDinos silently drops an animal it cannot place — 24 rejection-sampling
+   * attempts against a 150-unit gap inside the visible island — so on a small
+   * window a discovered device can end up with no dinosaur. Saying so is the
+   * difference between "nobody is there" and "you cannot reach them from here".
+   */
+  const peerStatus = () => {
+    if (discoveryError()) return { label: '⚠ Discovery unavailable', warn: true };
+
+    const found = peers().length;
+    if (found === 0) return { label: '◌ Searching for nearby devices…', warn: false };
+
+    const shown = dinos().length;
+    if (shown < found) {
+      return { label: `◉ ${found} nearby · ${found - shown} off-map`, warn: true };
+    }
+    return { label: `◉ ${found} device${found === 1 ? '' : 's'} nearby`, warn: false };
+  };
 
   /** Why the herd is silent, when it is — otherwise a click reads as broken. */
   const soundStatus = () => {
@@ -135,13 +218,26 @@ export default function DiscoveryPanel() {
         <div class="dash-heading">
           <span class="dash-title">Discovery</span>
           <span class="dash-subtitle">
-            A procedurally generated world — every seed is a different island. Click a dinosaur to
-            hear it roar.
+            Nearby devices running yv appear as dinosaurs. Click one to share your commands with it.
           </span>
         </div>
       </div>
 
       <div class="dash-toolbar">
+        {/* Leftmost because it is the only thing on this screen that reports
+            something outside the app. */}
+        <span
+          class="dash-refresh disc-peer-status"
+          classList={{ muted: peerStatus().warn, searching: peers().length === 0 && !discoveryError() }}
+          title={
+            discoveryError()
+              ? `Discovery could not start: ${discoveryError()}`
+              : 'Devices on your network running yv, discovered over mDNS'
+          }
+        >
+          {peerStatus().label}
+        </span>
+
         <button type="button" class="dash-refresh" onClick={reroll}>
           ↻ Regenerate
         </button>
@@ -190,6 +286,20 @@ export default function DiscoveryPanel() {
         ref={stageRef}
       >
         <LandscapeMap world={world()} dinos={dinos()} onSelectDino={handleSelect} />
+
+        {/* An empty island reads as a broken screen without a word of
+            explanation, and this is the common case for someone working alone. */}
+        <Show when={peers().length === 0}>
+          <div class="landscape-empty">
+            <span class="landscape-empty-title">No devices nearby</span>
+            <span class="landscape-empty-hint">
+              {discoveryError()
+                ? 'Discovery could not start on this machine.'
+                : 'Open yv on another laptop on this network and it will appear here.'}
+            </span>
+          </div>
+        </Show>
+
         <div class="landscape-meta">
           {/* The seed is shown but not editable — it is here so a world you like
               can be noted down and asked for again, not as a control. */}
@@ -198,9 +308,13 @@ export default function DiscoveryPanel() {
           <span>{world().peaks.length} peaks</span>
           <span>{world().settlements.length} settlements</span>
           <span>{world().rivers.length} waterways</span>
-          <span>{dinos().length} dinosaurs</span>
+          <span>{dinos().length} nearby</span>
         </div>
       </div>
+
+      <Show when={sharePeer()}>
+        <ShareModal />
+      </Show>
     </main>
   );
 }

@@ -26,12 +26,22 @@ import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import SettingsModal from './components/modals/SettingsModal';
+import IncomingShareModal from './components/modals/IncomingShareModal';
 import DashboardPanel from './components/DashboardPanel';
 import DiscoveryPanel from './components/DiscoveryPanel';
 import {
   setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
-import type { ResourceStats, ProcessStats } from './types';
+import type { ResourceStats, ProcessStats, PeerInfo, IncomingShare } from './types';
+import {
+  setPeers,
+  setSharePeer,
+  setShareBusy,
+  setShareError,
+  incomingShare,
+  setIncomingShare,
+  setIncomingResult,
+} from './store';
 
 /**
  * Pushes the current column widths onto the body grid.
@@ -140,6 +150,7 @@ export default function App() {
   let unsubShortcuts: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubDashboard: (() => void) | undefined;
+  let unsubPeers: Array<() => void> = [];
 
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
@@ -164,6 +175,40 @@ export default function App() {
     unsubDashboard = runtime.EventsOn('open-dashboard', () => {
       setActiveView('dashboard');
     });
+
+    // Peer and share events are wired here rather than in DiscoveryPanel on
+    // purpose: the share node keeps running once started, so an offer can arrive
+    // while the user is looking at their commands. A listener scoped to the
+    // Discovery view would drop that prompt on the floor and leave the sender
+    // waiting on a dialog nobody ever saw.
+    unsubPeers = [
+      runtime.EventsOn('peer:found', (p: PeerInfo) => {
+        // mDNS re-announces periodically, so dedup or a peer grows a new
+        // dinosaur every announcement.
+        setPeers(prev => (prev.some(x => x.id === p.id) ? prev : [...prev, p]));
+      }),
+      runtime.EventsOn('peer:lost', (e: { id: string }) => {
+        setPeers(prev => prev.filter(x => x.id !== e.id));
+        // A peer that vanished mid-share cannot receive anything.
+        setSharePeer(cur => (cur?.id === e.id ? null : cur));
+      }),
+      runtime.EventsOn('share:incoming', (offer: IncomingShare) => {
+        setIncomingResult(null);
+        setIncomingShare(offer);
+      }),
+      runtime.EventsOn('share:imported', (e: { summary: string }) => {
+        setIncomingResult(e.summary);
+        // The projects file was written underneath us; reload so the sidebar
+        // shows what arrived without needing a restart.
+        void go.LoadProjects()
+          .then(loaded => setProjects(loaded as any))
+          .catch(() => { /* it is on disk either way */ });
+      }),
+      runtime.EventsOn('share:error', (e: { message: string }) => {
+        setShareBusy(false);
+        setShareError(e.message);
+      }),
+    ];
   });
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeydown);
@@ -172,6 +217,7 @@ export default function App() {
     unsubShortcuts?.();
     unsubSettings?.();
     unsubDashboard?.();
+    unsubPeers.forEach(off => off());
   });
 
   // Column widths are driven by one effect, so a resize, a collapse, or a view
@@ -199,6 +245,10 @@ export default function App() {
       <EnvironmentsModal />
       <KeyboardShortcutsModal />
       <SettingsModal />
+      {/* Global, not inside DiscoveryPanel: an offer can arrive on any view. */}
+      <Show when={incomingShare()}>
+        <IncomingShareModal />
+      </Show>
       <Show when={spotlightOpen()}>
         <Spotlight />
       </Show>

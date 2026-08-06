@@ -102,6 +102,39 @@ export interface AppSettings {
   soundMuted: boolean;
   /** The user's own sound files. Empty means the dinosaurs are silent. */
   audioClips?: string[];
+  /**
+   * Gates incoming config shares. Empty — the default — means any nearby peer
+   * may ask, which is still safe because an incoming share has to be accepted
+   * explicitly either way.
+   */
+  sharePIN?: string;
+}
+
+// --- peer sharing ---
+
+/**
+ * A nearby yv instance.
+ *
+ * `name` is the peer's hostname and doubles as its identity on the Discovery
+ * map: `randomDino` seeds off the name, so a device always draws the same
+ * dinosaur. `id` is carried separately because two laptops can share a hostname
+ * and because a clicked dinosaur only knows its own name.
+ */
+export interface PeerInfo {
+  id: string;
+  name: string;
+  pinRequired: boolean;
+}
+
+export type ShareScope = 'app' | 'project';
+
+/** An inbound offer awaiting the user's accept or decline. */
+export interface IncomingShare {
+  transferId: string;
+  fromName: string;
+  scope: ShareScope;
+  projectName?: string;
+  projectCount: number;
 }
 
 // --- metrics ---

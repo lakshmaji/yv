@@ -212,6 +212,80 @@ describe('randomDinos', () => {
   });
 });
 
+describe('randomDinos variantFor', () => {
+  it('is identical to opts.variant when absent', () => {
+    expect(randomDinos(NAMES, { minGap: 60, variant: 7 })).toEqual(
+      randomDinos(NAMES, { minGap: 60, variantFor: () => 7 }),
+    );
+  });
+
+  it('overrides opts.variant', () => {
+    const withVariant = randomDinos(NAMES, { minGap: 60, variant: 1 });
+    const overridden = randomDinos(NAMES, { minGap: 60, variant: 1, variantFor: () => 99 });
+    expect(overridden).not.toEqual(withVariant);
+    expect(overridden).toEqual(randomDinos(NAMES, { minGap: 60, variant: 99 }));
+  });
+
+  it('receives each name and its index', () => {
+    const seen: Array<[string, number]> = [];
+    randomDinos(['Rexy', 'Bronte', 'Spike'], {
+      minGap: 60,
+      variantFor: (name, i) => {
+        seen.push([name, i]);
+        return i;
+      },
+    });
+    expect(seen).toEqual([
+      ['Rexy', 0],
+      ['Bronte', 1],
+      ['Spike', 2],
+    ]);
+  });
+
+  // The reason this option exists: two devices can report the same hostname, and
+  // without a per-animal variant they would draw as one indistinguishable dino.
+  it('separates duplicate names into different animals', () => {
+    const [a, b] = randomDinos(['MacBook-Pro', 'MacBook-Pro'], {
+      minGap: 10,
+      distinctColors: false,
+      variantFor: (_name, i) => (i === 0 ? 0xa1b2c3 : 0xd4e5f6),
+    });
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+    // Same name, so same label — but a visibly different animal.
+    expect(a.name).toBe(b.name);
+    const differs =
+      a.species !== b.species || a.paletteIndex !== b.paletteIndex || a.size !== b.size;
+    expect(differs).toBe(true);
+  });
+
+  it('keeps a given name stable for a given variant', () => {
+    const first = randomDinos(['Rexy', 'Bronte'], {
+      minGap: 60,
+      variantFor: (name) => (name === 'Rexy' ? 11 : 22),
+    });
+    const second = randomDinos(['Rexy', 'Bronte'], {
+      minGap: 60,
+      variantFor: (name) => (name === 'Rexy' ? 11 : 22),
+    });
+    expect(first).toEqual(second);
+  });
+
+  // Order in the herd comes from discovery order, which is arbitrary; an animal
+  // must not change appearance because another peer was found first.
+  it('does not tie appearance to position in the list when keyed by name', () => {
+    const variantFor = (name: string) => (name === 'Rexy' ? 11 : 22);
+    const forwards = randomDinos(['Rexy', 'Bronte'], { minGap: 10, distinctColors: false, variantFor });
+    const backwards = randomDinos(['Bronte', 'Rexy'], { minGap: 10, distinctColors: false, variantFor });
+
+    const rexyA = forwards.find((d) => d.name === 'Rexy')!;
+    const rexyB = backwards.find((d) => d.name === 'Rexy')!;
+    expect(rexyA.species).toBe(rexyB.species);
+    expect(rexyA.paletteIndex).toBe(rexyB.paletteIndex);
+    expect(rexyA.size).toBeCloseTo(rexyB.size);
+  });
+});
+
 describe('DINO_TEMPO', () => {
   it('covers every species with a sane cycle length', () => {
     for (const species of DINO_SPECIES) {

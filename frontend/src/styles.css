@@ -2673,6 +2673,27 @@
       border-style: dashed;
     }
 
+    /* Peer status. A span, not a button — there is nothing to click, unlike the
+       sound chip whose answer is always in Settings. */
+    .disc-peer-status {
+      cursor: default;
+      font-variant-numeric: tabular-nums;
+    }
+    .disc-peer-status.muted {
+      color: var(--muted);
+      border-style: dashed;
+    }
+    /* Breathing rather than spinning: discovery is idle waiting, not work. */
+    .disc-peer-status.searching {
+      color: var(--muted);
+      animation: disc-peer-pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes disc-peer-pulse {
+      0%, 100% { opacity: .55; }
+      50%      { opacity: 1; }
+    }
+
     .disc-legend {
       display: flex;
       align-items: center;
@@ -2705,6 +2726,33 @@
       display: block;
       width: 100%;
       height: 100%;
+    }
+
+    /* Empty island. Centred over the map and non-interactive, so it explains the
+       emptiness without becoming another thing to dismiss. */
+    .landscape-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      pointer-events: none;
+      text-shadow: 0 1px 6px rgba(0,0,0,.75);
+    }
+
+    .landscape-empty-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e6f1fa;
+    }
+
+    .landscape-empty-hint {
+      font-size: 12px;
+      color: #a9c4d8;
+      max-width: 320px;
     }
 
     .landscape-meta {
@@ -2919,3 +2967,109 @@
          ambient motion, and it is the only cue that names the animal. */
       .land-dino { transition: none; }
     }
+
+    /* ── Peer sharing modals ──────────────────────────────── */
+
+    .share-modal { width: 420px; }
+
+    /* The two scope choices sit side by side because they are alternatives, not
+       a list — and the sizes differ enough that the labels alone would mislead. */
+    .share-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .share-scope-option {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 9px 11px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color .12s, background .12s;
+    }
+    .share-scope-option:hover:not(:disabled) { border-color: var(--accent); }
+    .share-scope-option.selected {
+      border-color: var(--accent);
+      background: rgba(88,166,255,.10);
+    }
+    .share-scope-option:disabled { opacity: .45; cursor: not-allowed; }
+
+    .share-scope-name { font-size: 13px; font-weight: 600; }
+    .share-scope-detail { font-size: 11px; color: var(--muted); }
+
+    .share-project-select {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 100%;
+    }
+    .share-project-select:focus { outline: none; border-color: var(--accent); }
+
+    /* Wide tracking because this is read digit by digit off another screen. */
+    .share-pin-input {
+      font-family: var(--mono);
+      letter-spacing: 3px;
+    }
+
+    .share-hint, .share-note {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .share-error {
+      font-size: 12px;
+      color: var(--red);
+      background: rgba(224,82,82,.10);
+      border: 1px solid rgba(224,82,82,.35);
+      border-radius: var(--radius);
+      padding: 7px 9px;
+    }
+
+    .share-done {
+      font-size: 13px;
+      color: var(--green);
+      background: rgba(63,185,80,.10);
+      border: 1px solid rgba(63,185,80,.35);
+      border-radius: var(--radius);
+      padding: 10px 11px;
+    }
+
+    .share-incoming-body {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .share-incoming-what {
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    /* Share PIN, in Settings. Narrow and monospaced: it is a short code read
+       aloud or typed on another machine, not free text. */
+    .settings-pin-input {
+      flex-shrink: 0;
+      width: 108px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-align: center;
+    }
+    .settings-pin-input:focus { outline: none; border-color: var(--accent); }
+    .settings-pin-input::placeholder { letter-spacing: 0; font-family: var(--sans, inherit); }

@@ -364,21 +364,35 @@ export function randomDino(name: string, opts: DinoOptions = {}): Dino | null {
  */
 export function randomDinos(
   names: readonly string[],
-  opts: DinoOptions & { minGap?: number; distinctColors?: boolean } = {},
+  opts: DinoOptions & {
+    minGap?: number;
+    distinctColors?: boolean;
+    /**
+     * Per-animal variant, overriding `opts.variant` for each name.
+     *
+     * Names are normally unique, so one variant for the whole herd is enough.
+     * Peer hostnames are not: two laptops both called "MacBook-Pro" hash
+     * identically and would draw as the same animal. Feeding something actually
+     * unique — a peer id — through here separates them while keeping a given
+     * device stable across renders.
+     */
+    variantFor?: (name: string, index: number) => number;
+  } = {},
 ): Dino[] {
-  const { minGap = 150, distinctColors = true, ...rest } = opts;
+  const { minGap = 150, distinctColors = true, variantFor, ...rest } = opts;
   const placed: Dino[] = [];
   const taken = new Set<number>();
 
-  for (const name of names) {
+  names.forEach((name, i) => {
     const dino = randomDino(name, {
       ...rest,
+      variant: variantFor ? variantFor(name, i) : rest.variant,
       allow: (p) => {
         if (rest.allow && !rest.allow(p)) return false;
         return placed.every((d) => Math.hypot(d.x - p.x, d.y - p.y) >= minGap);
       },
     });
-    if (!dino) continue;
+    if (!dino) return;
 
     // Each animal picks its own palette from its name, so a herd can easily end
     // up with two of the same colour — which defeats the point of naming them.
@@ -392,7 +406,7 @@ export function randomDinos(
       taken.add(index);
     }
     placed.push(dino);
-  }
+  });
   // Back-to-front, so a renderer can draw them in order and get correct overlap.
   return placed.sort((a, b) => a.y - b.y);
 }

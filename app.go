@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"yv/internal/monitor"
 	"yv/internal/runner"
 	"yv/internal/settings"
+	"yv/internal/share"
 )
 
 // App is the Wails-bound facade. All business logic lives in the internal packages;
@@ -28,6 +30,7 @@ type App struct {
 	envs    *env.Store
 	set     *settings.Store
 	metrics *metrics.Store
+	share   *share.Node
 }
 
 func NewApp() *App {
@@ -42,7 +45,7 @@ func NewApp() *App {
 	r.SetRunSink(mx)
 	set.OnChange(func(s models.Settings) { mx.SetEnabled(s.MetricsEnabled) })
 
-	return &App{
+	a := &App{
 		runner:  r,
 		cfg:     config.NewStore(),
 		mon:     monitor.NewMonitor(r, mx),
@@ -50,6 +53,15 @@ func NewApp() *App {
 		set:     set,
 		metrics: mx,
 	}
+
+	// The share node is constructed here but opens no socket until
+	// StartDiscovery, so a user who never visits the Discovery view never puts
+	// this machine on the network.
+	a.share = share.New(a.applySharedPayload)
+	a.share.SetPIN(set.Get().SharePIN)
+	set.OnChange(func(s models.Settings) { a.share.SetPIN(s.SharePIN) })
+
+	return a
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -220,6 +232,113 @@ func (a *App) SaveSettings(s models.Settings) string {
 		return "error: " + err.Error()
 	}
 	return "ok"
+}
+
+// --- Peer sharing ---
+
+// StartDiscovery begins advertising this instance and looking for others on the
+// local network. Idempotent, so the Discovery view can mount repeatedly.
+func (a *App) StartDiscovery() string {
+	if err := a.share.Start(a.getCtx()); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// StopDiscovery takes this instance off the network.
+func (a *App) StopDiscovery() string {
+	a.share.Stop()
+	return "ok"
+}
+
+// GetPeers returns the peers already known, so a view that mounts after
+// discovery has been running does not have to wait for the next announcement.
+func (a *App) GetPeers() []models.PeerInfo {
+	peers := a.share.Peers()
+	if peers == nil {
+		return []models.PeerInfo{}
+	}
+	return peers
+}
+
+// InitiateShare offers config to a peer and streams it if they accept.
+//
+// scope is "app" for every project or "project" for one. pin is the code the
+// target requires, ignored when it requires none. Returns "ok" or "error: …".
+func (a *App) InitiateShare(peerID, scope, projectID, pin string) string {
+	payload, offer, err := a.buildShare(scope, projectID)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	offer.PIN = pin
+
+	ctx, cancel := context.WithTimeout(a.getCtx(), shareSendTimeout)
+	defer cancel()
+
+	if err := a.share.Send(ctx, peerID, offer, payload); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// RespondToShare delivers the user's accept/decline to a waiting transfer.
+func (a *App) RespondToShare(transferID string, accept bool) string {
+	if !a.share.Respond(transferID, accept) {
+		return "error: that transfer is no longer waiting"
+	}
+	return "ok"
+}
+
+// shareSendTimeout bounds a whole outbound transfer, including the time the
+// other person spends deciding.
+const shareSendTimeout = 3 * time.Minute
+
+// buildShare assembles the payload and its offer header.
+//
+// Environments are deliberately not included. Secrets live in a separate file
+// precisely so they never travel with shared config.
+func (a *App) buildShare(scope, projectID string) (models.SharePayload, models.ShareOffer, error) {
+	all := a.cfg.LoadProjects()
+
+	var picked []models.Project
+	var projectName string
+
+	switch scope {
+	case "app":
+		picked = all
+	case "project":
+		for _, p := range all {
+			if p.ID == projectID {
+				picked = []models.Project{p}
+				projectName = p.Name
+				break
+			}
+		}
+		if len(picked) == 0 {
+			return models.SharePayload{}, models.ShareOffer{}, fmt.Errorf("project not found")
+		}
+	default:
+		return models.SharePayload{}, models.ShareOffer{}, fmt.Errorf("unknown scope %q", scope)
+	}
+
+	payload := models.SharePayload{Scope: scope, Projects: picked}
+	offer := models.ShareOffer{
+		TransferID:   fmt.Sprintf("%d", time.Now().UnixNano()),
+		Scope:        scope,
+		ProjectName:  projectName,
+		ProjectCount: len(picked),
+	}
+	return payload, offer, nil
+}
+
+// applySharedPayload merges a received payload into the local config. Runs on a
+// libp2p handler goroutine, after the user has accepted.
+func (a *App) applySharedPayload(p models.SharePayload) string {
+	summary, err := a.cfg.ImportProjectsFromSlice(p.Projects)
+	if err != nil {
+		return "Import failed: " + err.Error()
+	}
+	return summary
 }
 
 // --- Audio ---

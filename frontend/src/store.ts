@@ -13,6 +13,8 @@ import type {
   MetricsResult,
   FrequencyResult,
   ActivityHeatmap,
+  PeerInfo,
+  IncomingShare,
 } from './types';
 
 const DEFAULT_CMD_STATE: CmdState = {
@@ -72,6 +74,41 @@ const [activeView, setActiveView] = createSignal<'commands' | 'dashboard' | 'dis
 // the view and coming back shows the same world instead of silently rerolling.
 const [discoverySeed, setDiscoverySeed] = createSignal(20260806);
 const [discoveryMotion, setDiscoveryMotion] = createSignal(true);
+
+// Nearby yv instances. Each one is a dinosaur on the Discovery map; an empty
+// list means an empty island, which is the honest thing to show.
+const [peers, setPeers] = createSignal<PeerInfo[]>([]);
+
+// A clicked dinosaur only knows its own name, so this is how the click gets back
+// to a peer id. Hostnames can collide; first match wins, which is the same
+// animal the user pointed at as far as the name is concerned.
+const peerByName = createMemo(() => {
+  const byName = new Map<string, PeerInfo>();
+  for (const p of peers()) {
+    if (!byName.has(p.name)) byName.set(p.name, p);
+  }
+  return byName;
+});
+
+// Outbound share: the peer whose dinosaur was tapped, null when the modal is shut.
+const [sharePeer, setSharePeer] = createSignal<PeerInfo | null>(null);
+const [shareBusy, setShareBusy] = createSignal(false);
+const [shareError, setShareError] = createSignal<string | null>(null);
+// Set once a transfer lands, so the modal can say so before closing itself.
+const [shareDone, setShareDone] = createSignal<string | null>(null);
+
+// Inbound share awaiting a decision.
+const [incomingShare, setIncomingShare] = createSignal<IncomingShare | null>(null);
+const [incomingBusy, setIncomingBusy] = createSignal(false);
+const [incomingResult, setIncomingResult] = createSignal<string | null>(null);
+
+/** Clears every transient bit of outbound share state. */
+function resetShareState(): void {
+  setSharePeer(null);
+  setShareBusy(false);
+  setShareError(null);
+  setShareDone(null);
+}
 
 // Global settings modal (opened from View → Settings… / ⌘,)
 const [settingsModalOpen, setSettingsModalOpen] = createSignal(false);
@@ -298,6 +335,15 @@ export {
   activeView, setActiveView,
   discoverySeed, setDiscoverySeed,
   discoveryMotion, setDiscoveryMotion,
+  peers, setPeers, peerByName,
+  sharePeer, setSharePeer,
+  shareBusy, setShareBusy,
+  shareError, setShareError,
+  shareDone, setShareDone,
+  resetShareState,
+  incomingShare, setIncomingShare,
+  incomingBusy, setIncomingBusy,
+  incomingResult, setIncomingResult,
   settingsModalOpen, setSettingsModalOpen,
   appSettings, setAppSettings, loadAppSettings,
   dashGroupBy, setDashGroupBy,

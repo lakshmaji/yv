@@ -165,6 +165,17 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("parse: %w", err)
 	}
 
+	return s.ImportProjectsFromSlice(incoming)
+}
+
+// ImportProjectsFromSlice merges projects into the stored config by ID: a
+// project with an unseen ID is appended, one whose ID already exists is skipped
+// rather than overwritten. Returns a human-readable summary.
+//
+// Separate from ImportProjects because the merge is also the landing point for
+// projects arriving over the network from another device — one implementation
+// for both paths, so a change to the merge rule cannot apply to only one of them.
+func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, error) {
 	existing := s.LoadProjects()
 	seen := make(map[string]bool, len(existing))
 	for _, p := range existing {
@@ -173,12 +184,13 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 
 	added, skipped := 0, 0
 	for _, p := range incoming {
-		if seen[p.ID] {
+		if p.ID == "" || seen[p.ID] {
 			skipped++
-		} else {
-			existing = append(existing, p)
-			added++
+			continue
 		}
+		seen[p.ID] = true
+		existing = append(existing, p)
+		added++
 	}
 
 	configP, err := configPath()

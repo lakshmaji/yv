@@ -12,6 +12,8 @@ import type {
   FrequencyResult,
   ActivityHeatmap,
   MetricsStorageInfo,
+  PeerInfo,
+  ShareScope,
 } from './types';
 
 interface WailsRuntime {
@@ -50,6 +52,17 @@ interface GoApp {
   GetActivityHeatmap(days: number): Promise<ActivityHeatmap>;
   ClearMetrics(): Promise<string>;
   GetMetricsStorageInfo(): Promise<MetricsStorageInfo>;
+  /** Starts mDNS discovery. Idempotent — safe to call on every view mount. */
+  StartDiscovery(): Promise<string>;
+  /** Takes this instance off the network. */
+  StopDiscovery(): Promise<string>;
+  /** Peers already known, for a view that mounts after discovery started. */
+  GetPeers(): Promise<PeerInfo[]>;
+  /** Offers config to a peer and streams it on acceptance. "ok" or "error: …". */
+  InitiateShare(peerID: string, scope: ShareScope, projectID: string, pin: string): Promise<string>;
+  /** Delivers the user's decision to a waiting inbound transfer. */
+  RespondToShare(transferID: string, accept: boolean): Promise<string>;
+
   /** True only in a build made with `-tags yvdev` (see app_dev.go). */
   SampleDataAvailable(): Promise<boolean>;
   /** Development builds only — rejects in a production build (see app_nodev.go). */

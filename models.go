@@ -28,4 +28,8 @@ type (
 	ActivityDay        = models.ActivityDay
 	ActivityHeatmap    = models.ActivityHeatmap
 	MetricsStorageInfo = models.MetricsStorageInfo
+
+	PeerInfo     = models.PeerInfo
+	SharePayload = models.SharePayload
+	ShareOffer   = models.ShareOffer
 )

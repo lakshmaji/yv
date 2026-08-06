@@ -122,6 +122,50 @@ type Settings struct {
 	// AudioClips are the user's own sound files, in the order they added them.
 	// No audio ships with the app, so an empty list means the roars are silent.
 	AudioClips []string `json:"audioClips,omitempty"`
+
+	// SharePIN gates incoming config shares. Empty — the zero value, and so the
+	// default — means any nearby peer may ask, which is still safe because the
+	// receiver has to accept the transfer explicitly either way. Stored in the
+	// clear because it is a convenience lock the user must be able to read back
+	// off their own screen to tell a colleague, not a credential.
+	SharePIN string `json:"sharePIN,omitempty"`
+}
+
+// --- peer sharing ---
+
+// PeerInfo is one nearby yv instance as the frontend sees it.
+//
+// Name is the peer's hostname and doubles as its identity in the Discovery
+// view: randomDino seeds its RNG from the name, so a given device always draws
+// the same dinosaur. ID is carried alongside because two laptops can share a
+// hostname, and because the name is all a clicked dinosaur knows about itself.
+type PeerInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	PINRequired bool   `json:"pinRequired"`
+}
+
+// SharePayload is the config one peer sends another.
+//
+// Environments are deliberately absent. Secrets live in their own file so they
+// never travel with exported config, and the same rule holds over the wire —
+// do not add them here for convenience.
+type SharePayload struct {
+	Scope    string    `json:"scope"` // "app" | "project"
+	Projects []Project `json:"projects"`
+}
+
+// ShareOffer is the header a sender writes before any payload bytes, and what
+// the receiver shows the user when asking whether to accept.
+type ShareOffer struct {
+	TransferID   string `json:"transferId"`
+	FromName     string `json:"fromName"`
+	Scope        string `json:"scope"`
+	ProjectName  string `json:"projectName,omitempty"`
+	ProjectCount int    `json:"projectCount"`
+	// PIN is sent in the clear over an already-encrypted libp2p stream. It is
+	// compared against the receiver's stored PIN.
+	PIN string `json:"pin,omitempty"`
 }
 
 // --- metrics: on-disk records ---

@@ -71,6 +71,10 @@ func main() {
 			// in-flight run records have landed before the metrics files close.
 			app.StopAllCommands()
 			app.closeMetrics()
+			// Closes the libp2p host so this machine stops advertising itself
+			// the moment the window goes away, rather than lingering as a
+			// dinosaur on someone else's map until their TTL sweep.
+			app.StopDiscovery()
 		},
 
 		Mac: &mac.Options{

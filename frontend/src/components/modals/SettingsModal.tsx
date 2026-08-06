@@ -24,6 +24,9 @@ export default function SettingsModal() {
   // Preview playback. `playing` drives the row's play/pause button; `broken`
   // remembers clips that would not load, so the row can say so instead of
   // looking identical to a working one that the user simply hasn't tried.
+  // Share PIN. Empty means no PIN, which is the default.
+  const [sharePIN, setSharePIN] = createSignal('');
+
   const [playing, setPlaying] = createSignal<string | null>(null);
   const [broken, setBroken] = createSignal<string[]>([]);
   let preview: HTMLAudioElement | null = null;
@@ -40,6 +43,7 @@ export default function SettingsModal() {
     setPanels([...(current.panels || [])]);
     setSoundOn(!current.soundMuted);
     setClips([...(current.audioClips || [])]);
+    setSharePIN(current.sharePIN || '');
     setConfirmClear(false);
     setError('');
     setBroken([]);
@@ -133,6 +137,12 @@ export default function SettingsModal() {
     if (!Number.isInteger(days) || days < MIN_RETENTION || days > MAX_RETENTION) {
       return `Retention must be a whole number between ${MIN_RETENTION} and ${MAX_RETENTION} days.`;
     }
+    const pin = sharePIN().trim();
+    // Four digits is the shortest that is worth typing; anything non-numeric
+    // would be read aloud badly off a screen, which is the whole use case.
+    if (pin && !/^\d{4,12}$/.test(pin)) {
+      return 'The share PIN must be 4 to 12 digits, or empty for none.';
+    }
     return '';
   }
 
@@ -150,6 +160,7 @@ export default function SettingsModal() {
       panels: panels(),
       soundMuted: !soundOn(),
       audioClips: clips(),
+      sharePIN: sharePIN().trim(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -401,6 +412,34 @@ export default function SettingsModal() {
                 </For>
               </div>
             </Show>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Sharing</div>
+            <div class="settings-section-hint">
+              Nearby devices running yv appear as dinosaurs in Discovery, and can offer to share
+              their commands with you. Environment variables are never shared.
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Require a PIN to share with this device</div>
+                <div class="settings-row-hint">
+                  {/* Says plainly what the PIN does and does not do, so nobody
+                      treats an empty field as a security hole. */}
+                  Someone must type this code before they can offer you anything. Leave it empty to
+                  let anyone nearby ask — you still have to accept every transfer either way.
+                </div>
+              </div>
+              <input
+                class="settings-pin-input"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="none"
+                value={sharePIN()}
+                onInput={(e) => setSharePIN(e.currentTarget.value)}
+              />
+            </div>
           </div>
 
           <Show when={error()}>

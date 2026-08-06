@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -32,6 +33,11 @@ const (
 	DefaultRetentionDays = 365
 	MinRetentionDays     = 1
 	MaxRetentionDays     = 3650
+
+	// Share PIN bounds. Four digits is the shortest worth typing; twelve is well
+	// past anything a person will read off a screen.
+	MinPINLen = 4
+	MaxPINLen = 12
 
 	schemaVersion = 1
 )
@@ -203,6 +209,9 @@ func Normalize(in models.Settings) models.Settings {
 
 	out.Panels = NormalizePanels(out.Panels)
 	out.AudioClips = audio.NormalizePaths(out.AudioClips)
+	// Trimmed on the way in so a stray space cannot make a stored PIN
+	// impossible to type correctly.
+	out.SharePIN = strings.TrimSpace(out.SharePIN)
 	return out
 }
 
@@ -250,5 +259,31 @@ func Validate(in models.Settings) error {
 		sort.Strings(unknown)
 		return fmt.Errorf("unknown panel(s): %v", unknown)
 	}
+	if err := ValidateSharePIN(in.SharePIN); err != nil {
+		return err
+	}
 	return audio.ValidatePaths(in.AudioClips)
+}
+
+// ValidateSharePIN accepts an empty PIN — the default, meaning none — or 4 to 12
+// digits.
+//
+// Digits only, because the PIN's entire job is to be read off one screen and
+// typed on another; letters invite case and homoglyph mistakes in exactly the
+// situation where the user cannot see what went wrong. The modal checks this too
+// for immediate feedback, but this is the enforcement point.
+func ValidateSharePIN(pin string) error {
+	pin = strings.TrimSpace(pin)
+	if pin == "" {
+		return nil
+	}
+	if len(pin) < MinPINLen || len(pin) > MaxPINLen {
+		return fmt.Errorf("share PIN must be %d to %d digits", MinPINLen, MaxPINLen)
+	}
+	for _, r := range pin {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("share PIN must contain digits only")
+		}
+	}
+	return nil
 }
