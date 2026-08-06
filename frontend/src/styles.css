@@ -2706,6 +2706,42 @@
       50%      { opacity: 1; }
     }
 
+    /* Sweep countdown, inside the peer status chip: the drone comes down on a
+       schedule, and without this the burst is a surprise rather than a deadline
+       running out. */
+    .disc-sweep {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: 7px;
+    }
+
+    .disc-sweep-left {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      /* Fixed width, so the chip doesn't twitch as the number loses a digit. */
+      min-width: 22px;
+      text-align: right;
+    }
+
+    .disc-sweep-bar {
+      width: 34px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    /* Drains left to right. --sweep is the fraction remaining, set inline. */
+    .disc-sweep-bar::after {
+      content: '';
+      display: block;
+      height: 100%;
+      width: calc(var(--sweep, 1) * 100%);
+      background: var(--accent);
+      opacity: .8;
+    }
+
     .disc-legend {
       display: flex;
       align-items: center;

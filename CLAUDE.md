@@ -953,6 +953,16 @@ there is something to go and look at.
 anything is there). It is how long the flight is worth watching before the app
 admits there is nobody about.
 
+The remaining time is **shown** in the peer status chip — `9s` plus a bar that
+drains — because otherwise the burst happens on a schedule the user cannot see, and
+"it blew up" reads very differently from "it ran out". The chip stores the *deadline*
+and a 250ms ticker only decides how often it is redrawn, so the display can never
+drift from the single `setTimeout` that actually ends the sweep.
+
+With discovery itself broken the sweep still ends, but the dialog is **not** opened:
+its advice (open yv on another laptop) would be wrong and another drone cannot help,
+so the map's "Discovery unavailable" stands on its own.
+
 `droneLaunch` is a counter mixed into the route seed, so a replacement drone flies a
 genuinely new circuit rather than repeating the sweep that just failed.
 

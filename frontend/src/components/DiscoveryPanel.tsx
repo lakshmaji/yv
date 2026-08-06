@@ -185,12 +185,41 @@ export default function DiscoveryPanel() {
   /** Length of the burst. Must match the CSS, which owns the animation. */
   const BURST_MS = 900;
 
+  /**
+   * When the current sweep runs out, and a clock to compare it against.
+   *
+   * The deadline is stored rather than a remaining count so the display cannot
+   * drift from the timeout that actually fires — one setTimeout owns the ending,
+   * and the ticker only decides how often the number is redrawn.
+   */
+  const [sweepEndsAt, setSweepEndsAt] = createSignal<number | null>(null);
+  const [now, setNow] = createSignal(Date.now());
+
   /** The empty sweep: fly for a while, find nothing, come apart. */
   createEffect(() => {
-    if (droneState() !== 'flying' || peers().length > 0) return;
+    if (droneState() !== 'flying' || peers().length > 0) {
+      setSweepEndsAt(null);
+      return;
+    }
+
     const timer = setTimeout(() => setDroneState('bursting'), SWEEP_MS);
-    onCleanup(() => clearTimeout(timer));
+    setSweepEndsAt(Date.now() + SWEEP_MS);
+    // Four times a second: enough that the bar drains smoothly rather than
+    // stepping once a second, which reads as a stall.
+    const ticker = setInterval(() => setNow(Date.now()), 250);
+
+    onCleanup(() => {
+      clearTimeout(timer);
+      clearInterval(ticker);
+      setSweepEndsAt(null);
+    });
   });
+
+  /** Milliseconds left in the sweep, or null when nothing is counting down. */
+  const sweepLeft = () => {
+    const endsAt = sweepEndsAt();
+    return endsAt === null ? null : Math.max(0, endsAt - now());
+  };
 
   /** …then vanish and hand over to the dialog. */
   createEffect(() => {
@@ -203,7 +232,10 @@ export default function DiscoveryPanel() {
 
     const timer = setTimeout(() => {
       setDroneState('gone');
-      setNoDevicesOpen(true);
+      // With discovery itself broken, the dialog's advice — open yv on another
+      // laptop — is wrong, and sending another drone cannot help. The map says
+      // what actually went wrong instead.
+      if (!discoveryError()) setNoDevicesOpen(true);
     }, BURST_MS);
     onCleanup(() => clearTimeout(timer));
   });
@@ -378,6 +410,19 @@ export default function DiscoveryPanel() {
               }
             >
               {peerStatus().label}
+
+              {/* How long this drone has left. Shown because the burst is
+                  otherwise a surprise: it happens on a schedule the user cannot
+                  see, and a countdown turns "it blew up" into "it ran out". */}
+              <Show when={sweepLeft() !== null && !discoveryError()}>
+                <span class="disc-sweep" title="The drone comes down when this runs out">
+                  <span class="disc-sweep-left">{Math.ceil((sweepLeft() ?? 0) / 1000)}s</span>
+                  <span
+                    class="disc-sweep-bar"
+                    style={{ '--sweep': ((sweepLeft() ?? 0) / SWEEP_MS).toFixed(3) }}
+                  />
+                </span>
+              </Show>
             </span>
           }
         >
