@@ -2628,6 +2628,15 @@
       50%      { transform: rotate(1.6deg); }
     }
 
+    /* One sound wave, out and gone. The arcs share this and are offset by their
+       index, so the ring nearest the mouth lights first and the call travels
+       outward; the long tail is the pause before the next growl. */
+    @keyframes land-dino-growl {
+      0%, 100% { opacity: 0; }
+      6%       { opacity: .95; }
+      26%      { opacity: 0; }
+    }
+
     /* A double blink, then a rest.
        Two things make a blink readable on a 4px eye: it has to be quick — each
        shut here lasts about 4% of the cycle, roughly the 120ms of a real one —
@@ -2676,6 +2685,15 @@
       will-change: transform;
     }
 
+    /* Hidden at rest, so with animation off a silent animal shows no arcs at all
+       rather than three permanent rings stuck to its face. */
+    .land-dino-growl {
+      opacity: 0;
+      animation: land-dino-growl 5s ease-out infinite;
+      pointer-events: none;
+      will-change: opacity;
+    }
+
     .land-dino-bob {
       transform-origin: bottom center;
       animation: land-dino-bob 4s ease-in-out infinite;
@@ -2714,7 +2732,8 @@
     .landscape-stage.no-motion .land-tree,
     .landscape-stage.no-motion .land-dino-bob,
     .landscape-stage.no-motion .land-dino-sway,
-    .landscape-stage.no-motion .land-dino-eye { animation: none; }
+    .landscape-stage.no-motion .land-dino-eye,
+    .landscape-stage.no-motion .land-dino-growl { animation: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
@@ -2724,7 +2743,8 @@
       .land-tree,
       .land-dino-bob,
       .land-dino-sway,
-      .land-dino-eye { animation: none; }
+      .land-dino-eye,
+      .land-dino-growl { animation: none; }
       /* Hover feedback stays: it is a direct response to the pointer, not
          ambient motion, and it is the only cue that names the animal. */
       .land-dino { transition: none; }

@@ -256,7 +256,7 @@ describe('dinoInsets / DINO_EXTENT', () => {
           const s = dinoShape({ ...d, facing });
           const paths = [
             s.body, s.belly, ...s.plates, ...s.legsBack, ...s.legsFront,
-            ...s.arms, ...s.horns, s.frill ?? '', s.smile,
+            ...s.arms, ...s.horns, s.frill ?? '', s.smile, ...s.growl,
           ];
           for (const path of paths) {
             const nums = (path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
@@ -293,6 +293,44 @@ describe('dinoShape', () => {
       expect(s.smile.endsWith('Z')).toBe(false);
       for (const optional of [s.frill, ...s.horns, ...s.arms]) {
         if (optional) expect(optional).not.toContain('NaN');
+      }
+    }
+  });
+
+  it('emits three growl arcs, open, growing outward from the mouth', () => {
+    for (const d of all) {
+      const s = dinoShape(d);
+      expect(s.growl).toHaveLength(3);
+      const spans: number[] = [];
+      for (const arc of s.growl) {
+        expect(arc).not.toContain('NaN');
+        // Stroked, so they must stay open — a closed arc would fill as a wedge.
+        expect(arc.endsWith('Z')).toBe(false);
+        const nums = (arc.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+        const xs: number[] = [];
+        const ys: number[] = [];
+        for (let i = 0; i < nums.length; i += 2) { xs.push(nums[i]); ys.push(nums[i + 1]); }
+        spans.push(Math.max(...ys) - Math.min(...ys));
+      }
+      // Each ring is wider than the one inside it, or they would not read as
+      // a wave travelling outward.
+      expect(spans[1]).toBeGreaterThan(spans[0]);
+      expect(spans[2]).toBeGreaterThan(spans[1]);
+    }
+  });
+
+  it('puts the growl in front of the face, on whichever way it faces', () => {
+    for (const species of DINO_SPECIES) {
+      for (const facing of [1, -1] as const) {
+        const d = { ...dino('Rexy', { species }), x: 0, y: 0, size: 100, facing };
+        const s = dinoShape(d);
+        const outer = (s.growl[2].match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+        const xs: number[] = [];
+        for (let i = 0; i < outer.length; i += 2) xs.push(outer[i]);
+        // Forward of the animal's centre, mirrored with facing.
+        const tip = facing === 1 ? Math.max(...xs) : Math.min(...xs);
+        expect(Math.sign(tip)).toBe(facing);
+        expect(Math.abs(tip)).toBeGreaterThan(d.size * 0.5);
       }
     }
   });

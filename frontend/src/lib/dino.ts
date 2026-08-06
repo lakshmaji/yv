@@ -418,6 +418,15 @@ export interface DinoShape {
   /** Catch-light, offset toward the light like every other highlight here. */
   glint: { cx: number; cy: number; r: number };
   smile: string;
+  /**
+   * Concentric arcs in front of the snout — the "growl", innermost first.
+   *
+   * Built as sampled polylines rather than SVG arc commands so they pass through
+   * the same coordinate mapping as everything else and therefore mirror
+   * correctly when the animal faces left. An `A` command's sweep flag would have
+   * to be flipped by hand.
+   */
+  growl: string[];
 }
 
 /**
@@ -437,6 +446,33 @@ function frillFan(frill: NonNullable<DinoProfile['frill']>): [number, number][] 
   }
   pts.push([u, v]);
   return pts;
+}
+
+/** Radii of the growl arcs, in normalised units, innermost first. */
+const GROWL_RADII = [0.13, 0.21, 0.29] as const;
+
+/** Half-angle of the arcs, either side of straight ahead. */
+const GROWL_SPREAD = (38 * Math.PI) / 180;
+
+/**
+ * Arcs radiating from the mouth, sampled as polylines.
+ *
+ * Centred on the middle of the smile so each species emits from its own snout,
+ * and kept inside DINO_EXTENT so a growling animal near the panel edge does not
+ * spill off it.
+ */
+function growlArcs(profile: DinoProfile): [number, number][][] {
+  const lips = profile.smile;
+  const mouth = lips[Math.floor(lips.length / 2)];
+  const steps = 12;
+  return GROWL_RADII.map((radius) => {
+    const pts: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const angle = -GROWL_SPREAD + (2 * GROWL_SPREAD * i) / steps;
+      pts.push([mouth[0] + Math.cos(angle) * radius, mouth[1] + Math.sin(angle) * radius]);
+    }
+    return pts;
+  });
 }
 
 /** An 8-point rounded limb, smoothed into a stumpy leg. */
@@ -552,9 +588,7 @@ export function dinoShape(dino: Dino): DinoShape {
     }),
     eye: { cx: eye.x, cy: eye.y, r: eyeR },
     glint: { cx: eye.x - facing * eyeR * 0.35, cy: eye.y - eyeR * 0.35, r: eyeR * 0.4 },
-    smile: (() => {
-      const pts = map(profile.smile);
-      return catmullRomPath(pts, false);
-    })(),
+    smile: catmullRomPath(map(profile.smile), false),
+    growl: growlArcs(profile).map((arc) => catmullRomPath(map(arc), false)),
   };
 }

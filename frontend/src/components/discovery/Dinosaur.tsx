@@ -110,6 +110,38 @@ export default function Dinosaur(props: { dino: Dino }) {
             stroke-linecap="round"
             opacity="0.75"
           />
+
+          {/* Growl. Each arc fades in a beat after the one inside it, so the
+              sound reads as travelling outward; they all rest together before
+              the next call. Two strokes per arc — a dark halo under a light
+              line — because a single colour disappears against either the pale
+              grass or the dark water depending on where the animal stands. */}
+          <For each={shape().growl}>
+            {(arc, i) => (
+              <g
+                class="land-dino-growl"
+                style={{
+                  'animation-duration': `${(tempo() * 1.15).toFixed(2)}s`,
+                  'animation-delay': `${(-props.dino.phase * tempo() + i() * 0.13).toFixed(2)}s`,
+                }}
+              >
+                <path
+                  d={arc}
+                  fill="none"
+                  stroke="rgba(4,18,30,.5)"
+                  stroke-width={Math.max(2.2, props.dino.size * 0.05)}
+                  stroke-linecap="round"
+                />
+                <path
+                  d={arc}
+                  fill="none"
+                  stroke="#f4f8fb"
+                  stroke-width={Math.max(1, props.dino.size * 0.026)}
+                  stroke-linecap="round"
+                />
+              </g>
+            )}
+          </For>
         </g>
       </g>
 
