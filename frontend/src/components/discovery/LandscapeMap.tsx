@@ -1,8 +1,10 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { LAND } from '../../lib/landscape/palette';
 import { ringPath, type World } from '../../lib/landscape/world';
 import type { Dino } from '../../lib/dino';
+import type { Drone as DroneData } from '../../lib/drone';
 import Dinosaur from './Dinosaur';
+import Drone from './Drone';
 import Terrain from './Terrain';
 import Water from './Water';
 import Scenery from './Scenery';
@@ -23,6 +25,15 @@ export default function LandscapeMap(props: {
   world: World;
   dinos?: Dino[];
   onSelectDino?: (dino: Dino) => void;
+  drone?: DroneData;
+  /** Devices found: the drone's lights go green. */
+  droneLocked?: boolean;
+  /**
+   * Whether ambient motion is on. Only the drone needs telling — everything else
+   * is stopped by the `.no-motion` class on the stage, but the drone's travel is
+   * a script animation, which CSS cannot reach.
+   */
+  motion?: boolean;
 }) {
   const coastPath = () => ringPath(props.world.coast);
 
@@ -98,6 +109,15 @@ export default function LandscapeMap(props: {
         {(dino) => <Dinosaur dino={dino} onSelect={props.onSelectDino} />}
       </For>
       <Settlements world={props.world} />
+
+      {/* Airborne, so it flies over the settlement labels — but under the fog,
+          which is the only thing on the map above it. */}
+      <Show when={props.drone}>
+        {(drone) => (
+          <Drone drone={drone()} locked={props.droneLocked ?? false} motion={props.motion} />
+        )}
+      </Show>
+
       <Clouds world={props.world} />
 
       <rect

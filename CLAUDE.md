@@ -837,3 +837,85 @@ bank was neither clickable nor nameable on hover.
 | `frontend/src/styles.css` | `.land-dino.roaring` burst, clip list rows, `.disc-sound-status`, scenery `pointer-events: none` |
 | `frontend/src/{types,wails,store}.ts` | New settings fields and bindings |
 | `.gitignore` | `assets/` — samples are local-only |
+
+---
+
+## Implemented: Scanning drone on the discovery map
+
+### Goal
+
+Make the search visible on the map itself. A survey quadcopter flies a circuit over
+the island: four rotors spinning, status lights **amber** while nothing has been
+found and **green** once devices are there — and once they are, the circuit is re-planned to
+visit them, dipping over each dinosaur as it passes.
+
+Presentation only. No Go changes and no new peer state: `peers().length > 0` is the
+entire "found" signal, and the animals to visit are just `dinos()`.
+
+### The dip falls out of the route, not an extra animation
+
+`dronePatrol` always returns exactly `PATROL_STOPS` (8) waypoints, and every leg
+gets an equal share of the lap's time. A visited dinosaur contributes **two**
+waypoints — an approach at cruise height and a lower dip just past it — so the hop
+across one animal is short and therefore slow, while the long legs between animals
+are covered fast. The loiter is a consequence of equal-time legs; nothing animates
+it separately.
+
+With fewer than four devices the spare slots become transit legs, placed in the
+widest angular gaps around the herd so a lap stays a rough circle rather than a
+shuttle back and forth over one animal. With nothing found at all, the route is a
+farthest-first spread of seeded points over open ground — `openGround(world, 40)`,
+the same predicate the herd uses. Unlike `randomDino` this never returns null: the
+drone *is* the scanning indicator, so a world where no sampled point is acceptable
+still gets a ring inside the bounds.
+
+Once there are animals to visit the seed stops mattering — the route follows the
+herd. Regenerating the world therefore doesn't move the drone for reasons the user
+can't see.
+
+### Why the travel is a script animation
+
+The waypoints are data. A static `@keyframes` rule could only reach them through
+custom properties, which pins the stop count for good and puts the route somewhere
+no test can see. So `patrolFrames` / `bankFrames` emit steps and `Drone.tsx` hands
+them to `element.animate()`. Per-step `easing` is what makes it settle at each
+waypoint; a single easing in the animation options would apply once across the
+whole lap.
+
+The cost is that neither the `.no-motion` class nor `prefers-reduced-motion` can
+cancel a script animation, so **`Drone.tsx` honours both itself** (the `motion`
+prop, plus a `matchMedia` listener because the OS setting can change while the app
+is open). Everything the airframe does in place — rotor spin, hover jitter, the
+amber blink — is ordinary CSS and *is* in both opt-out lists. With the animation
+absent the drone parks at its first waypoint, which is why the route is expressed
+as offsets from a drawn `origin` rather than as absolute points.
+
+### Geometry lives in the lib
+
+`droneShape(drone)` returns primitives, like `dinoShape`. That is what lets a test
+prove the drawing fits inside `DRONE_EXTENT` — the placement bounds are inset by it,
+and the two drift apart easily. It caught the real trap: reach is set by the rotor
+discs, not the airframe. A hub sits ~1.07 out along the diagonal (`ROTOR_MOUNTS`),
+its disc spans 0.42 more, and the ±9° tilt swings that corner further still.
+
+It is a **quadcopter drawn from above**, unlike the dinosaurs, which are in profile:
+a rotor only reads as spinning if you are looking down the shaft, and four discs in
+an X is the silhouette everyone recognises as a drone. Each arm is one rect drawn
+along +x and rotated to its rotor about the shape's `origin`, rather than four
+hand-placed diagonals. The four rotor periods are all different — four discs in
+lockstep read as one rigid ornament.
+
+`.land-drone` carries `pointer-events: none`. It crosses the herd, and scenery over
+the herd swallowing a click is a bug this codebase has already had once.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/drone.ts` | New — `dronePatrol`, `droneShape`, `patrolFrames`/`bankFrames`, `droneInsets`, `ROTOR_MOUNTS`, `DRONE_EXTENT` |
+| `frontend/src/lib/drone.test.ts` | New — 77 seeded cases (route, dip, bounds, extent fit incl. tilt, quad layout, frames) |
+| `frontend/src/components/discovery/Drone.tsx` | New — projection of `droneShape`, four nested transform layers, WAAPI patrol |
+| `frontend/src/components/discovery/LandscapeMap.tsx` | `drone` / `droneLocked` / `motion` props; drawn between settlements and clouds |
+| `frontend/src/components/DiscoveryPanel.tsx` | `droneBounds` + `drone` memos; passes `peers().length > 0` and `discoveryMotion()` |
+| `frontend/src/lib/landscape/palette.ts` | `droneShell`, `droneShellDark`, `droneBlade`, `droneLightIdle`, `droneLightLocked` |
+| `frontend/src/styles.css` | Rotor/hover/blink keyframes, light state on `.locked`, `pointer-events: none`, both motion opt-out lists |

@@ -50,6 +50,19 @@ export const LAND = {
   hutWall: '#e2d3b4',
   ruin: '#9aa0a6',
 
+  /**
+   * The survey drone. Deliberately a cool grey against the warm land, so a small
+   * machine reads as machinery rather than as another animal.
+   *
+   * The two light colours are the whole status display: amber while the network
+   * is still being searched, green once devices have been found.
+   */
+  droneShell: '#cfd8e0',
+  droneShellDark: '#78838f',
+  droneBlade: '#e8eef4',
+  droneLightIdle: '#f5a524',
+  droneLightLocked: '#3fd97f',
+
   /** Shared shading. */
   shadow: '#04121e',
   fog: '#dce8f2',

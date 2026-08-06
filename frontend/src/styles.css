@@ -2839,12 +2839,31 @@
       86%           { transform: scaleY(1); }
     }
 
+    /* Rotor wash: the airframe never sits perfectly still. Small — a drone that
+       bobbed like a dinosaur breathes would read as a balloon. */
+    @keyframes land-drone-hover {
+      0%, 100% { transform: translateY(-1.4px); }
+      50%      { transform: translateY(1.4px); }
+    }
+
+    @keyframes land-drone-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Amber, searching. Never fully dark: a light that switched off would read as
+       a fault rather than as a scan in progress. */
+    @keyframes land-drone-blink {
+      0%, 100% { opacity: .35; }
+      50%      { opacity: 1; }
+    }
+
     /* Everything painted over the herd is scenery, and scenery must not swallow a
-       click. The clouds and settlements are drawn after the dinosaurs so they
-       layer correctly, which without this would leave an animal under a fog bank
-       both unclickable and unnameable. */
+       click. The clouds, settlements and drone are drawn after the dinosaurs so
+       they layer correctly, which without this would leave an animal under a fog
+       bank — or under a passing drone — both unclickable and unnameable. */
     .land-clouds,
-    .land-settlements { pointer-events: none; }
+    .land-settlements,
+    .land-drone { pointer-events: none; }
 
     .land-swell { animation: land-swell-drift 26s ease-in-out infinite; }
     .land-swell.swell-b { animation-duration: 38s; animation-delay: -9s; }
@@ -2943,6 +2962,44 @@
     }
     .land-dino:hover .land-dino-name { opacity: 1; }
 
+    /* The drone. Travel and tilt are script animations — the route is data, so it
+       cannot live in a static keyframe — which is also why neither appears in the
+       opt-out lists below: a script animation is not cancellable by CSS, and the
+       component honours both the toggle and the OS setting itself. Everything the
+       airframe does in place is ordinary CSS and does appear there. */
+    .land-drone-bank,
+    .land-drone-hover,
+    .land-drone-rotor {
+      transform-box: fill-box;
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    .land-drone-hover { animation: land-drone-hover 2.6s ease-in-out infinite; }
+
+    /* Duration comes from the component, so the two rotors never beat together. */
+    .land-drone-rotor { animation: land-drone-spin linear infinite; }
+
+    .land-drone-light {
+      fill: var(--drone-light-idle, #f5a524);
+      animation: land-drone-blink 1.5s ease-in-out infinite;
+    }
+    .land-drone-light-glow {
+      fill: var(--drone-light-idle, #f5a524);
+      opacity: .16;
+      animation: land-drone-blink 1.5s ease-in-out infinite;
+    }
+
+    /* Found. Steady rather than blinking: the search has stopped, and a light
+       still pulsing would say it hadn't. */
+    .land-drone.locked .land-drone-light,
+    .land-drone.locked .land-drone-light-glow {
+      fill: var(--drone-light-locked, #3fd97f);
+      animation: none;
+    }
+    .land-drone.locked .land-drone-light { opacity: 1; }
+    .land-drone.locked .land-drone-light-glow { opacity: .26; }
+
     .landscape-stage.no-motion .land-swell,
     .landscape-stage.no-motion .land-cloud,
     .landscape-stage.no-motion .land-river-glint,
@@ -2951,7 +3008,11 @@
     .landscape-stage.no-motion .land-dino-bob,
     .landscape-stage.no-motion .land-dino-sway,
     .landscape-stage.no-motion .land-dino-eye,
-    .landscape-stage.no-motion .land-dino-growl { animation: none; }
+    .landscape-stage.no-motion .land-dino-growl,
+    .landscape-stage.no-motion .land-drone-hover,
+    .landscape-stage.no-motion .land-drone-rotor,
+    .landscape-stage.no-motion .land-drone-light,
+    .landscape-stage.no-motion .land-drone-light-glow { animation: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
@@ -2962,7 +3023,11 @@
       .land-dino-bob,
       .land-dino-sway,
       .land-dino-eye,
-      .land-dino-growl { animation: none; }
+      .land-dino-growl,
+      .land-drone-hover,
+      .land-drone-rotor,
+      .land-drone-light,
+      .land-drone-light-glow { animation: none; }
       /* Hover feedback stays: it is a direct response to the pointer, not
          ambient motion, and it is the only cue that names the animal. */
       .land-dino { transition: none; }

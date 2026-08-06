@@ -17,6 +17,7 @@ import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '..
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
 import { clipForName, playClip, resetAudioCache, SESSION_SALT } from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
+import { DRONE_SIZE, dronePatrol, droneInsets } from '../lib/drone';
 import { hashText } from '../lib/landscape/rng';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import { go } from '../wails';
@@ -106,6 +107,34 @@ export default function DiscoveryPanel() {
         maxSize: DINO_MAX_SIZE,
       },
     ),
+  );
+
+  /**
+   * The scanning drone: one machine flying a circuit over the island.
+   *
+   * Its route is the search made visible — a sweep of open ground while nothing
+   * has been found, and a tour of the herd once devices are there, dipping over
+   * each animal as it passes. Deriving the targets from `dinos()` is what makes a
+   * newly discovered device get visited: the route re-plans with the herd.
+   *
+   * Same quantised bounds as the herd, and for the same reason — an unquantised
+   * rect would re-plan the circuit on every pixel of a window drag.
+   */
+  const droneBounds = createMemo(() => {
+    const visible = visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize());
+    return insetRect(quantizeRect(visible, 40), droneInsets(DRONE_SIZE));
+  });
+
+  const drone = createMemo(() =>
+    dronePatrol({
+      bounds: droneBounds(),
+      seed: world().seed,
+      // Over land: a survey drone circling the open sea is looking in the wrong
+      // place. Once it is visiting animals the route follows them instead.
+      allow: openGround(world(), 40),
+      targets: dinos().map((d) => ({ x: d.x, y: d.y })),
+      size: DRONE_SIZE,
+    }),
   );
 
   // --- sound ---
@@ -246,7 +275,7 @@ export default function DiscoveryPanel() {
           type="button"
           class="dash-refresh"
           classList={{ active: discoveryMotion() }}
-          title="Water shimmer, drifting fog, canopy sway and dinosaur idles"
+          title="Water shimmer, drifting fog, canopy sway, dinosaur idles and the survey drone"
           onClick={() => setDiscoveryMotion(!discoveryMotion())}
         >
           {discoveryMotion() ? '◉ Motion on' : '○ Motion off'}
@@ -285,7 +314,14 @@ export default function DiscoveryPanel() {
         classList={{ 'no-motion': !discoveryMotion() }}
         ref={stageRef}
       >
-        <LandscapeMap world={world()} dinos={dinos()} onSelectDino={handleSelect} />
+        <LandscapeMap
+          world={world()}
+          dinos={dinos()}
+          onSelectDino={handleSelect}
+          drone={drone()}
+          droneLocked={peers().length > 0}
+          motion={discoveryMotion()}
+        />
 
         {/* An empty island reads as a broken screen without a word of
             explanation, and this is the common case for someone working alone. */}
