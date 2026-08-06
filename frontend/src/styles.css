@@ -2513,16 +2513,48 @@
 
     /* The user's sound clips. Scrolls rather than growing, because the list has
        no upper bound — they can add as many as they like. */
+    .settings-clip-header { border-bottom: none; padding-bottom: 4px; }
+    .settings-clip-clear {
+      padding: 3px 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .settings-clip-clear:hover { color: var(--danger, #f85149); }
+
+    /* Empty state doubles as the add target: with no clips, the row button
+       above is the only affordance and it is easy to read past. */
+    .settings-clip-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 16px 12px;
+      margin: 2px 0 4px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      background: rgba(0,0,0,.12);
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .settings-clip-empty:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: rgba(88,166,255,.06);
+    }
+    .settings-clip-empty-icon { font-size: 14px; opacity: .8; }
+
     .settings-clip-list {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      max-height: 148px;
+      gap: 1px;
+      max-height: 184px;
       overflow-y: auto;
       margin: 2px 0 4px;
       padding: 4px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       background: rgba(0,0,0,.15);
     }
 
@@ -2530,14 +2562,48 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 3px 6px;
-      border-radius: 4px;
+      padding: 5px 6px;
+      border-radius: 6px;
     }
     .settings-clip-row:hover { background: rgba(255,255,255,.05); }
+    .settings-clip-row.playing { background: rgba(88,166,255,.12); }
 
-    .settings-clip-name {
+    .settings-clip-play {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .settings-clip-play:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .settings-clip-row.playing .settings-clip-play {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #0d1117;
+    }
+
+    .settings-clip-main {
       flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .settings-clip-name {
       font-size: 11px;
+      color: var(--text);
       font-family: var(--mono, ui-monospace, monospace);
       /* Long filenames truncate at the tail so the extension stays visible —
          it is what distinguishes an unplayable file from a playable one. */
@@ -2545,16 +2611,40 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .settings-clip-path {
+      font-size: 10px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-clip-broken {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--danger, #f85149);
+      background: rgba(248,81,73,.12);
+    }
+    .settings-clip-row.broken .settings-clip-name { color: var(--muted); }
 
     .settings-clip-remove {
       flex-shrink: 0;
-      padding: 0 5px;
+      padding: 2px 5px;
       border: none;
       background: none;
       color: var(--muted);
       cursor: pointer;
       line-height: 1;
+      opacity: 0;
     }
+    /* Hidden until the row is hovered or focused, so scanning the list isn't a
+       column of delete buttons — but never hidden from the keyboard. */
+    .settings-clip-row:hover .settings-clip-remove,
+    .settings-clip-remove:focus-visible { opacity: 1; }
     .settings-clip-remove:hover { color: var(--danger, #f85149); }
 
     /* ── Discovery landscape ─────────────────────────────── */

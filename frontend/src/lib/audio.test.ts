@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addClips, clipForName, clipLabel, SESSION_SALT } from './audio';
+import { addClips, clipDir, clipForName, clipLabel, SESSION_SALT } from './audio';
 
 // Only the pure half is exercised here: vitest runs in the node environment, so
 // Audio and the Wails bridge do not exist. playClip is verified by hand in the app.
@@ -77,6 +77,23 @@ describe('clipLabel', () => {
   for (const [input, want] of cases) {
     it(`${input || '(empty)'} → ${want || '(empty)'}`, () => {
       expect(clipLabel(input)).toBe(want);
+    });
+  }
+});
+
+describe('clipDir', () => {
+  const cases: Array<[string, string]> = [
+    ['/Users/me/clips/roar.mp3', '/Users/me/clips'],
+    ['/roar.mp3', ''], // at the root there is no folder line worth showing
+    ['roar.mp3', ''],
+    ['C:\\Sounds\\roar.mp3', 'C:\\Sounds'],
+    ['relative/clips/roar.mp3', 'relative/clips'],
+    ['', ''],
+  ];
+
+  for (const [input, want] of cases) {
+    it(`${input || '(empty)'} → ${want || '(empty)'}`, () => {
+      expect(clipDir(input)).toBe(want);
     });
   }
 });

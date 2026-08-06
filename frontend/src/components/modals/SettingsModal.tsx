@@ -1,8 +1,8 @@
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { appSettings, setAppSettings, settingsModalOpen, setSettingsModalOpen } from '../../store';
 import { go } from '../../wails';
 import { PANELS, togglePanel } from '../../lib/dashboardPanels';
-import { addClips, clipLabel } from '../../lib/audio';
+import { addClips, clipDir, clipLabel, playClip } from '../../lib/audio';
 import { formatBytes } from '../../lib/utils';
 import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
 
@@ -21,6 +21,15 @@ export default function SettingsModal() {
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
 
+  // Preview playback. `playing` drives the row's play/pause button; `broken`
+  // remembers clips that would not load, so the row can say so instead of
+  // looking identical to a working one that the user simply hasn't tried.
+  const [playing, setPlaying] = createSignal<string | null>(null);
+  const [broken, setBroken] = createSignal<string[]>([]);
+  let preview: HTMLAudioElement | null = null;
+  let pausedPath = ''; // the clip `preview` is holding a position in, if paused
+  let previewTicket = 0;
+
   // Snapshot on open so Cancel discards cleanly.
   createEffect(() => {
     if (!settingsModalOpen()) return;
@@ -33,9 +42,14 @@ export default function SettingsModal() {
     setClips([...(current.audioClips || [])]);
     setConfirmClear(false);
     setError('');
+    setBroken([]);
+    stopPreview();
 
     void refreshStorage();
   });
+
+  // A clip left mid-roar would keep playing over the app once the modal is gone.
+  onCleanup(stopPreview);
 
   async function refreshStorage() {
     try {
@@ -46,8 +60,67 @@ export default function SettingsModal() {
   }
 
   function close() {
+    stopPreview();
     setSettingsModalOpen(false);
     setError('');
+  }
+
+  /** Pause where it is, so pressing play again resumes rather than restarts. */
+  function pausePreview() {
+    preview?.pause();
+    previewTicket++; // abandons any clip still loading
+    setPlaying(null);
+  }
+
+  /** Pause and forget the position — for switching clips, closing, removing. */
+  function stopPreview() {
+    pausePreview();
+    preview = null;
+    pausedPath = '';
+  }
+
+  /**
+   * Play the clip, pause it if it is the one already sounding, or resume it if
+   * it is the one paused.
+   *
+   * Only one preview runs at a time — starting a second while the first plays
+   * would be two roars at once, which tells the user nothing about either.
+   */
+  async function togglePreview(path: string) {
+    if (playing() === path) {
+      pausedPath = path;
+      pausePreview();
+      return;
+    }
+    if (pausedPath === path && preview) {
+      const resumed = preview;
+      previewTicket++;
+      setPlaying(path);
+      void resumed.play().catch(() => stopPreview());
+      return;
+    }
+
+    stopPreview();
+    const ticket = ++previewTicket;
+
+    const el = await playClip(path);
+    if (!el) {
+      if (ticket === previewTicket) setBroken([...new Set([...broken(), path])]);
+      return;
+    }
+    // Loading a clip is async, so a later click can land first. Whoever asked
+    // most recently wins; an older request stops rather than layering a second
+    // roar over the new one.
+    if (ticket !== previewTicket) {
+      el.pause();
+      return;
+    }
+    setBroken(broken().filter((p) => p !== path));
+    preview = el;
+    setPlaying(path);
+    el.onended = () => {
+      if (playing() === path) stopPreview();
+    };
   }
 
   function handleOverlayClick(e: MouseEvent) {
@@ -108,7 +181,15 @@ export default function SettingsModal() {
   }
 
   function removeClip(path: string) {
+    if (playing() === path) stopPreview();
     setClips(clips().filter((p) => p !== path));
+    setBroken(broken().filter((p) => p !== path));
+  }
+
+  function removeAllClips() {
+    stopPreview();
+    setClips([]);
+    setBroken([]);
   }
 
   async function handleClear() {
@@ -240,34 +321,77 @@ export default function SettingsModal() {
               />
             </label>
 
-            <div class="settings-row">
+            <div class="settings-row settings-clip-header">
               <div class="settings-row-main">
                 <div class="settings-row-label">Sound clips</div>
                 <div class="settings-row-hint">
                   {clips().length === 0
                     ? 'None yet — the dinosaurs are silent until you add some.'
-                    : `${clips().length} clip${clips().length === 1 ? '' : 's'} in the pool.`}
+                    : `${clips().length} clip${clips().length === 1 ? '' : 's'} in the pool · ▶ to hear one.`}
                 </div>
               </div>
-              <button type="button" onClick={handleAddClips}>
-                + Add clips…
-              </button>
+              <span class="settings-row-control">
+                <Show when={clips().length > 0}>
+                  <button type="button" class="settings-clip-clear" onClick={removeAllClips}>
+                    Remove all
+                  </button>
+                </Show>
+                <button type="button" onClick={handleAddClips}>
+                  + Add clips…
+                </button>
+              </span>
             </div>
 
-            <Show when={clips().length > 0}>
+            <Show
+              when={clips().length > 0}
+              fallback={
+                <button type="button" class="settings-clip-empty" onClick={handleAddClips}>
+                  <span class="settings-clip-empty-icon">🔈</span>
+                  <span class="settings-clip-empty-text">
+                    Add .mp3, .m4a, .aac, .wav, .ogg or .flac files to give the herd a voice
+                  </span>
+                </button>
+              }
+            >
               <div class="settings-clip-list">
                 <For each={clips()}>
                   {(path) => (
-                    <div class="settings-clip-row">
-                      {/* The basename is what identifies a clip at a glance; the
-                          full path is one hover away when two share a name. */}
-                      <span class="settings-clip-name" title={path}>
-                        {clipLabel(path)}
+                    <div
+                      class="settings-clip-row"
+                      classList={{
+                        playing: playing() === path,
+                        broken: broken().includes(path),
+                      }}
+                    >
+                      {/* Preview is the only way to tell one roar from another —
+                          the filename rarely says what the clip sounds like. */}
+                      <button
+                        type="button"
+                        class="settings-clip-play"
+                        title={playing() === path ? 'Pause' : 'Play this clip'}
+                        aria-label={playing() === path ? 'Pause' : 'Play this clip'}
+                        onClick={() => void togglePreview(path)}
+                      >
+                        {playing() === path ? '❚❚' : '▶'}
+                      </button>
+                      {/* The basename identifies a clip at a glance; the folder
+                          below it disambiguates two files that share a name. */}
+                      <span class="settings-clip-main" title={path}>
+                        <span class="settings-clip-name">{clipLabel(path)}</span>
+                        <Show when={clipDir(path)}>
+                          {(dir) => <span class="settings-clip-path">{dir()}</span>}
+                        </Show>
                       </span>
+                      <Show when={broken().includes(path)}>
+                        <span class="settings-clip-broken" title="This file could not be played">
+                          unplayable
+                        </span>
+                      </Show>
                       <button
                         type="button"
                         class="settings-clip-remove"
                         title="Remove this clip"
+                        aria-label="Remove this clip"
                         onClick={() => removeClip(path)}
                       >
                         ✕

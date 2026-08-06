@@ -795,6 +795,16 @@ stored **inverted** because of the zero-value-means-default contract on
 The Settings modal grows a **Dinosaur sounds** section — a toggle plus a clip list
 with `+ Add clips…` (native multi-select) and per-row removal.
 
+Each row has a **play/pause preview**, because a filename rarely says what a roar
+sounds like and there is otherwise no way to audition the pool without clicking
+dinosaurs. Only one preview runs at a time; loading is async, so a monotonic
+`previewTicket` decides which of two rapid clicks owns playback rather than
+letting the slower load layer a second roar over the newer one. A clip that fails
+to load is tagged `unplayable` on its row instead of silently doing nothing —
+that is the only signal a moved or deleted file gives. `playClip` returns its
+`HTMLAudioElement` (or `null`) so the modal can follow `ended`; the Discovery
+caller ignores the return.
+
 ### Click feedback is independent of sound
 
 `Dinosaur` owns a local `roaring` signal for 900ms on click, which swaps the

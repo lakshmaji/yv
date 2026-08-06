@@ -42,6 +42,18 @@ export function clipLabel(path: string): string {
 }
 
 /**
+ * The folder a clip lives in, for the second line of a Settings row.
+ *
+ * Two clips can share a basename, and the basename alone then reads as a
+ * duplicate; the directory is what tells them apart. Empty for a bare filename,
+ * so the caller can skip the line rather than render a stray separator.
+ */
+export function clipDir(path: string): string {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return cut <= 0 ? '' : path.slice(0, cut);
+}
+
+/**
  * Adds paths to a pool, dropping duplicates and preserving order. Mirrors
  * audio.NormalizePaths in Go, which is the enforcement point; this one exists so
  * picking the same file twice doesn't visibly double it in the list.
@@ -93,14 +105,17 @@ async function clipUrl(path: string): Promise<string | null> {
 }
 
 /**
- * Plays a clip once, from the start.
+ * Plays a clip once, from the start. Returns the element so a caller that wants
+ * to follow the playback — the Settings preview shows which row is sounding —
+ * can listen for `ended`; callers that just want a roar ignore it.
  *
- * Every failure is swallowed with a console warning: a clip the user has since
- * moved or deleted, or a decode the webview refuses, must not break the panel.
+ * Every failure is swallowed with a console warning and reported as `null`: a
+ * clip the user has since moved or deleted, or a decode the webview refuses,
+ * must not break the panel.
  */
-export async function playClip(path: string): Promise<void> {
+export async function playClip(path: string): Promise<HTMLAudioElement | null> {
   const url = await clipUrl(path);
-  if (!url) return;
+  if (!url) return null;
 
   let el = players.get(path);
   if (!el) {
@@ -114,7 +129,9 @@ export async function playClip(path: string): Promise<void> {
     await el.play();
   } catch (e) {
     console.warn('[audio] playback failed', path, e);
+    return null;
   }
+  return el;
 }
 
 /**
