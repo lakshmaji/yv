@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_BOUNDS,
+  DINO_EXTENT,
+  DINO_PALETTE_COUNT,
   DINO_SPECIES,
+  dinoInsets,
   dinoShape,
   randomDino,
   randomDinos,
@@ -170,6 +173,78 @@ describe('randomDinos', () => {
 
   it('returns an empty herd for no names', () => {
     expect(randomDinos([])).toEqual([]);
+  });
+
+  it('gives every animal in a herd a different colour', () => {
+    const herd = randomDinos(NAMES.slice(0, DINO_PALETTE_COUNT), { minGap: 60 });
+    expect(herd.length).toBeGreaterThan(2);
+    const bodies = new Set(herd.map((d) => d.colors.body));
+    expect(bodies.size).toBe(herd.length);
+    const indices = new Set(herd.map((d) => d.paletteIndex));
+    expect(indices.size).toBe(herd.length);
+  });
+
+  it('keeps colours consistent with the palette index it reports', () => {
+    for (const d of randomDinos(NAMES, { minGap: 60 })) {
+      expect(d.paletteIndex).toBeGreaterThanOrEqual(0);
+      expect(d.paletteIndex).toBeLessThan(DINO_PALETTE_COUNT);
+      for (const value of Object.values(d.colors)) expect(isValidColor(value)).toBe(true);
+    }
+  });
+
+  it('only repeats a colour once the herd outgrows the palette set', () => {
+    const many = Array.from({ length: DINO_PALETTE_COUNT + 4 }, (_, i) => `dino-${i}`);
+    const herd = randomDinos(many, { minGap: 40 });
+    const bodies = new Set(herd.map((d) => d.colors.body));
+    expect(bodies.size).toBe(Math.min(herd.length, DINO_PALETTE_COUNT));
+  });
+
+  it('can be told not to de-duplicate colours', () => {
+    const herd = randomDinos(NAMES, { minGap: 60, distinctColors: false });
+    for (const d of herd) {
+      expect(d.paletteIndex).toBe(randomDino(d.name)!.paletteIndex);
+    }
+  });
+
+  it('is still deterministic with colour de-duplication on', () => {
+    expect(randomDinos(NAMES, { minGap: 60 })).toEqual(randomDinos(NAMES, { minGap: 60 }));
+  });
+});
+
+describe('dinoInsets / DINO_EXTENT', () => {
+  it('scales with size', () => {
+    const insets = dinoInsets(100);
+    expect(insets.left).toBeCloseTo(DINO_EXTENT.left * 100, 6);
+    expect(insets.top).toBeCloseTo(DINO_EXTENT.top * 100, 6);
+    expect(insets.bottom).toBeLessThan(insets.top);
+  });
+
+  it('actually contains every species — the point of the constant', () => {
+    // If a profile ever grows past the declared extent, a caller insetting by it
+    // would still clip the animal at the container edge.
+    for (const species of DINO_SPECIES) {
+      for (const name of NAMES) {
+        const d = { ...dino(name, { species }), x: 0, y: 0, size: 100 };
+        for (const facing of [1, -1] as const) {
+          const s = dinoShape({ ...d, facing });
+          const paths = [
+            s.body, s.belly, ...s.plates, ...s.legsBack, ...s.legsFront,
+            ...s.arms, ...s.horns, s.frill ?? '', s.smile,
+          ];
+          for (const path of paths) {
+            const nums = (path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+            for (let i = 0; i < nums.length; i += 2) {
+              expect(nums[i], `${species} x`).toBeGreaterThanOrEqual(-DINO_EXTENT.left * 100);
+              expect(nums[i], `${species} x`).toBeLessThanOrEqual(DINO_EXTENT.right * 100);
+              expect(-nums[i + 1], `${species} v`).toBeLessThanOrEqual(DINO_EXTENT.top * 100);
+              expect(nums[i + 1], `${species} v`).toBeLessThanOrEqual(DINO_EXTENT.bottom * 100);
+            }
+          }
+          // The ground shadow is the lowest thing drawn.
+          expect(s.shadow.cy + s.shadow.ry).toBeLessThanOrEqual(DINO_EXTENT.bottom * 100);
+        }
+      }
+    }
   });
 });
 

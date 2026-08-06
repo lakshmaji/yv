@@ -1,8 +1,9 @@
-import { createMemo, For } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount, For } from 'solid-js';
 import { discoverySeed, setDiscoverySeed, discoveryMotion, setDiscoveryMotion } from '../store';
 import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '../lib/landscape/world';
 import { BIOME_RAMPS, type BiomeKind } from '../lib/landscape/palette';
-import { randomDinos } from '../lib/dino';
+import { dinoInsets, randomDinos } from '../lib/dino';
+import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import LandscapeMap from './discovery/LandscapeMap';
 
 const BIOME_LABELS: Record<BiomeKind, string> = {
@@ -18,24 +19,56 @@ const BIOME_LABELS: Record<BiomeKind, string> = {
  */
 const DINO_NAMES = ['Rexy', 'Bronte', 'Spike', 'Trixie', 'Dot', 'Nessa'];
 
+/**
+ * Sizes are deliberately modest: a tree is only ~15px tall and a summit 50–130,
+ * so anything much past 70 stops reading as an animal in a landscape and starts
+ * competing with the mountains.
+ */
+const DINO_MIN_SIZE = 44;
+const DINO_MAX_SIZE = 72;
+
 export default function DiscoveryPanel() {
   // One memo is the whole regeneration mechanism: writing the seed rebuilds the
   // world, and Solid diffs the SVG for us.
   const world = createMemo(() => generateWorld(discoverySeed()));
 
-  // The dinosaur utility knows nothing about islands; it takes bounds and a
-  // predicate, and finding it somewhere to stand is the caller's business.
-  //
-  // Sizes are deliberately modest: a tree is only ~15px tall and a summit 50–130,
-  // so anything much past 70 stops reading as an animal in a landscape and starts
-  // competing with the mountains.
+  // The map is drawn with `slice`, so it is cropped to whatever shape the panel
+  // is. Tracking the panel's size is the only way to know which viewBox
+  // coordinates are actually on screen.
+  let stageRef!: HTMLDivElement;
+  const [stageSize, setStageSize] = createSignal({ width: 0, height: 0 });
+
+  onMount(() => {
+    const observer = new ResizeObserver(([entry]) => {
+      const box = entry.contentRect;
+      setStageSize({ width: box.width, height: box.height });
+    });
+    observer.observe(stageRef);
+    onCleanup(() => observer.disconnect());
+  });
+
+  /**
+   * Where a dinosaur may stand: the visible slice of the viewBox, pulled in by
+   * the animal's own reach so none of them is clipped by the panel edge.
+   *
+   * Quantised because the bounds feed a seeded sample — without it every pixel
+   * of a window drag would reroll the placement and the herd would flicker
+   * across the island for the whole resize.
+   */
+  const dinoBounds = createMemo(() => {
+    const visible = visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize());
+    return insetRect(quantizeRect(visible, 40), dinoInsets(DINO_MAX_SIZE));
+  });
+
+  // The dinosaur utility knows nothing about islands or panels; it takes bounds
+  // and a predicate, and finding somewhere to stand is the caller's business.
   const dinos = createMemo(() =>
     randomDinos(DINO_NAMES, {
-      bounds: { x: 60, y: 120, width: WORLD_W - 120, height: WORLD_H - 200 },
+      bounds: dinoBounds(),
       allow: openGround(world(), 30),
       variant: world().seed,
-      minSize: 44,
-      maxSize: 72,
+      minSize: DINO_MIN_SIZE,
+      maxSize: DINO_MAX_SIZE,
     }),
   );
 
@@ -81,7 +114,11 @@ export default function DiscoveryPanel() {
         </div>
       </div>
 
-      <div class="landscape-stage" classList={{ 'no-motion': !discoveryMotion() }}>
+      <div
+        class="landscape-stage"
+        classList={{ 'no-motion': !discoveryMotion() }}
+        ref={stageRef}
+      >
         <LandscapeMap world={world()} dinos={dinos()} />
         <div class="landscape-meta">
           {/* The seed is shown but not editable — it is here so a world you like

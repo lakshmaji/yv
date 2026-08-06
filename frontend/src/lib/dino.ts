@@ -18,6 +18,7 @@
 import { makeRng, hashText, type Rng } from './landscape/rng';
 import { catmullRomPath, polygonPath, type Pt } from './landscape/geometry';
 import { shade } from './landscape/palette';
+import type { Insets, Rect } from './viewbox';
 
 export type DinoSpecies = 'sauropod' | 'theropod' | 'stegosaur' | 'triceratops';
 
@@ -28,11 +29,25 @@ export const DINO_SPECIES: readonly DinoSpecies[] = [
   'triceratops',
 ];
 
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+export type { Rect, Insets };
+
+/**
+ * How far a dinosaur reaches from its feet, in units of `size`.
+ *
+ * The feet are the anchor, so the figure extends about a size to each side, well
+ * over a size upward, and barely at all below. A caller that must keep the whole
+ * animal on screen insets its bounds by this — see `dinoInsets`.
+ */
+export const DINO_EXTENT = { left: 1.05, right: 1.05, top: 1.25, bottom: 0.18 } as const;
+
+/** Bounds insets that keep an animal of up to `maxSize` fully inside a rect. */
+export function dinoInsets(maxSize: number): Required<Insets> {
+  return {
+    left: DINO_EXTENT.left * maxSize,
+    right: DINO_EXTENT.right * maxSize,
+    top: DINO_EXTENT.top * maxSize,
+    bottom: DINO_EXTENT.bottom * maxSize,
+  };
 }
 
 /**
@@ -68,6 +83,8 @@ export interface Dino {
   size: number;
   /** 1 faces right, -1 faces left. */
   facing: 1 | -1;
+  /** Which palette this animal drew. Exposed so a herd can be de-duplicated. */
+  paletteIndex: number;
   colors: DinoColors;
   spots: DinoSpot[];
   /** 0–1, for staggering idle animation so a herd doesn't move in lockstep. */
@@ -265,8 +282,11 @@ const PROFILES: Record<DinoSpecies, DinoProfile> = {
   triceratops: TRICERATOPS,
 };
 
-function buildColors(rng: Rng): DinoColors {
-  const base = rng.pick(PALETTES);
+/** How many distinct looks exist. A herd larger than this must repeat. */
+export const DINO_PALETTE_COUNT = PALETTES.length;
+
+function colorsAt(index: number): DinoColors {
+  const base = PALETTES[((index % PALETTES.length) + PALETTES.length) % PALETTES.length];
   return {
     ...base,
     // Derived rather than listed, so a spot can never clash with its own body.
@@ -305,7 +325,7 @@ export function randomDino(name: string, opts: DinoOptions = {}): Dino | null {
   const profile = PROFILES[kind];
   const size = rng.range(minSize, maxSize);
   const facing: 1 | -1 = rng.chance(0.5) ? 1 : -1;
-  const colors = buildColors(rng);
+  const paletteIndex = rng.int(0, PALETTES.length - 1);
   const spots = buildSpots(rng, profile);
   const phase = rng.next();
 
@@ -315,7 +335,10 @@ export function randomDino(name: string, opts: DinoOptions = {}): Dino | null {
       y: rng.range(bounds.y, bounds.y + bounds.height),
     };
     if (allow && !allow(p)) continue;
-    return { name, species: kind, x: p.x, y: p.y, size, facing, colors, spots, phase };
+    return {
+      name, species: kind, x: p.x, y: p.y, size, facing,
+      paletteIndex, colors: colorsAt(paletteIndex), spots, phase,
+    };
   }
   return null;
 }
@@ -326,10 +349,12 @@ export function randomDino(name: string, opts: DinoOptions = {}): Dino | null {
  */
 export function randomDinos(
   names: readonly string[],
-  opts: DinoOptions & { minGap?: number } = {},
+  opts: DinoOptions & { minGap?: number; distinctColors?: boolean } = {},
 ): Dino[] {
-  const { minGap = 150, ...rest } = opts;
+  const { minGap = 150, distinctColors = true, ...rest } = opts;
   const placed: Dino[] = [];
+  const taken = new Set<number>();
+
   for (const name of names) {
     const dino = randomDino(name, {
       ...rest,
@@ -338,7 +363,20 @@ export function randomDinos(
         return placed.every((d) => Math.hypot(d.x - p.x, d.y - p.y) >= minGap);
       },
     });
-    if (dino) placed.push(dino);
+    if (!dino) continue;
+
+    // Each animal picks its own palette from its name, so a herd can easily end
+    // up with two of the same colour — which defeats the point of naming them.
+    // Walk forward to the next free palette instead; deterministic, and it only
+    // repeats once the herd is larger than the palette set.
+    if (distinctColors && taken.size < DINO_PALETTE_COUNT) {
+      let index = dino.paletteIndex;
+      while (taken.has(index)) index = (index + 1) % DINO_PALETTE_COUNT;
+      dino.paletteIndex = index;
+      dino.colors = colorsAt(index);
+      taken.add(index);
+    }
+    placed.push(dino);
   }
   // Back-to-front, so a renderer can draw them in order and get correct overlap.
   return placed.sort((a, b) => a.y - b.y);
