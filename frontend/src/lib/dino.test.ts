@@ -319,6 +319,42 @@ describe('dinoShape', () => {
     }
   });
 
+  it('fans the arcs open as they travel, not just scales them up', () => {
+    // Measured as angle about the mouth, so it is independent of radius: equal
+    // angles would mean three nested copies of one shape — a logo, not a wave.
+    for (const d of all) {
+      const s = dinoShape(d);
+      const angles = s.growl.map((arc) => {
+        const nums = (arc.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+        const first = { x: nums[0], y: nums[1] };
+        const last = { x: nums[nums.length - 2], y: nums[nums.length - 1] };
+        const a0 = Math.atan2(first.y - s.growlOrigin.y, first.x - s.growlOrigin.x);
+        const a1 = Math.atan2(last.y - s.growlOrigin.y, last.x - s.growlOrigin.x);
+        let span = Math.abs(a1 - a0);
+        if (span > Math.PI) span = 2 * Math.PI - span;
+        return span;
+      });
+      expect(angles[1]).toBeGreaterThan(angles[0] + 0.1);
+      expect(angles[2]).toBeGreaterThan(angles[1] + 0.1);
+      // Still a forward cone, not a halo around the head.
+      expect(angles[2]).toBeLessThan(Math.PI * 0.75);
+    }
+  });
+
+  it('radiates from the mouth, on the face and forward of centre', () => {
+    for (const species of DINO_SPECIES) {
+      const d = { ...dino('Rexy', { species }), x: 0, y: 0, size: 100, facing: 1 as const };
+      const s = dinoShape(d);
+      expect(s.growlOrigin.x).toBeGreaterThan(0);
+      // Level with the smile, which is where a mouth is.
+      const lipNums = (s.smile.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+      const lipYs: number[] = [];
+      for (let i = 1; i < lipNums.length; i += 2) lipYs.push(lipNums[i]);
+      expect(s.growlOrigin.y).toBeGreaterThanOrEqual(Math.min(...lipYs) - 1);
+      expect(s.growlOrigin.y).toBeLessThanOrEqual(Math.max(...lipYs) + 1);
+    }
+  });
+
   it('puts the growl in front of the face, on whichever way it faces', () => {
     for (const species of DINO_SPECIES) {
       for (const facing of [1, -1] as const) {

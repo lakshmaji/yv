@@ -22,6 +22,17 @@ import { shade } from '../../lib/landscape/palette';
  * `phase`, so a herd never moves in unison — which is the point: distinct
  * rhythms are what let you pick one animal out at a glance.
  */
+/**
+ * Stroke multiplier per growl ring, outward.
+ *
+ * The arcs already fan wider as they travel; thickening them a little as well
+ * makes the expanding wavefront unmistakable at map scale, where the difference
+ * in angular span alone is only a few pixels.
+ */
+function ringWeight(ring: number): number {
+  return 1 + ring * 0.16;
+}
+
 export default function Dinosaur(props: { dino: Dino }) {
   const shape = () => dinoShape(props.dino);
   const c = () => props.dino.colors;
@@ -129,14 +140,14 @@ export default function Dinosaur(props: { dino: Dino }) {
                   d={arc}
                   fill="none"
                   stroke="rgba(4,18,30,.5)"
-                  stroke-width={Math.max(2.2, props.dino.size * 0.05)}
+                  stroke-width={Math.max(2.2, props.dino.size * 0.05) * ringWeight(i())}
                   stroke-linecap="round"
                 />
                 <path
                   d={arc}
                   fill="none"
                   stroke="#f4f8fb"
-                  stroke-width={Math.max(1, props.dino.size * 0.026)}
+                  stroke-width={Math.max(1, props.dino.size * 0.026) * ringWeight(i())}
                   stroke-linecap="round"
                 />
               </g>

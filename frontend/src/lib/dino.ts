@@ -427,6 +427,8 @@ export interface DinoShape {
    * to be flipped by hand.
    */
   growl: string[];
+  /** The point the arcs radiate from — the mouth, in absolute coordinates. */
+  growlOrigin: { x: number; y: number };
 }
 
 /**
@@ -451,8 +453,15 @@ function frillFan(frill: NonNullable<DinoProfile['frill']>): [number, number][] 
 /** Radii of the growl arcs, in normalised units, innermost first. */
 const GROWL_RADII = [0.13, 0.21, 0.29] as const;
 
-/** Half-angle of the arcs, either side of straight ahead. */
-const GROWL_SPREAD = (38 * Math.PI) / 180;
+/**
+ * Half-angle of each arc either side of straight ahead, widening outward.
+ *
+ * Concentric arcs of equal angle read as a static nested set — a logo. Letting
+ * the span grow with distance makes the call open into a cone, which is both
+ * what a spreading wave does and what makes the sequence read as motion rather
+ * than three rings switching on.
+ */
+const GROWL_SPREAD = [30, 41, 52].map((deg) => (deg * Math.PI) / 180);
 
 /**
  * Arcs radiating from the mouth, sampled as polylines.
@@ -464,15 +473,21 @@ const GROWL_SPREAD = (38 * Math.PI) / 180;
 function growlArcs(profile: DinoProfile): [number, number][][] {
   const lips = profile.smile;
   const mouth = lips[Math.floor(lips.length / 2)];
-  const steps = 12;
-  return GROWL_RADII.map((radius) => {
+  const steps = 14;
+  return GROWL_RADII.map((radius, ring) => {
+    const spread = GROWL_SPREAD[ring];
     const pts: [number, number][] = [];
     for (let i = 0; i <= steps; i++) {
-      const angle = -GROWL_SPREAD + (2 * GROWL_SPREAD * i) / steps;
+      const angle = -spread + (2 * spread * i) / steps;
       pts.push([mouth[0] + Math.cos(angle) * radius, mouth[1] + Math.sin(angle) * radius]);
     }
     return pts;
   });
+}
+
+/** Where the growl radiates from, in normalised units. */
+function growlOrigin(profile: DinoProfile): [number, number] {
+  return profile.smile[Math.floor(profile.smile.length / 2)];
 }
 
 /** An 8-point rounded limb, smoothed into a stumpy leg. */
@@ -590,5 +605,9 @@ export function dinoShape(dino: Dino): DinoShape {
     glint: { cx: eye.x - facing * eyeR * 0.35, cy: eye.y - eyeR * 0.35, r: eyeR * 0.4 },
     smile: catmullRomPath(map(profile.smile), false),
     growl: growlArcs(profile).map((arc) => catmullRomPath(map(arc), false)),
+    growlOrigin: (() => {
+      const [u, v] = growlOrigin(profile);
+      return P(u, v);
+    })(),
   };
 }
