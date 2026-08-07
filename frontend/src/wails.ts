@@ -19,6 +19,10 @@ import type {
 interface WailsRuntime {
   EventsOn(event: string, callback: (...args: any[]) => void): () => void;
   EventsEmit(event: string, ...args: any[]): void;
+  // Opens a URL in the system browser. Wails injects this; only the type was
+  // missing. It accepts http(s) only — a file:// path is refused, which is why
+  // openfolder_*.go shells out to the platform opener instead.
+  BrowserOpenURL(url: string): void;
 }
 
 interface GoApp {

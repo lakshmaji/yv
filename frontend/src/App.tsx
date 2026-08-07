@@ -8,7 +8,8 @@ import {
   spotlightOpen, setSpotlightOpen,
   editingCmd, editingShortcut, settingsProjectId, envModalOpen,
   maximizedCmd, setMaximizedCmd, filteredCommands,
-  setShortcutsModalOpen,
+  shortcutsModalOpen, setShortcutsModalOpen,
+  aboutModalOpen, setAboutModalOpen,
   activeView, setActiveView,
   settingsModalOpen, setSettingsModalOpen, loadAppSettings,
 } from './store';
@@ -25,6 +26,7 @@ import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
+import AboutModal from './components/modals/AboutModal';
 import SettingsModal from './components/modals/SettingsModal';
 import IncomingShareModal from './components/modals/IncomingShareModal';
 import IncomingConnectModal from './components/modals/IncomingConnectModal';
@@ -147,7 +149,8 @@ export default function App() {
       // A maximized terminal is below any modal, so it only yields to Esc
       // once nothing is stacked on top of it.
       const modalOpen =
-        editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() || settingsModalOpen();
+        editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
+        settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen();
       if (maximizedCmd() && !modalOpen) {
         setMaximizedCmd(null);
         return;
@@ -158,12 +161,14 @@ export default function App() {
       setEnvModalOpen(false);
       setShortcutsModalOpen(false);
       setSettingsModalOpen(false);
+      setAboutModalOpen(false);
     }
   }
 
   let unsubFullscreen: (() => void) | undefined;
   let unsubResources: (() => void) | undefined;
   let unsubShortcuts: (() => void) | undefined;
+  let unsubAbout: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubDashboard: (() => void) | undefined;
   let unsubPeers: Array<() => void> = [];
@@ -182,6 +187,9 @@ export default function App() {
     });
     unsubShortcuts = runtime.EventsOn('open-keyboard-shortcuts', () => {
       setShortcutsModalOpen(true);
+    });
+    unsubAbout = runtime.EventsOn('open-about', () => {
+      setAboutModalOpen(true);
     });
     // ⌘, and ⌘D are native menu accelerators — macOS swallows them before they
     // reach the webview, so they arrive only as these events.
@@ -261,6 +269,7 @@ export default function App() {
     unsubFullscreen?.();
     unsubResources?.();
     unsubShortcuts?.();
+    unsubAbout?.();
     unsubSettings?.();
     unsubDashboard?.();
     unsubPeers.forEach(off => off());
@@ -290,6 +299,7 @@ export default function App() {
       <ProjectSettingsModal />
       <EnvironmentsModal />
       <KeyboardShortcutsModal />
+      <AboutModal />
       <SettingsModal />
       {/* Global, not inside DiscoveryPanel: a request can arrive on any view. */}
       <Show when={incomingConnect()}>

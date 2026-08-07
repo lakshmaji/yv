@@ -68,6 +68,9 @@ const [envModalOpen, setEnvModalOpen] = createSignal(false);
 // Keyboard shortcuts help modal (opened from the Help menu / ⌘/)
 const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
 
+// About dialog (opened from Help → About yv)
+const [aboutModalOpen, setAboutModalOpen] = createSignal(false);
+
 // Which main view is showing. Dashboard and Discovery are app-wide rather than
 // per-project, so they replace both the command list and the (meaningless there)
 // groups column.
@@ -444,6 +447,7 @@ export {
   projectEnvs, setProjectEnvs, loadProjectEnvs,
   envModalOpen, setEnvModalOpen,
   shortcutsModalOpen, setShortcutsModalOpen,
+  aboutModalOpen, setAboutModalOpen,
   activeEnv, activeEnvVarCount,
   activeView, setActiveView,
   discoverySeed, setDiscoverySeed,

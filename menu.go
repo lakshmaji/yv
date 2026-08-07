@@ -13,14 +13,20 @@ const (
 	helpIssuesURL = "https://github.com/lakshmaji/yv/issues"
 )
 
+// aboutEvent opens the About dialog, which is a frontend modal like every other
+// one in the app rather than a native MessageDialog — a system alert box cannot
+// lay out links and would be the only window here with OS chrome.
+const aboutEvent = "open-about"
+
 // appMenu builds the macOS menu bar. It reconstructs the standard App / Edit /
 // Window menus (which Wails provides automatically when no menu is set) and adds
 // custom "View" and "Help" menus.
 //
-// Settings lives under View rather than in the canonical "yv › Settings…" slot
-// because menu.AppMenu() maps to the native AppMenuRole, which Wails builds in
-// Objective-C and does not expose to Go — reaching that slot would mean
-// hand-rolling the whole app menu and losing Hide Others / Services.
+// Settings and About live under View and Help rather than in the canonical
+// "yv › Settings…" / "yv › About yv" slots because menu.AppMenu() maps to the
+// native AppMenuRole, which Wails builds in Objective-C and does not expose to
+// Go — reaching those slots would mean hand-rolling the whole app menu and
+// losing Hide Others / Services.
 func appMenu(ctx func() context.Context) *menu.Menu {
 	m := menu.NewMenu()
 	m.Append(menu.AppMenu())
@@ -39,6 +45,10 @@ func appMenu(ctx func() context.Context) *menu.Menu {
 	m.Append(menu.WindowMenu())
 
 	help := menu.NewMenu()
+	help.Append(menu.Text("About yv", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(ctx(), aboutEvent)
+	}))
+	help.Append(menu.Separator())
 	help.Append(menu.Text("Keyboard Shortcuts", keys.CmdOrCtrl("/"), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(ctx(), "open-keyboard-shortcuts")
 	}))

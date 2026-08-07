@@ -1245,6 +1245,74 @@
       padding-top: 10px;
     }
 
+    /* ── About modal ──────────────────────────────────────── */
+    .about-modal {
+      width: 440px;
+      gap: 12px;
+    }
+
+    .about-lead {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .about-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .about-dot { opacity: .5; }
+
+    /* A link that reads as a link but is a <button>, because an anchor would
+       navigate the app window instead of handing off to the browser. */
+    .about-link {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      color: var(--accent);
+      cursor: pointer;
+      align-self: flex-start;
+    }
+    .about-link:hover { text-decoration: underline; }
+
+    .about-note {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .about-note-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--text);
+    }
+
+    .about-note p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    /* btn-primary is flex: 1 for footer rows; here it sits alone in a column,
+       so it has to be told not to span the whole card. */
+    .about-modal .about-star {
+      flex: 0 0 auto;
+      align-self: flex-start;
+    }
+
     /* ── Keyboard Shortcuts modal ─────────────────────────── */
     .kb-modal {
       width: 760px;
