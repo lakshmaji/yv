@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   bankFrames,
   bladeAngles,
-  chatterBubble,
-  CHAT_CHAR_W,
   droneMessage,
   BURST_SHARDS,
   burstShards,
@@ -25,6 +23,7 @@ import {
   type DroneShape,
   type DroneVariant,
 } from './drone';
+import { chatBubble } from './chatBubble';
 import { insetRect, type Rect } from './viewbox';
 import type { Pt } from './landscape/geometry';
 
@@ -651,69 +650,9 @@ describe('droneMessage', () => {
   });
 });
 
-describe('chatterBubble', () => {
-  it('grows with the text, so a longer line is not clipped', () => {
-    const short = chatterBubble('Found 1 rare dinosaur');
-    const long = chatterBubble('Found 100 extremely rare and unusual dinosaurs');
-    expect(long.w).toBeGreaterThan(short.w);
-    // Same type size, so the box height is the one thing that must not move.
-    expect(long.h).toBe(short.h);
-  });
-
-  it('leaves room for the text it was sized for', () => {
-    const text = 'Found 3 rare dinosaurs';
-    const box = chatterBubble(text);
-    const textWidth = text.length * CHAT_CHAR_W;
-    expect(box.w).toBeGreaterThan(textWidth);
-    // The anchor is inside the box, and the string still ends before the far edge.
-    expect(box.textX).toBeGreaterThan(box.x);
-    expect(box.textX + textWidth).toBeLessThanOrEqual(box.x + box.w);
-  });
-
-  it('puts the baseline inside the box', () => {
-    const box = chatterBubble('Found 2 rare dinosaurs');
-    expect(box.textY).toBeGreaterThan(box.y);
-    expect(box.textY).toBeLessThan(box.y + box.h);
-  });
-
-  /**
-   * The bubble is drawn relative to the drone's origin, so "above and to the
-   * right" is the sign of its own coordinates — and it is what keeps the box
-   * clear of the rotor discs and the ground shadow.
-   */
-  it('sits above and to the right of the airframe', () => {
-    const box = chatterBubble('Found 1 rare dinosaur');
-    expect(box.x).toBeGreaterThan(0);
-    expect(box.y + box.h).toBeLessThan(0);
-  });
-
-  it('scales its offset with the airframe, so a big drone is not overlapped', () => {
-    const small = chatterBubble('Found 1 rare dinosaur', 20);
-    const big = chatterBubble('Found 1 rare dinosaur', 60);
-    expect(big.x).toBeGreaterThan(small.x);
-    expect(big.y).toBeLessThan(small.y);
-    // Text size is fixed, so the box itself must not scale with the airframe.
-    expect(big.w).toBe(small.w);
-  });
-
-  it('draws a closed tail path aimed back at the drone', () => {
-    const box = chatterBubble('Found 4 rare dinosaurs');
-    expect(box.tail).toMatch(/^M [\d.-]+ [\d.-]+ L [\d.-]+ [\d.-]+ L [\d.-]+ [\d.-]+ Z$/);
-    // The tip is the third point: nearer the airframe than the bubble's underside.
-    const ys = [...box.tail.matchAll(/-?\d+\.\d+/g)].map((m) => Number(m[0]));
-    expect(ys[5]).toBeGreaterThan(box.y + box.h);
-  });
-
-  it('never collapses on an empty string', () => {
-    const box = chatterBubble('');
-    expect(box.w).toBeGreaterThan(0);
-    expect(box.h).toBeGreaterThan(0);
-  });
-});
-
 describe('droneInsets with a chat bubble', () => {
   const text = 'Found 3 rare dinosaurs';
-  const box = chatterBubble(text, DRONE_SIZE);
+  const box = chatBubble(text, DRONE_SIZE);
 
   it('reserves more room on the right and top than the airframe alone', () => {
     const bare = droneInsets(DRONE_SIZE, DEFAULT_VARIANT);
@@ -746,7 +685,7 @@ describe('droneInsets with a chat bubble', () => {
   });
 
   it('reserves room for a longer message, so an AI-written line still fits', () => {
-    const chatty = chatterBubble('Found 3 astonishingly rare dinosaurs today', DRONE_SIZE);
+    const chatty = chatBubble('Found 3 astonishingly rare dinosaurs today', DRONE_SIZE);
     expect(droneInsets(DRONE_SIZE, DEFAULT_VARIANT, chatty).right).toBeGreaterThan(
       droneInsets(DRONE_SIZE, DEFAULT_VARIANT, box).right,
     );

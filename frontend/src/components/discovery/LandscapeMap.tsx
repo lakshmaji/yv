@@ -3,6 +3,7 @@ import { LAND } from '../../lib/landscape/palette';
 import { ringPath, type World } from '../../lib/landscape/world';
 import type { Dino } from '../../lib/dino';
 import type { Drone as DroneData } from '../../lib/drone';
+import type { ChatBubble } from '../../lib/chatBubble';
 import Dinosaur from './Dinosaur';
 import Drone from './Drone';
 import Terrain from './Terrain';
@@ -30,6 +31,11 @@ export default function LandscapeMap(props: {
   droneLocked?: boolean;
   /** The sweep came up empty and the drone is going up in smoke. */
   droneBursting?: boolean;
+  /**
+   * What the drone is saying. Sized by the panel rather than here, because the
+   * same bubble constrains where the drone is allowed to fly.
+   */
+  droneChat?: ChatBubble | null;
   /**
    * Whether ambient motion is on. Only the drone needs telling — everything else
    * is stopped by the `.no-motion` class on the stage, but the drone's travel is
@@ -121,11 +127,7 @@ export default function LandscapeMap(props: {
             locked={props.droneLocked ?? false}
             bursting={props.droneBursting}
             motion={props.motion}
-            // The herd it can actually see, not the peer count: the bubble is
-            // drawn on the map, and claiming a find that has no dinosaur on
-            // screen would contradict it. The toolbar chip owns that
-            // discrepancy and already reports it as "off-map".
-            found={props.dinos?.length ?? 0}
+            chat={props.droneChat}
           />
         )}
       </Show>

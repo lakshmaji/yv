@@ -1,12 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from 'solid-js';
-import {
-  bankFrames,
-  burstShards,
-  chatterBubble,
-  droneMessage,
-  patrolFrames,
-  type Drone as DroneData,
-} from '../../lib/drone';
+import { bankFrames, burstShards, patrolFrames, type Drone as DroneData } from '../../lib/drone';
+import type { ChatBubble } from '../../lib/chatBubble';
 import { LAND } from '../../lib/landscape/palette';
 import DroneGlyph from './DroneGlyph';
 
@@ -45,8 +39,12 @@ export default function Drone(props: {
   motion?: boolean;
   /** Mid-explosion: the airframe is gone and only the burst is drawn. */
   bursting?: boolean;
-  /** Dinosaurs on the map, for the drone's report. 0 means it says nothing. */
-  found?: number;
+  /**
+   * What it is saying, already sized and shaped. Passed in rather than derived
+   * here because the same object sets the flight bounds — computing it twice is
+   * how a bubble ends up drawn somewhere the drone was never allowed to fly.
+   */
+  chat?: ChatBubble | null;
 }) {
   let rootRef!: SVGGElement;
   let bankRef!: SVGGElement;
@@ -104,12 +102,8 @@ export default function Drone(props: {
 
   onCleanup(() => stop());
 
-  /** What it is saying, and the box that fits it — null when it has nothing. */
-  const chatter = createMemo(() => {
-    if (props.bursting) return null;
-    const text = droneMessage(props.found ?? 0);
-    return text === null ? null : { text, box: chatterBubble(text, props.drone.size) };
-  });
+  /** Nothing is said mid-explosion. */
+  const chatter = createMemo(() => (props.bursting ? null : (props.chat ?? null)));
 
   return (
     <g
@@ -205,18 +199,20 @@ export default function Drone(props: {
       <Show when={chatter()}>
         {(chat) => (
           <g transform={`translate(${props.drone.origin.x} ${props.drone.origin.y})`}>
-            <g class="land-drone-chat">
-              <path class="land-drone-chat-tail" d={chat().box.tail} />
-              <rect
-                class="land-drone-chat-box"
-                x={chat().box.x}
-                y={chat().box.y}
-                width={chat().box.w}
-                height={chat().box.h}
-                rx={chat().box.r}
-                ry={chat().box.r}
-              />
-              <text class="land-drone-chat-text" x={chat().box.textX} y={chat().box.textY}>
+            <g class="land-drone-chat" data-kind={chat().kind}>
+              {/* Tail first, so the body is painted over the join and no seam
+                  shows where the two meet. */}
+              <Show when={chat().tail}>
+                <path class="land-drone-chat-tail" d={chat().tail} />
+              </Show>
+              <path class="land-drone-chat-box" d={chat().path} />
+              {/* Open, unfilled strokes — the burst's ticks and the sketch's
+                  second pass. Kept out of the body path so the fill rule
+                  cannot decide what they look like. */}
+              <For each={chat().accents}>
+                {(accent) => <path class="land-drone-chat-accent" d={accent} />}
+              </For>
+              <text class="land-drone-chat-text" x={chat().textX} y={chat().textY}>
                 {chat().text}
               </text>
             </g>

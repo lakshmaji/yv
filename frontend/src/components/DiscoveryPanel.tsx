@@ -35,13 +35,8 @@ import {
   type LoopStatus,
 } from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
-import {
-  chatterBubble,
-  DRONE_SIZE,
-  droneInsets,
-  droneMessage,
-  dronePatrol,
-} from '../lib/drone';
+import { DRONE_SIZE, droneInsets, droneMessage, dronePatrol } from '../lib/drone';
+import { chatBubble } from '../lib/chatBubble';
 import { hashText } from '../lib/landscape/rng';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import { go } from '../wails';
@@ -145,12 +140,19 @@ export default function DiscoveryPanel() {
 
   /**
    * The bubble the drone is currently showing, or null when it has nothing to
-   * say. Computed here as well as in Drone because it constrains where the drone
-   * may fly — both call the same pure function on the same count, so they agree.
+   * say.
+   *
+   * Built here, once, and passed down: the same object both constrains where the
+   * drone may fly and gets drawn, so the box on screen can never be one the
+   * flight bounds did not account for.
    */
   const droneChat = createMemo(() => {
     const text = droneMessage(dinos().length);
-    return text === null ? null : chatterBubble(text, DRONE_SIZE);
+    if (text === null) return null;
+    // Seeded from the launch and the world, so the shape holds still for the
+    // whole sweep — a bubble that reshaped itself on every re-render would be
+    // unreadable — and a later drone gets a different one.
+    return chatBubble(text, DRONE_SIZE, world().seed ^ hashText(`chat:${droneLaunch()}`));
   });
 
   const droneBounds = createMemo(() => {
@@ -609,6 +611,7 @@ export default function DiscoveryPanel() {
           onSelectDino={handleSelect}
           drone={droneState() === 'gone' ? undefined : drone()}
           droneLocked={peers().length > 0}
+          droneChat={droneChat()}
           droneBursting={droneState() === 'bursting'}
           motion={discoveryMotion()}
         />

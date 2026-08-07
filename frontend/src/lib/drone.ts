@@ -16,6 +16,7 @@
 import { hashText, makeRng, type Rng } from './landscape/rng';
 import { centroid, dist, type Pt } from './landscape/geometry';
 import type { Insets, Rect } from './viewbox';
+import type { ChatBubble } from './chatBubble';
 
 /**
  * Waypoints per lap. Fixed, because every stop is a keyframe: the route is
@@ -742,6 +743,7 @@ export function bankFrames(drone: Drone): FrameStep[] {
   return steps;
 }
 
+
 // --- what the drone says ---------------------------------------------------
 
 /**
@@ -752,87 +754,11 @@ export function bankFrames(drone: Drone): FrameStep[] {
  * repeating it would be noise attached to a moving object. The bubble is for
  * the one moment the chip cannot dramatise — the find.
  *
- * Kept a pure function of the count so the wording is swappable. A generated
- * or AI-written line can be dropped in here, or passed to `chatterBubble`
- * directly, without any of the geometry below needing to know.
+ * Kept a pure function of the count so the wording is swappable. A generated or
+ * AI-written line can be dropped in here, or handed to `chatBubble` directly,
+ * and none of the geometry needs to know.
  */
 export function droneMessage(found: number): string | null {
   if (!Number.isFinite(found) || found <= 0) return null;
   return `Found ${found} rare dinosaur${found === 1 ? '' : 's'}`;
-}
-
-/** Type size of the bubble's text, in world units. Matches .land-drone-chat. */
-export const CHAT_FONT = 12;
-
-/**
- * Advance width of one character at CHAT_FONT.
- *
- * The bubble is sized from the string rather than measured, because it is drawn
- * inside an SVG viewBox that is scaled to the panel — getComputedTextLength
- * would need a live, laid-out element and would put the geometry somewhere no
- * test can reach. 0.6em is the advance of the monospace face the label styles
- * already use, so the estimate is exact for it rather than approximate.
- */
-export const CHAT_CHAR_W = CHAT_FONT * 0.6;
-
-const CHAT_PAD_X = 9;
-const CHAT_PAD_Y = 6;
-/** Gap between the airframe and the bubble's near corner. */
-const CHAT_GAP = 6;
-
-export interface ChatBubble {
-  /** Box, in the same space as `Drone.origin` — i.e. it travels with the drone. */
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** Corner radius. */
-  r: number;
-  /** Tail from the bubble back to the airframe, as a path `d`. */
-  tail: string;
-  /** Where the text baseline anchor sits, left-aligned inside the box. */
-  textX: number;
-  textY: number;
-}
-
-/**
- * A speech bubble sized to `text`, placed up and to the right of the drone.
- *
- * Up and to the right because the drone's own reach is widest across its rotor
- * discs and the ground shadow sits below it, so above the airframe is the only
- * side where a box cannot overlap the thing it belongs to. The caller is
- * responsible for the bubble staying inside the panel: like the airframe, it is
- * drawn relative to `origin` and travels with it.
- */
-export function chatterBubble(text: string, size = DRONE_SIZE): ChatBubble {
-  const w = Math.max(1, text.length) * CHAT_CHAR_W + CHAT_PAD_X * 2;
-  const h = CHAT_FONT + CHAT_PAD_Y * 2;
-
-  // Clear of the rotor disc on the near side, then up by the box's own height.
-  const x = size * 0.75 + CHAT_GAP;
-  const y = -(size * 1.15) - h;
-
-  // A stubby triangle off the bottom-left corner, aimed back at the airframe.
-  const tipX = size * 0.3;
-  const tipY = -(size * 0.7);
-  const baseX = x + CHAT_PAD_X;
-  const tail = [
-    `M ${baseX.toFixed(2)} ${(y + h).toFixed(2)}`,
-    `L ${(baseX + CHAT_CHAR_W * 1.6).toFixed(2)} ${(y + h).toFixed(2)}`,
-    `L ${tipX.toFixed(2)} ${tipY.toFixed(2)}`,
-    'Z',
-  ].join(' ');
-
-  return {
-    x,
-    y,
-    w,
-    h,
-    r: 6,
-    tail,
-    textX: x + CHAT_PAD_X,
-    // Baseline rather than centre: dominant-baseline is inconsistent across
-    // engines, and this only has to agree with itself.
-    textY: y + CHAT_PAD_Y + CHAT_FONT * 0.8,
-  };
 }
