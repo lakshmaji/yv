@@ -139,6 +139,13 @@ func TestUnmarshalOneProject(t *testing.T) {
 }
 
 func TestConfigPath(t *testing.T) {
+	// configPath has an MkdirAll side effect, so without redirecting the config
+	// dir this test creates a real ~/.config/yv. HOME alone is not enough: on
+	// Linux os.UserConfigDir prefers XDG_CONFIG_HOME and only falls back to
+	// $HOME/.config.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+
 	path, err := configPath()
 	if err != nil {
 		t.Fatalf("configPath: %v", err)

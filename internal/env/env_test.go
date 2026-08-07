@@ -9,6 +9,22 @@ import (
 	"yv/internal/models"
 )
 
+// isolateHome points os.UserConfigDir at a scratch directory and returns it.
+//
+// Overriding HOME alone is not enough. On Linux os.UserConfigDir prefers
+// XDG_CONFIG_HOME and only falls back to $HOME/.config — and GitHub's runners
+// set XDG_CONFIG_HOME — so a HOME-only override silently reads and writes the
+// real ~/.config/yv. Clearing it restores the $HOME fallback everywhere. On
+// macOS the path is $HOME/Library/Application Support either way, which is why
+// this only ever failed on Linux.
+func isolateHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	return home
+}
+
 func TestMerge(t *testing.T) {
 	cases := []struct {
 		name string
@@ -252,7 +268,7 @@ func TestActiveVars(t *testing.T) {
 }
 
 func TestStoreRoundTrip(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	s := NewStore()
 
 	cases := []struct {
@@ -354,7 +370,7 @@ func TestStoreRoundTrip(t *testing.T) {
 }
 
 func TestStoreGetUnknownProject(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	got := NewStore().Get("nope")
 	if got.Environments == nil {
 		t.Error("Environments should be an empty slice, not nil")
@@ -365,7 +381,7 @@ func TestStoreGetUnknownProject(t *testing.T) {
 }
 
 func TestStoreDelete(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	s := NewStore()
 
 	if err := s.Save("p1", models.ProjectEnvs{
@@ -385,8 +401,7 @@ func TestStoreDelete(t *testing.T) {
 }
 
 func TestStoreFileIsOwnerOnly(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := isolateHome(t)
 	s := NewStore()
 
 	if err := s.Save("p1", models.ProjectEnvs{
@@ -418,7 +433,7 @@ func TestStoreFileIsOwnerOnly(t *testing.T) {
 }
 
 func TestStoreActiveVars(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	s := NewStore()
 	if err := s.Save("p1", models.ProjectEnvs{
 		Environments: []models.Environment{
@@ -467,7 +482,7 @@ func TestValidateColor(t *testing.T) {
 }
 
 func TestStoreNormalizesColors(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	s := NewStore()
 
 	if err := s.Save("p1", models.ProjectEnvs{

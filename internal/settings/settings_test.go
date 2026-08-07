@@ -11,6 +11,22 @@ import (
 	"yv/internal/models"
 )
 
+// isolateHome points os.UserConfigDir at a scratch directory and returns it.
+//
+// Overriding HOME alone is not enough. On Linux os.UserConfigDir prefers
+// XDG_CONFIG_HOME and only falls back to $HOME/.config — and GitHub's runners
+// set XDG_CONFIG_HOME — so a HOME-only override silently reads and writes the
+// real ~/.config/yv. Clearing it restores the $HOME fallback everywhere. On
+// macOS the path is $HOME/Library/Application Support either way, which is why
+// this only ever failed on Linux.
+func isolateHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	return home
+}
+
 func TestNormalize(t *testing.T) {
 	all := DefaultPanels
 
@@ -155,7 +171,7 @@ func TestValidate(t *testing.T) {
 // --- store tests (isolated via HOME, as in internal/env) ---
 
 func TestStoreDefaultsWhenMissing(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	got := NewStore().Get()
 	if got.MetricsEnabled {
@@ -176,7 +192,7 @@ func TestStoreDefaultsWhenMissing(t *testing.T) {
 }
 
 func TestStoreRoundTrip(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	if _, err := s.Save(models.Settings{
@@ -209,8 +225,7 @@ func TestStoreRoundTrip(t *testing.T) {
 }
 
 func TestStoreDefaultsWhenCorrupt(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	isolateHome(t)
 
 	path, err := storePath()
 	if err != nil {
@@ -227,7 +242,7 @@ func TestStoreDefaultsWhenCorrupt(t *testing.T) {
 }
 
 func TestUnknownFieldsIgnored(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	path, _ := storePath()
 	raw := `{"schemaVersion":1,"metricsEnabled":true,"retentionDays":45,"futureSetting":"hello"}`
@@ -242,7 +257,7 @@ func TestUnknownFieldsIgnored(t *testing.T) {
 }
 
 func TestStoreFileIsOwnerOnly(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	if _, err := s.Save(models.Settings{RetentionDays: 10}); err != nil {
@@ -260,7 +275,7 @@ func TestStoreFileIsOwnerOnly(t *testing.T) {
 }
 
 func TestHotPathMirrors(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	if s.MetricsEnabled() {
@@ -287,7 +302,7 @@ func TestHotPathMirrors(t *testing.T) {
 }
 
 func TestSaveRejectsInvalidWithoutWriting(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	if _, err := s.Save(models.Settings{RetentionDays: 99999}); err == nil {
@@ -301,7 +316,7 @@ func TestSaveRejectsInvalidWithoutWriting(t *testing.T) {
 }
 
 func TestOnChangeFires(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	var seen []models.Settings
@@ -322,7 +337,7 @@ func TestOnChangeFires(t *testing.T) {
 }
 
 func TestSavedFileIsValidJSON(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 
 	s := NewStore()
 	if _, err := s.Save(models.Settings{MetricsEnabled: true, RetentionDays: 20}); err != nil {

@@ -14,9 +14,13 @@ import (
 func newShareTestApp(t *testing.T, projects []models.Project) *App {
 	t.Helper()
 
-	// config.Store resolves its path through os.UserConfigDir, which is derived
-	// from HOME on macOS, so redirecting HOME isolates the store completely.
+	// config.Store resolves its path through os.UserConfigDir. Redirecting HOME
+	// is not enough on its own: on Linux os.UserConfigDir prefers
+	// XDG_CONFIG_HOME and only falls back to $HOME/.config, so with that set
+	// these tests overwrote the developer's real projects.json. Clearing it
+	// restores the $HOME fallback on every platform.
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	cfg := config.NewStore()
 	if res := cfg.SaveProjects(projects); res != "ok" {

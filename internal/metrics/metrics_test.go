@@ -11,9 +11,25 @@ import (
 	"yv/internal/models"
 )
 
+// isolateHome points os.UserConfigDir at a scratch directory and returns it.
+//
+// Overriding HOME alone is not enough. On Linux os.UserConfigDir prefers
+// XDG_CONFIG_HOME and only falls back to $HOME/.config — and GitHub's runners
+// set XDG_CONFIG_HOME — so a HOME-only override silently reads and writes the
+// real ~/.config/yv. Clearing it restores the $HOME fallback everywhere. On
+// macOS the path is $HOME/Library/Application Support either way, which is why
+// this only ever failed on Linux.
+func isolateHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	return home
+}
+
 func newTestStore(t *testing.T, retentionDays int) *Store {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	isolateHome(t)
 	return NewStore(func() int { return retentionDays })
 }
 
