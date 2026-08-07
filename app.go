@@ -84,26 +84,6 @@ func (a *App) getCtx() context.Context {
 	return a.ctx
 }
 
-func (a *App) startFullscreenMonitor(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(300 * time.Millisecond)
-		defer ticker.Stop()
-		wasFullscreen := false
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				isFs := wailsRuntime.WindowIsFullscreen(ctx)
-				if isFs != wasFullscreen {
-					wasFullscreen = isFs
-					wailsRuntime.EventsEmit(ctx, "fullscreen-changed", isFs)
-				}
-			}
-		}
-	}()
-}
-
 // StopAllCommands kills all running command processes. Called from main.go on quit.
 func (a *App) StopAllCommands() {
 	a.runner.StopAll()
