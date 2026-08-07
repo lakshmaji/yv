@@ -413,6 +413,15 @@ export default function DiscoveryPanel() {
     setDiscoverySeed(Math.floor(Math.random() * 1_000_000_000));
   }
 
+  /**
+   * The dead end: the sweep ended and nothing was found.
+   *
+   * Distinct from a discovery failure, which no amount of rescanning fixes and
+   * so must not offer the same way out.
+   */
+  const noDevices = () =>
+    peers().length === 0 && droneState() === 'gone' && !discoveryError();
+
   /** True while a rescan's stop/start round trip is in flight. */
   const [rescanning, setRescanning] = createSignal(false);
 
@@ -427,9 +436,10 @@ export default function DiscoveryPanel() {
    * fresh one and browses mDNS again, so the herd is rebuilt from what is
    * actually out there now rather than from what we happened to have seen.
    *
-   * The island is deliberately left alone. This is a search, and redrawing the
-   * terrain underneath it would read as a redraw rather than a rescan — the map
-   * has its own button for that.
+   * The island is redrawn along the way. A rescan discards everything it knew
+   * about the network, so a fresh island is the honest picture of that — and it
+   * makes the reset unmistakable in the half-second before the first answer
+   * arrives, which is otherwise indistinguishable from nothing having happened.
    */
   async function rescan(): Promise<void> {
     // The round trip is not instant, and a second press mid-flight would race a
@@ -441,6 +451,7 @@ export default function DiscoveryPanel() {
     // wait — the countdown then measures the new sweep, not the old one.
     setPeers([]);
     setDiscoveryError(null);
+    reroll();
     launchDrone();
 
     try {
@@ -467,48 +478,48 @@ export default function DiscoveryPanel() {
 
       <div class="dash-toolbar">
         {/* Leftmost because it is the only thing on this screen that reports
-            something outside the app. */}
-        <Show
-          when={peers().length === 0 && droneState() === 'gone' && !discoveryError()}
-          fallback={
-            <span
-              class="dash-refresh disc-peer-status"
-              classList={{
-                muted: peerStatus().warn,
-                searching: peers().length === 0 && !discoveryError(),
-              }}
-              title={
-                discoveryError()
-                  ? `Discovery could not start: ${discoveryError()}`
-                  : 'Devices on your network running yv, discovered over mDNS'
-              }
-            >
-              {peerStatus().label}
+            something outside the app.
 
-              {/* How long this drone has left. Shown because the burst is
-                  otherwise a surprise: it happens on a schedule the user cannot
-                  see, and a countdown turns "it blew up" into "it ran out". */}
-              <Show when={sweepLeft() !== null && !discoveryError()}>
-                <span class="disc-sweep" title="The drone comes down when this runs out">
-                  <span class="disc-sweep-left">{Math.ceil((sweepLeft() ?? 0) / 1000)}s</span>
-                  <span
-                    class="disc-sweep-bar"
-                    style={{ '--sweep': ((sweepLeft() ?? 0) / SWEEP_MS).toFixed(3) }}
-                  />
-                </span>
-              </Show>
-            </span>
+            A button in every state, not just the no-devices one: with the
+            separate map button gone, redrawing the island now rides along with
+            the search-related controls, and this chip is one of them. In the
+            no-devices state it additionally reopens the dialog, which is the
+            only route back to the fleet picker once the drone has left no
+            trace on the map to click. */}
+        <button
+          type="button"
+          class="dash-refresh disc-peer-status"
+          classList={{
+            muted: peerStatus().warn,
+            searching: peers().length === 0 && !discoveryError(),
+          }}
+          title={
+            discoveryError()
+              ? `Discovery could not start: ${discoveryError()}`
+              : noDevices()
+                ? 'The sweep found nothing — send another drone, on a fresh island'
+                : 'Devices on your network running yv, discovered over mDNS. Click to redraw the island.'
           }
+          onClick={() => {
+            reroll();
+            if (noDevices()) setNoDevicesOpen(true);
+          }}
         >
-          <button
-            type="button"
-            class="dash-refresh disc-peer-status muted"
-            title="The sweep found nothing — send another drone"
-            onClick={() => setNoDevicesOpen(true)}
-          >
-            {peerStatus().label}
-          </button>
-        </Show>
+          {peerStatus().label}
+
+          {/* How long this drone has left. Shown because the burst is
+              otherwise a surprise: it happens on a schedule the user cannot
+              see, and a countdown turns "it blew up" into "it ran out". */}
+          <Show when={sweepLeft() !== null && !discoveryError()}>
+            <span class="disc-sweep" title="The drone comes down when this runs out">
+              <span class="disc-sweep-left">{Math.ceil((sweepLeft() ?? 0) / 1000)}s</span>
+              <span
+                class="disc-sweep-bar"
+                style={{ '--sweep': ((sweepLeft() ?? 0) / SWEEP_MS).toFixed(3) }}
+              />
+            </span>
+          </Show>
+        </button>
 
         <button
           type="button"
@@ -516,22 +527,10 @@ export default function DiscoveryPanel() {
           // Deliberately still enabled when discovery failed to start: a rescan
           // is a full stop/start, so it is the retry for exactly that case.
           disabled={rescanning()}
-          title="Forget the devices found so far and search the network again"
+          title="Forget the devices found so far and search the network again, on a fresh island"
           onClick={() => void rescan()}
         >
           {rescanning() ? '↻ Rescanning…' : '↻ Rescan'}
-        </button>
-
-        {/* Kept, but demoted: rerolling the island is a different thing from
-            looking for devices, and conflating them is what made the old
-            "Regenerate" confusing. */}
-        <button
-          type="button"
-          class="dash-refresh"
-          title="Draw a different island. The devices found are unaffected."
-          onClick={reroll}
-        >
-          ⟳ New map
         </button>
 
         <button
