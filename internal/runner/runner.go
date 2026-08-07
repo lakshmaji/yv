@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -198,8 +197,8 @@ func (r *Runner) StopCommand(cmdID string) string {
 	r.markStopped(cmdID)
 
 	pgid := c.Process.Pid // PTY Setsid guarantees pgid == pid
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	if err := terminateGroup(pgid); err != nil {
+		_ = killGroup(pgid)
 		return "killed"
 	}
 
@@ -209,7 +208,7 @@ func (r *Runner) StopCommand(cmdID string) string {
 		_, stillRunning := r.processes[cmdID]
 		r.processesMu.RUnlock()
 		if stillRunning {
-			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			_ = killGroup(pgid)
 		}
 	}()
 
@@ -240,14 +239,14 @@ func (r *Runner) StopAll() {
 
 	for _, e := range snapshot {
 		r.markStopped(e.id)
-		_ = syscall.Kill(-e.pid, syscall.SIGTERM)
+		_ = terminateGroup(e.pid)
 	}
 	time.Sleep(3 * time.Second)
 
 	r.processesMu.RLock()
 	for _, e := range snapshot {
 		if _, still := r.processes[e.id]; still {
-			_ = syscall.Kill(-e.pid, syscall.SIGKILL)
+			_ = killGroup(e.pid)
 		}
 	}
 	r.processesMu.RUnlock()
@@ -272,8 +271,7 @@ func (r *Runner) ExecuteCommand(ctx context.Context, cmd models.CommandConfig, w
 	// Kill any prior run of this command (process-group kill to include children).
 	r.processesMu.Lock()
 	if prior, ok := r.processes[cmd.ID]; ok {
-		pgid := prior.Process.Pid
-		_ = syscall.Kill(-pgid, syscall.SIGTERM)
+		_ = terminateGroup(prior.Process.Pid)
 	}
 	r.processesMu.Unlock()
 
@@ -510,8 +508,7 @@ func (r *Runner) runShellCommandCtx(ctx context.Context, cmdID, shellCmd, workDi
 	go func() {
 		select {
 		case <-ctx.Done():
-			pgid := c.Process.Pid
-			_ = syscall.Kill(-pgid, syscall.SIGTERM)
+			_ = terminateGroup(c.Process.Pid)
 		case <-killerCtx.Done():
 		}
 	}()
