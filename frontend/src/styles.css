@@ -3072,6 +3072,40 @@
     .land-drone.locked .land-drone-light { opacity: 1; }
     .land-drone.locked .land-drone-light-glow { opacity: .26; }
 
+    /* What the drone found, said next to it. Sized in the component from the
+       string, because the box has to fit text the panel scales — see
+       chatterBubble. Colours match the airframe rather than the UI chrome: it
+       belongs to the drone, not to the toolbar. */
+    .land-drone-chat-box,
+    .land-drone-chat-tail {
+      fill: rgba(9, 20, 32, .82);
+      stroke: var(--drone-light-locked, #3fd97f);
+      stroke-width: 1.2px;
+    }
+    /* The tail's own outline would draw a line across the bubble's underside;
+       the box is painted after it and covers the join. */
+    .land-drone-chat-tail { stroke: none; }
+
+    .land-drone-chat-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      fill: #eaf6ef;
+      letter-spacing: .2px;
+    }
+
+    /* A short rise as it appears. In both opt-out lists below: it is ambient,
+       unlike the burst, and the bubble still reads perfectly without it. */
+    .land-drone-chat {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: land-drone-chat-in .32s ease-out both;
+    }
+
+    @keyframes land-drone-chat-in {
+      from { opacity: 0; transform: translateY(4px) scale(.94); }
+      to   { opacity: 1; transform: none; }
+    }
+
     /* The burst. Deliberately outside both opt-out lists below, like the
        dinosaur's roar: it is a one-off event with a meaning — the sweep failed —
        and with it suppressed the drone would vanish between frames with no
@@ -3104,7 +3138,8 @@
     .landscape-stage.no-motion .land-drone-hover,
     .landscape-stage.no-motion .land-drone-rotor,
     .landscape-stage.no-motion .land-drone-light,
-    .landscape-stage.no-motion .land-drone-light-glow { animation: none; }
+    .landscape-stage.no-motion .land-drone-light-glow,
+    .landscape-stage.no-motion .land-drone-chat { animation: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
@@ -3119,7 +3154,8 @@
       .land-drone-hover,
       .land-drone-rotor,
       .land-drone-light,
-      .land-drone-light-glow { animation: none; }
+      .land-drone-light-glow,
+      .land-drone-chat { animation: none; }
       /* Hover feedback stays: it is a direct response to the pointer, not
          ambient motion, and it is the only cue that names the animal. */
       .land-dino { transition: none; }

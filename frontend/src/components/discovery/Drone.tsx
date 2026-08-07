@@ -1,5 +1,12 @@
-import { createEffect, createSignal, onCleanup, onMount, For, Show } from 'solid-js';
-import { bankFrames, burstShards, patrolFrames, type Drone as DroneData } from '../../lib/drone';
+import { createEffect, createMemo, createSignal, onCleanup, onMount, For, Show } from 'solid-js';
+import {
+  bankFrames,
+  burstShards,
+  chatterBubble,
+  droneMessage,
+  patrolFrames,
+  type Drone as DroneData,
+} from '../../lib/drone';
 import { LAND } from '../../lib/landscape/palette';
 import DroneGlyph from './DroneGlyph';
 
@@ -38,6 +45,8 @@ export default function Drone(props: {
   motion?: boolean;
   /** Mid-explosion: the airframe is gone and only the burst is drawn. */
   bursting?: boolean;
+  /** Dinosaurs on the map, for the drone's report. 0 means it says nothing. */
+  found?: number;
 }) {
   let rootRef!: SVGGElement;
   let bankRef!: SVGGElement;
@@ -94,6 +103,13 @@ export default function Drone(props: {
   });
 
   onCleanup(() => stop());
+
+  /** What it is saying, and the box that fits it — null when it has nothing. */
+  const chatter = createMemo(() => {
+    if (props.bursting) return null;
+    const text = droneMessage(props.found ?? 0);
+    return text === null ? null : { text, box: chatterBubble(text, props.drone.size) };
+  });
 
   return (
     <g
@@ -177,6 +193,36 @@ export default function Drone(props: {
           </g>
         </Show>
       </g>
+
+      {/* Outside the bank layer, so the bubble travels with the drone but stays
+          level — text that tilts into every turn is unreadable. Last inside the
+          group so it draws over the airframe rather than under a rotor.
+
+          Two nested groups, because the rise-in animation is a CSS `transform`
+          and would otherwise override the positioning one: a CSS transform beats
+          the SVG attribute, which would park the bubble at the viewBox origin
+          for as long as the animation ran. */}
+      <Show when={chatter()}>
+        {(chat) => (
+          <g transform={`translate(${props.drone.origin.x} ${props.drone.origin.y})`}>
+            <g class="land-drone-chat">
+              <path class="land-drone-chat-tail" d={chat().box.tail} />
+              <rect
+                class="land-drone-chat-box"
+                x={chat().box.x}
+                y={chat().box.y}
+                width={chat().box.w}
+                height={chat().box.h}
+                rx={chat().box.r}
+                ry={chat().box.r}
+              />
+              <text class="land-drone-chat-text" x={chat().box.textX} y={chat().box.textY}>
+                {chat().text}
+              </text>
+            </g>
+          </g>
+        )}
+      </Show>
     </g>
   );
 }

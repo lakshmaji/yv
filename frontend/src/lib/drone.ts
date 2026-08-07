@@ -255,13 +255,29 @@ export function droneExtent(variant: DroneVariant = DEFAULT_VARIANT): Required<I
  * Bounds insets that keep the whole drone — including the ground shadow it
  * drags along under itself — inside a rect.
  */
-export function droneInsets(size = DRONE_SIZE, variant: DroneVariant = DEFAULT_VARIANT): Required<Insets> {
+export function droneInsets(
+  size = DRONE_SIZE,
+  variant: DroneVariant = DEFAULT_VARIANT,
+  /** The speech bubble, when one is showing — it reaches further than the rotors. */
+  chat: ChatBubble | null = null,
+): Required<Insets> {
   const extent = droneExtent(variant);
-  return {
+  const insets = {
     left: extent.left * size,
     right: extent.right * size,
     top: extent.top * size,
     bottom: extent.bottom * size,
+  };
+  if (!chat) return insets;
+
+  // The bubble hangs off the top-right corner and is far wider than the
+  // airframe, so on those two edges it — not the rotor disc — sets how close
+  // the drone may fly. Without this the box clips off the side of the panel
+  // whenever the drone visits a dinosaur near the right edge.
+  return {
+    ...insets,
+    right: Math.max(insets.right, chat.x + chat.w),
+    top: Math.max(insets.top, -chat.y),
   };
 }
 
@@ -724,4 +740,99 @@ export function bankFrames(drone: Drone): FrameStep[] {
   }));
   steps.push({ offset: 1, transform: steps[0].transform });
   return steps;
+}
+
+// --- what the drone says ---------------------------------------------------
+
+/**
+ * The drone's report, or null when it has nothing worth saying.
+ *
+ * Null rather than a "still looking" string on purpose: the toolbar chip
+ * already narrates the search, complete with a countdown, and a bubble
+ * repeating it would be noise attached to a moving object. The bubble is for
+ * the one moment the chip cannot dramatise — the find.
+ *
+ * Kept a pure function of the count so the wording is swappable. A generated
+ * or AI-written line can be dropped in here, or passed to `chatterBubble`
+ * directly, without any of the geometry below needing to know.
+ */
+export function droneMessage(found: number): string | null {
+  if (!Number.isFinite(found) || found <= 0) return null;
+  return `Found ${found} rare dinosaur${found === 1 ? '' : 's'}`;
+}
+
+/** Type size of the bubble's text, in world units. Matches .land-drone-chat. */
+export const CHAT_FONT = 12;
+
+/**
+ * Advance width of one character at CHAT_FONT.
+ *
+ * The bubble is sized from the string rather than measured, because it is drawn
+ * inside an SVG viewBox that is scaled to the panel — getComputedTextLength
+ * would need a live, laid-out element and would put the geometry somewhere no
+ * test can reach. 0.6em is the advance of the monospace face the label styles
+ * already use, so the estimate is exact for it rather than approximate.
+ */
+export const CHAT_CHAR_W = CHAT_FONT * 0.6;
+
+const CHAT_PAD_X = 9;
+const CHAT_PAD_Y = 6;
+/** Gap between the airframe and the bubble's near corner. */
+const CHAT_GAP = 6;
+
+export interface ChatBubble {
+  /** Box, in the same space as `Drone.origin` — i.e. it travels with the drone. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Corner radius. */
+  r: number;
+  /** Tail from the bubble back to the airframe, as a path `d`. */
+  tail: string;
+  /** Where the text baseline anchor sits, left-aligned inside the box. */
+  textX: number;
+  textY: number;
+}
+
+/**
+ * A speech bubble sized to `text`, placed up and to the right of the drone.
+ *
+ * Up and to the right because the drone's own reach is widest across its rotor
+ * discs and the ground shadow sits below it, so above the airframe is the only
+ * side where a box cannot overlap the thing it belongs to. The caller is
+ * responsible for the bubble staying inside the panel: like the airframe, it is
+ * drawn relative to `origin` and travels with it.
+ */
+export function chatterBubble(text: string, size = DRONE_SIZE): ChatBubble {
+  const w = Math.max(1, text.length) * CHAT_CHAR_W + CHAT_PAD_X * 2;
+  const h = CHAT_FONT + CHAT_PAD_Y * 2;
+
+  // Clear of the rotor disc on the near side, then up by the box's own height.
+  const x = size * 0.75 + CHAT_GAP;
+  const y = -(size * 1.15) - h;
+
+  // A stubby triangle off the bottom-left corner, aimed back at the airframe.
+  const tipX = size * 0.3;
+  const tipY = -(size * 0.7);
+  const baseX = x + CHAT_PAD_X;
+  const tail = [
+    `M ${baseX.toFixed(2)} ${(y + h).toFixed(2)}`,
+    `L ${(baseX + CHAT_CHAR_W * 1.6).toFixed(2)} ${(y + h).toFixed(2)}`,
+    `L ${tipX.toFixed(2)} ${tipY.toFixed(2)}`,
+    'Z',
+  ].join(' ');
+
+  return {
+    x,
+    y,
+    w,
+    h,
+    r: 6,
+    tail,
+    textX: x + CHAT_PAD_X,
+    // Baseline rather than centre: dominant-baseline is inconsistent across
+    // engines, and this only has to agree with itself.
+    textY: y + CHAT_PAD_Y + CHAT_FONT * 0.8,
+  };
 }

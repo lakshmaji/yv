@@ -35,7 +35,13 @@ import {
   type LoopStatus,
 } from '../lib/audio';
 import { dinoInsets, randomDinos, type Dino } from '../lib/dino';
-import { DRONE_SIZE, dronePatrol, droneInsets } from '../lib/drone';
+import {
+  chatterBubble,
+  DRONE_SIZE,
+  droneInsets,
+  droneMessage,
+  dronePatrol,
+} from '../lib/drone';
 import { hashText } from '../lib/landscape/rng';
 import { insetRect, quantizeRect, visibleViewBox } from '../lib/viewbox';
 import { go } from '../wails';
@@ -138,6 +144,30 @@ export default function DiscoveryPanel() {
   );
 
   /**
+   * The bubble the drone is currently showing, or null when it has nothing to
+   * say. Computed here as well as in Drone because it constrains where the drone
+   * may fly — both call the same pure function on the same count, so they agree.
+   */
+  const droneChat = createMemo(() => {
+    const text = droneMessage(dinos().length);
+    return text === null ? null : chatterBubble(text, DRONE_SIZE);
+  });
+
+  const droneBounds = createMemo(() => {
+    const visible = quantizeRect(
+      visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize()),
+      40,
+    );
+    const airframe = insetRect(visible, droneInsets(DRONE_SIZE, droneVariant()));
+    const withChat = insetRect(visible, droneInsets(DRONE_SIZE, droneVariant(), droneChat()));
+
+    // On a narrow panel the bubble's own width can leave almost nothing to fly
+    // over. A drone pinned to one corner is a worse outcome than a bubble that
+    // clips at the edge, so past a point the airframe's bounds win.
+    return withChat.width > airframe.width * 0.45 ? withChat : airframe;
+  });
+
+  /**
    * The scanning drone: one machine flying a circuit over the island.
    *
    * Its route is the search made visible — a sweep of open ground while nothing
@@ -148,11 +178,6 @@ export default function DiscoveryPanel() {
    * Same quantised bounds as the herd, and for the same reason — an unquantised
    * rect would re-plan the circuit on every pixel of a window drag.
    */
-  const droneBounds = createMemo(() => {
-    const visible = visibleViewBox({ width: WORLD_W, height: WORLD_H }, stageSize());
-    return insetRect(quantizeRect(visible, 40), droneInsets(DRONE_SIZE, droneVariant()));
-  });
-
   const drone = createMemo(() =>
     dronePatrol({
       bounds: droneBounds(),

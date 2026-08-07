@@ -121,6 +121,11 @@ export default function LandscapeMap(props: {
             locked={props.droneLocked ?? false}
             bursting={props.droneBursting}
             motion={props.motion}
+            // The herd it can actually see, not the peer count: the bubble is
+            // drawn on the map, and claiming a find that has no dinosaur on
+            // screen would contradict it. The toolbar chip owns that
+            // discrepancy and already reports it as "off-map".
+            found={props.dinos?.length ?? 0}
           />
         )}
       </Show>
