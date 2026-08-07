@@ -15,8 +15,9 @@
 // output is asserted on all over world.test.ts; the swell is presentation derived
 // from the coast, the same arrangement river.ts has with River.
 
-import { catmullRomPath, centroid, type Pt } from './geometry';
+import { catmullRomPath, centroid, jitterRing, pointInPolygon, type Pt } from './geometry';
 import { makeRng, type Rng } from './rng';
+import { ringPath } from './world';
 
 /**
  * How far offshore the outermost ring starts, in world px.
@@ -131,6 +132,63 @@ export interface Swell {
   /** Centroid of the coast — the origin every ring contracts about. */
   origin: Pt;
   waves: Wave[];
+}
+
+/* ---------------------------------------------------------------------------- *
+ * Surf, whitecaps and surface patches.
+ *
+ * The swell above answers "which way is the water going". These three answer
+ * "is this water at all" — and they are what the paper-cut reference is mostly
+ * made of. Without them the sea is a dark rectangle with a few pale scratches on
+ * it, because a gradient has no surface and the crests alone are too sparse to
+ * read as one.
+ * ---------------------------------------------------------------------------- */
+
+/** How far the white collar of surf reaches out from the shore, in world px. */
+export const SURF_REACH = 18;
+
+/**
+ * Scallop count and depth for the surf collar.
+ *
+ * Surf is not a stroke of even width. It piles up in lobes — deeper where the water
+ * shoals, pinched almost to nothing between — and that scalloped inner edge is the
+ * single strongest cue in the reference. A constant-width ring in white would just be
+ * a bright outline, which is a sticker, not spray.
+ */
+const SURF_LOBES = 8;
+const SURF_PINCH = 0.62;
+
+/** One whitecap per this much sea area, and the ceiling on the whole map. */
+const CAP_PER_AREA = 34_000;
+export const MAX_WHITECAPS = 46;
+
+/** How far out from the coast a whitecap may sit before it is dropped. */
+const CAP_MAX_OFFSHORE = 260;
+
+/** Broad flat tone patches over the open sea. */
+export const SEA_PATCHES = 9;
+
+/** The white collar of broken water hugging the shore. */
+export interface Surf {
+  /** Filled band between the shoreline and the scalloped outer edge of the spray. */
+  d: string;
+  opacity: number;
+}
+
+/** A whitecap out on open water: a short stroke, twinkling in and out. */
+export interface Whitecap {
+  d: string;
+  strokeWidth: number;
+  opacity: number;
+  dur: number;
+  delay: number;
+}
+
+/** A broad flat patch of surface tone. */
+export interface SeaPatch {
+  d: string;
+  tone: number;
+  opacity: number;
 }
 
 /**
@@ -296,4 +354,147 @@ export function coastalSwell(coast: readonly Pt[], seed: number): Swell {
   }
 
   return { origin, waves };
+}
+
+/**
+ * The white collar of broken water around the shore.
+ *
+ * A filled band rather than a stroke, because the two edges do different things: the
+ * inner one is the shoreline exactly, and the outer one scallops in and out. That
+ * difference is what makes it spray. A stroke can only ever be the shoreline offset by
+ * one number, which is the same defect the swell rings had.
+ *
+ * Seeded from the coast's own bearing so the lobes sit in the same places every time
+ * this island is drawn.
+ */
+export function coastalSurf(coast: readonly Pt[], seed: number): Surf | null {
+  if (coast.length < 3) return null;
+  const origin = centroid(coast);
+  const rng = makeRng(seed ^ 0x71c5a3);
+  const phase = rng.range(0, Math.PI * 2);
+  const freq = SURF_LOBES + rng.int(0, 2);
+
+  const outer = coast.map((p) => {
+    const dx = p.x - origin.x;
+    const dy = p.y - origin.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const angle = Math.atan2(dy, dx);
+    // Never fully pinched off: a gap in the collar reads as a hole in the island.
+    const lobe = 1 - SURF_PINCH * (0.5 + 0.5 * Math.cos(angle * freq + phase));
+    const reach = SURF_REACH * Math.max(0.18, lobe);
+    return { x: p.x + (dx / len) * reach, y: p.y + (dy / len) * reach };
+  });
+
+  // Outer ring forwards, shoreline backwards: an annulus in one subpath, so it fills
+  // as a band without needing a fill-rule or a second element to punch the hole.
+  return {
+    d: `${ringPath(outer)} ${ringPath([...coast].reverse())}`,
+    opacity: 0.72,
+  };
+}
+
+/**
+ * Short white strokes scattered over the open sea.
+ *
+ * These are what stop the water between the island and the frame reading as empty
+ * space. Rejection sampling against the coast and the islets rather than a computed
+ * safe region: the shapes are blobs, the predicate is one call, and a rejected sample
+ * costs nothing.
+ *
+ * Held within `CAP_MAX_OFFSHORE` of the shore as well as outside it, so the caps
+ * describe water *around the island* rather than an even confetti over the frame —
+ * the far corners of the reference are open water with nothing on them.
+ */
+export function whitecaps(
+  coast: readonly Pt[],
+  islets: readonly Pt[][],
+  width: number,
+  height: number,
+  seed: number,
+): Whitecap[] {
+  if (coast.length < 3) return [];
+  const rng = makeRng(seed ^ 0x3d90f1);
+  const want = Math.min(MAX_WHITECAPS, Math.round((width * height) / CAP_PER_AREA));
+  const middle = centroid(coast);
+  const caps: Whitecap[] = [];
+
+  // A fixed budget of attempts, not "until we have enough": a small island in a big
+  // frame would otherwise be fine, but a large one leaves little open water and the
+  // loop would spin.
+  for (let attempt = 0; attempt < want * 12 && caps.length < want; attempt++) {
+    const p = { x: rng.range(20, width - 20), y: rng.range(20, height - 20) };
+    if (pointInPolygon(p, coast)) continue;
+    if (islets.some((ring) => pointInPolygon(p, ring))) continue;
+
+    // Distance to the nearest shore vertex is a good enough stand-in for distance to
+    // the coastline: the vertices are 46 around the ring, far denser than this bound.
+    let near = Infinity;
+    for (const c of coast) near = Math.min(near, Math.hypot(p.x - c.x, p.y - c.y));
+    if (near > CAP_MAX_OFFSHORE) continue;
+
+    // Lying along the swell, roughly: caps that all point the same way read as hatching,
+    // caps at random angles read as scratches. A shared bearing with jitter reads as sea.
+    const lie = Math.atan2(p.y - middle.y, p.x - middle.x) + Math.PI / 2;
+    const angle = lie + rng.range(-0.5, 0.5);
+    // Short, thick and visibly bowed. Long thin near-straight marks read as scratches
+    // on the picture rather than as water: what makes a whitecap is that it is a
+    // chunky little crest with a curve to it, so the length came down and the bow and
+    // the weight went up.
+    const half = rng.range(10, 19);
+    // A shallow crescent. Bowed as hard as it is long turns a crest into a hook, which
+    // reads as a bracket or a small animal rather than as water.
+    const bow = rng.range(2.4, 4.8) * (rng.chance(0.5) ? 1 : -1);
+    const nx = -Math.sin(angle);
+    const ny = Math.cos(angle);
+    const a = { x: p.x - Math.cos(angle) * half, y: p.y - Math.sin(angle) * half };
+    const b = { x: p.x + nx * bow, y: p.y + ny * bow };
+    const c = { x: p.x + Math.cos(angle) * half, y: p.y + Math.sin(angle) * half };
+
+    // The *cap* has to be at sea, not just the point it was grown from. A cap is up to
+    // 22px long either way, so a centre that clears the shore by less than that still
+    // puts an end of the stroke on the grass — which is not a wave, it is a scratch on
+    // the island. Testing the drawn ends is exact, where a margin on `near` would not
+    // be: nearest-vertex distance overstates the distance to the coastline between
+    // vertices, and the shape is a blob, so there is no radius that is safe everywhere.
+    if ([a, b, c].some((q) => pointInPolygon(q, coast))) continue;
+    if (islets.some((ring) => [a, b, c].some((q) => pointInPolygon(q, ring)))) continue;
+
+    caps.push({
+      d: catmullRomPath([a, b, c], false),
+      strokeWidth: rng.range(3, 5.6),
+      opacity: rng.range(0.34, 0.7),
+      dur: rng.range(4, 9),
+      // Negative and spread wide, so they are not all bright on the first frame.
+      delay: -rng.range(0, 9),
+    });
+  }
+  return caps;
+}
+
+/**
+ * Broad flat tone patches over the whole sea.
+ *
+ * The reference's water is not a gradient, it is overlapping areas of slightly
+ * different flat colour — which is why it reads as a *surface* seen from above rather
+ * than as a lit volume. These sit under everything else and never move: they are the
+ * water's colour, not an animation, and drifting them would make the sea slide.
+ *
+ * `tone` picks between the sea tones in the palette rather than carrying a colour, so
+ * the palette stays the single place the map's colours live.
+ */
+export function seaPatches(width: number, height: number, seed: number): SeaPatch[] {
+  const rng = makeRng(seed ^ 0x6a17b2);
+  const patches: SeaPatch[] = [];
+  for (let i = 0; i < SEA_PATCHES; i++) {
+    const cx = rng.range(-60, width + 60);
+    const cy = rng.range(-40, height + 40);
+    const rx = rng.range(180, 460);
+    const ry = rng.range(90, 240);
+    patches.push({
+      d: ringPath(jitterRing(cx, cy, rx, ry, 12, rng, 0.3)),
+      tone: rng.int(0, 2),
+      opacity: rng.range(0.22, 0.44),
+    });
+  }
+  return patches;
 }

@@ -1390,3 +1390,82 @@ rim — the shadow is what actually reads as depth; without it the highlight is 
 | `frontend/src/lib/landscape/{geometry,world}.test.ts` | Helper tests; width-profile and confluence-step invariants; ribbon paths added to the NaN sweep |
 | `frontend/src/components/discovery/Water.tsx` | Four role passes over filled ribbons; two streak classes; lake shadow + lit highlight |
 | `frontend/src/styles.css` | `land-flow`, `land-flow-march`, `land-shoal-breathe`; `.land-river-thread`/`-streak`/`-shoal` added to all three motion opt-out lists; `land-glint` and `.land-river-glint` removed |
+
+---
+
+## Implemented: Surf, whitecaps and a sea surface
+
+### Goal
+
+Match the sea of a stylised isometric reference: white surf collaring the shore,
+whitecaps scattered over the water, and a surface made of flat tone areas.
+
+The swell rings already answered *which way the water is going*. What the map still
+lacked was any answer to *is this water at all* — outside the crests it was a dark
+gradient, and a gradient has no surface, so the sea read as empty space with a few
+pale scratches on it. Three additions, all in the existing dark palette rather than
+the reference's turquoise (the palette decision from the river pass stands).
+
+### Surf is a band, not a stroke
+
+`coastalSurf` returns a filled annulus — outer edge forwards, shoreline reversed, in
+one subpath — because the two edges do different things: the inner one is the
+shoreline exactly, the outer one scallops in and out. A stroke can only ever be the
+shoreline offset by one number, which is the same defect the swell rings had. The
+scalloped inner edge is the single strongest cue in the reference; a constant-width
+white ring is a sticker, not spray. The lobes never pinch fully off, because a gap in
+the collar reads as a hole in the island.
+
+`LAND.surf` is a new near-white. The existing `foam` is a pale blue — right for a
+glint on a river, but at the shore it reads as haze, and surf is white.
+
+### Whitecaps are rejection-sampled, and tested for it
+
+`whitecaps` scatters short crescents over open water, kept within `CAP_MAX_OFFSHORE`
+of the shore so they describe water *around the island* rather than confetti to the
+frame edges — the far corners of the reference are bare.
+
+The bug worth remembering: rejecting on the sample point alone is not enough. A cap is
+a stroke up to 19px each way, so a centre that clears the shore by less than that puts
+an end of the stroke on the grass. **The drawn ends are tested against the coast and
+the islets**, which is exact, where a margin on "distance to nearest coast vertex"
+would not be — that distance overstates the distance to the coastline between
+vertices, and the island is a blob, so no single radius is safe everywhere.
+
+Shape matters more than count here, and both extremes were wrong on the way: long thin
+near-straight marks read as scratches on the picture, and bowing one as hard as it is
+long turns it into a bracket. A shallow crescent, short and thick, is a crest.
+
+They lie roughly along the shore's bearing with jitter. All at one angle reads as
+hatching; fully random reads as scratches.
+
+### The surface is flat patches, and does not move
+
+`seaPatches` lays broad `jitterRing` blobs of slightly different tone under
+everything. This is what makes water read as a *surface seen from above* rather than a
+lit volume. Deliberately motionless — it is the water's colour, and drifting it would
+make the whole sea slide. `SeaPatch.tone` is an index rather than a colour, so the
+palette stays the one place the map's colours live.
+
+### Animation
+
+`land-cap-crest` peaks at `var(--cap-peak)`, the cap's *own* opacity, not at 1 — a
+keyframe ending at 1 would flatten every cap to the same brightness at exactly the
+moment they are most visible, throwing away the seeded variation. `land-surf-breathe`
+swells and eases without ever going out, because the shore is always breaking; it
+scales about the map's origin (`transform-box: view-box`) rather than its own bounding
+box, which would walk the collar off the shore on one side.
+
+Both are in all three motion opt-out lists. No animation library: everything here is
+opacity and transform, which CSS keyframes already do, and a script animation would
+sit outside those lists — the problem `Drone.tsx` has to handle by hand.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/landscape/palette.ts` | `seaTeal`, `seaTealLight`, `seaGreen`, `surf` |
+| `frontend/src/lib/landscape/sea.ts` | `coastalSurf`, `whitecaps`, `seaPatches` and their types/constants |
+| `frontend/src/lib/landscape/sea.test.ts` | Band-not-stroke, scalloped-edge, never-on-land, near-the-island, stable-per-seed |
+| `frontend/src/components/discovery/LandscapeMap.tsx` | Patches under the swells, caps and collar above the crests |
+| `frontend/src/styles.css` | `land-cap-crest`, `land-surf-breathe`; `.land-cap`/`.land-surf` in all three opt-out lists |

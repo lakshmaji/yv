@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { centroid, type Pt } from './geometry';
-import { SWELL_REACH, SWELL_RINGS, coastalSwell } from './sea';
-import { generateWorld } from './world';
+import {
+  MAX_WHITECAPS,
+  SEA_PATCHES,
+  SURF_REACH,
+  SWELL_REACH,
+  SWELL_RINGS,
+  coastalSurf,
+  coastalSwell,
+  seaPatches,
+  whitecaps,
+} from './sea';
+import { WORLD_H, WORLD_W, generateWorld } from './world';
+import { pointInPolygon } from './geometry';
 
 const SEEDS = [1, 7, 20260806, 88123, 999999];
 
@@ -249,5 +260,116 @@ describe('coastalSwell', () => {
 
     const c = coastalSwell(world.coast, 4243);
     expect(c.waves.map((w) => w.dur)).not.toEqual(a.waves.map((w) => w.dur));
+  });
+});
+
+describe('coastalSurf', () => {
+  it('gives back nothing for a degenerate coast rather than throwing', () => {
+    for (const coast of [[], [{ x: 1, y: 1 }], [{ x: 1, y: 1 }, { x: 2, y: 2 }]]) {
+      expect(coastalSurf(coast, 1)).toBeNull();
+    }
+  });
+
+  it('is a band with two edges, not a stroke', () => {
+    // The inner edge is the shoreline exactly and the outer one scallops. A stroke can
+    // only ever be the shoreline offset by one number, which is the defect the swell
+    // rings had — so the shape has to be two rings in one subpath.
+    for (const seed of SEEDS) {
+      const surf = coastalSurf(generateWorld(seed).coast, seed);
+      expect(surf, `seed ${seed}`).not.toBeNull();
+      expect(surf!.d.match(/M/g), `seed ${seed}`).toHaveLength(2);
+      expect(surf!.d.match(/Z/g), `seed ${seed}`).toHaveLength(2);
+      expect(surf!.d, `seed ${seed}`).not.toContain('NaN');
+    }
+  });
+
+  it('scallops the outer edge instead of standing off evenly', () => {
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      const origin = centroid(world.coast);
+      // The first subpath is the outer edge; measure it against the shore's own radius.
+      const outer = onCurvePoints(coastalSurf(world.coast, seed)!.d.split(' M')[0]);
+      const reaches = outer.map((p) => reachOf(p, origin, world.coast));
+      expect(Math.min(...reaches), `seed ${seed}`).toBeGreaterThan(0);
+      // Slack of half a pixel: `reachOf` measures against the nearest coast vertex by
+      // bearing, which for an offset ring is not always the vertex it was offset from.
+      expect(Math.max(...reaches), `seed ${seed}`).toBeLessThanOrEqual(SURF_REACH + 0.5);
+      // Lobes: the deepest spray is several times the pinch between.
+      expect(Math.max(...reaches), `seed ${seed}`).toBeGreaterThan(Math.min(...reaches) * 2);
+    }
+  });
+});
+
+describe('whitecaps', () => {
+  it('never puts a cap on land', () => {
+    // The one invariant that matters: a whitecap over the grass is not a wave, it is
+    // a scratch on the island.
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      const caps = whitecaps(world.coast, world.islets, WORLD_W, WORLD_H, seed);
+      expect(caps.length, `seed ${seed}`).toBeGreaterThan(0);
+      expect(caps.length, `seed ${seed}`).toBeLessThanOrEqual(MAX_WHITECAPS);
+      for (const cap of caps) {
+        for (const p of onCurvePoints(cap.d)) {
+          expect(pointInPolygon(p, world.coast), `seed ${seed} at ${p.x},${p.y}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('curves each cap, and staggers them so they are not all bright at once', () => {
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      const caps = whitecaps(world.coast, world.islets, WORLD_W, WORLD_H, seed);
+      for (const cap of caps) {
+        expect(cap.d, `seed ${seed}`).toContain('C');
+        expect(cap.d, `seed ${seed}`).not.toContain('NaN');
+        expect(cap.strokeWidth, `seed ${seed}`).toBeGreaterThan(0);
+        expect(cap.dur, `seed ${seed}`).toBeGreaterThan(0);
+        expect(cap.delay, `seed ${seed}`).toBeLessThanOrEqual(0);
+      }
+      expect(new Set(caps.map((c) => c.delay.toFixed(3))).size, `seed ${seed}`)
+        .toBeGreaterThan(1);
+    }
+  });
+
+  it('keeps the caps near the island rather than over the whole frame', () => {
+    // Confetti to the corners is not a sea; the open water in the reference is bare.
+    for (const seed of SEEDS) {
+      const world = generateWorld(seed);
+      const caps = whitecaps(world.coast, world.islets, WORLD_W, WORLD_H, seed);
+      for (const cap of caps) {
+        const p = onCurvePoints(cap.d)[0];
+        let near = Infinity;
+        for (const c of world.coast) near = Math.min(near, Math.hypot(p.x - c.x, p.y - c.y));
+        expect(near, `seed ${seed}`).toBeLessThan(320);
+      }
+    }
+  });
+
+  it('is empty for a degenerate coast', () => {
+    expect(whitecaps([], [], WORLD_W, WORLD_H, 1)).toEqual([]);
+  });
+});
+
+describe('seaPatches', () => {
+  it('covers the sea with closed flat areas and a tone the palette can index', () => {
+    for (const seed of SEEDS) {
+      const patches = seaPatches(WORLD_W, WORLD_H, seed);
+      expect(patches, `seed ${seed}`).toHaveLength(SEA_PATCHES);
+      for (const patch of patches) {
+        expect(patch.d.endsWith('Z'), `seed ${seed}`).toBe(true);
+        expect(patch.d, `seed ${seed}`).not.toContain('NaN');
+        expect(patch.tone, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+        expect(patch.tone, `seed ${seed}`).toBeLessThanOrEqual(2);
+        expect(patch.opacity, `seed ${seed}`).toBeGreaterThan(0);
+        expect(patch.opacity, `seed ${seed}`).toBeLessThan(0.5);
+      }
+    }
+  });
+
+  it('is stable for a seed and differs between seeds', () => {
+    expect(seaPatches(WORLD_W, WORLD_H, 7)).toEqual(seaPatches(WORLD_W, WORLD_H, 7));
+    expect(seaPatches(WORLD_W, WORLD_H, 7)).not.toEqual(seaPatches(WORLD_W, WORLD_H, 8));
   });
 });

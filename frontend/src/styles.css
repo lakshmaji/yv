@@ -2861,6 +2861,20 @@
       0%, 100% { opacity: .5; }
       50%      { opacity: .72; }
     }
+    /* A whitecap appears, holds, and goes. Opacity peaks at the cap's own value
+       rather than at 1, so the seeded variation between caps survives the
+       animation — a keyframe that ended at 1 would flatten them all to the same
+       brightness at the moment they are most visible. */
+    @keyframes land-cap-crest {
+      0%, 100% { opacity: 0; }
+      45%      { opacity: var(--cap-peak, .5); }
+    }
+    /* The surf collar swells and eases without ever going out: the shore is always
+       breaking, it just breaks harder in sets. */
+    @keyframes land-surf-breathe {
+      0%, 100% { opacity: .58; transform: scale(1); }
+      50%      { opacity: .82; transform: scale(1.006); }
+    }
     @keyframes land-foam-pulse {
       0%, 100% { opacity: .28; }
       50%      { opacity: .55; }
@@ -2994,6 +3008,20 @@
       animation-delay: var(--flow-delay, 0s);
     }
     .land-river-shoal { animation: land-shoal-breathe 11s ease-in-out infinite; }
+
+    .land-cap {
+      animation: land-cap-crest var(--cap-dur, 6s) ease-in-out infinite;
+      animation-delay: var(--cap-delay, 0s);
+    }
+    /* view-box, like .land-wave: the collar scales about the map's own origin, so it
+       breathes in place instead of about its own bounding-box centre, which would
+       walk it off the shore on one side. */
+    .land-surf {
+      transform-box: view-box;
+      transform-origin: 800px 450px;
+      animation: land-surf-breathe 9s ease-in-out infinite;
+    }
+    .land-sea-patches, .land-surf, .land-caps { pointer-events: none; }
 
     /* fill-box puts the rotation origin at the tree's own bounding box, so a
        conifer pivots about its trunk rather than about the map's origin. */
@@ -3190,6 +3218,8 @@
     .landscape-stage.no-motion .land-swell,
     .landscape-stage.no-motion .land-wave,
     .landscape-stage.no-motion .land-cloud,
+    .landscape-stage.no-motion .land-cap,
+    .landscape-stage.no-motion .land-surf,
     .landscape-stage.no-motion .land-river-streak,
     .landscape-stage.no-motion .land-river-thread,
     .landscape-stage.no-motion .land-river-shoal,
@@ -3213,6 +3243,8 @@
     .landscape-stage.no-water-motion .land-swell,
     .landscape-stage.no-water-motion .land-wave,
     .landscape-stage.no-water-motion .land-foam,
+    .landscape-stage.no-water-motion .land-cap,
+    .landscape-stage.no-water-motion .land-surf,
     .landscape-stage.no-water-motion .land-river-streak,
     .landscape-stage.no-water-motion .land-river-thread,
     .landscape-stage.no-water-motion .land-river-shoal { animation: none; }
@@ -3221,6 +3253,8 @@
       .land-swell,
       .land-wave,
       .land-cloud,
+      .land-cap,
+      .land-surf,
       .land-river-streak,
       .land-river-thread,
       .land-river-shoal,

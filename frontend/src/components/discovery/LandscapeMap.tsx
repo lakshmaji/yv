@@ -1,6 +1,6 @@
 import { For, Show, createMemo } from 'solid-js';
 import { LAND } from '../../lib/landscape/palette';
-import { coastalSwell } from '../../lib/landscape/sea';
+import { coastalSurf, coastalSwell, seaPatches, whitecaps } from '../../lib/landscape/sea';
 import { ringPath, type World } from '../../lib/landscape/world';
 import type { Dino } from '../../lib/dino';
 import type { Drone as DroneData } from '../../lib/drone';
@@ -46,6 +46,20 @@ export default function LandscapeMap(props: {
 }) {
   const coastPath = () => ringPath(props.world.coast);
   const swell = createMemo(() => coastalSwell(props.world.coast, props.world.seed));
+  const surf = createMemo(() => coastalSurf(props.world.coast, props.world.seed));
+  const patches = createMemo(() =>
+    seaPatches(props.world.width, props.world.height, props.world.seed),
+  );
+  const caps = createMemo(() =>
+    whitecaps(
+      props.world.coast,
+      props.world.islets,
+      props.world.width,
+      props.world.height,
+      props.world.seed,
+    ),
+  );
+  const seaTone = [LAND.seaTeal, LAND.seaTealLight, LAND.seaGreen];
 
   return (
     <svg
@@ -90,6 +104,16 @@ export default function LandscapeMap(props: {
       </defs>
 
       <rect x="0" y="0" width={props.world.width} height={props.world.height} fill="url(#ocean-grad)" />
+
+      {/* The sea's surface. Broad flat areas of slightly different tone, which is what
+          makes water read as a surface seen from above rather than as a lit volume —
+          a gradient alone has no surface. Deliberately motionless: this is the water's
+          colour, and drifting it would make the whole sea slide. */}
+      <g class="land-sea-patches">
+        <For each={patches()}>
+          {(p) => <path d={p.d} fill={seaTone[p.tone] ?? LAND.seaTeal} opacity={p.opacity} />}
+        </For>
+      </g>
 
       {/* Slow-drifting swells: the cheapest convincing "the sea is alive" cue. */}
       <g class="land-swells" filter="url(#swell-blur)">
@@ -145,6 +169,39 @@ export default function LandscapeMap(props: {
           )}
         </For>
       </g>
+
+      {/* Whitecaps out on the open sea, so the water between the island and the frame
+          is not empty space. Held within a few hundred px of the shore — the far
+          corners of the reference are open water with nothing on them. */}
+      <g class="land-caps">
+        <For each={caps()}>
+          {(c) => (
+            <path
+              class="land-cap"
+              d={c.d}
+              fill="none"
+              stroke={LAND.surf}
+              stroke-width={c.strokeWidth}
+              stroke-linecap="round"
+              opacity={c.opacity}
+              style={{
+                '--cap-dur': `${c.dur.toFixed(2)}s`,
+                '--cap-delay': `${c.delay.toFixed(2)}s`,
+                '--cap-peak': c.opacity.toFixed(3),
+              }}
+            />
+          )}
+        </For>
+      </g>
+
+      {/* The collar of broken water at the shore. A filled band, not a stroke: the
+          inner edge is the shoreline exactly and the outer edge scallops, and that
+          difference is what makes it spray instead of an outline. */}
+      <Show when={surf()}>
+        {(s) => (
+          <path class="land-surf" d={s().d} fill={LAND.surf} opacity={s().opacity} />
+        )}
+      </Show>
 
       <path class="land-foam" d={coastPath()} fill="none" stroke={LAND.foam} stroke-width="5" opacity="0.45" />
 
