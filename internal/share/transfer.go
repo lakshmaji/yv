@@ -114,6 +114,8 @@ func (n *Node) Send(ctx context.Context, peerID string, offer models.ShareOffer,
 		return fmt.Errorf("bad peer id: %w", err)
 	}
 
+	defer n.beginTransfer(id)()
+
 	s, err := h.NewStream(ctx, id, ShareProto)
 	if err != nil {
 		if isUnsupported(err) {
@@ -343,6 +345,7 @@ func (n *Node) handleShare(s network.Stream) {
 	if !read {
 		return
 	}
+	defer n.beginTransfer(in.remote)()
 
 	if in.offer.Kind == models.OfferKindConnect {
 		ok = n.handleConnect(s, in.remote, in.offer, in.code)
@@ -545,6 +548,8 @@ func (n *Node) RequestConnect(ctx context.Context, peerID, code string) error {
 	if err != nil {
 		return fmt.Errorf("bad peer id: %w", err)
 	}
+
+	defer n.beginTransfer(id)()
 
 	s, err := h.NewStream(ctx, id, ShareProto)
 	if err != nil {

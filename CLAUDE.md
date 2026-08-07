@@ -1682,3 +1682,32 @@ Removing the timers exposed two things they had been covering:
 
 `.share-done` gained `overflow-wrap: anywhere` — it now carries a filesystem
 path, and a deep home directory has no spaces to break on.
+
+### Fixed: a large transfer outlived the peer it was talking to
+
+On Linux, a big file share died part way through. The transfer was not the
+problem — discovery was.
+
+Peer liveness was inferred from two things, and a long transfer defeats both.
+`sweep` reaps anything not re-announced by mDNS within `PeerTTL` (5 minutes),
+which a gigabyte over Wi-Fi comfortably outlasts; and `probe` confirms a dropped
+connection with a 4-second dial, which is exactly what a link saturated by the
+transfer is worst at answering. Either one calls `forget`, which emits
+`peer:lost`, and `App.tsx` cleared `sharePeer` on that — unmounting the dialog
+while the bytes were still moving.
+
+**An open stream is better evidence a device is there than a missing multicast
+packet is that it is not.** `beginTransfer`/`transferring` count in-flight
+exchanges per peer; `sweep` skips those peers (and refreshes `lastSeen`, so one
+does not expire the instant its transfer ends) and `probe` returns without
+dialling. Every path that holds a stream is wrapped: both `Send` and `SendFiles`,
+`RequestConnect` — a peer must not be reaped while its user is being asked for a
+code — and both inbound handlers, from `readOffer` onward.
+
+The counter is nested rather than a boolean, because sending config while
+receiving files is a real pairing and the first to finish must not clear the
+flag for the other.
+
+The frontend keeps a backstop: `peer:lost` no longer clears `sharePeer` while
+`shareBusy()`. The transfer reports its own errors, and pulling the dialog would
+hide whichever one it was about to give.

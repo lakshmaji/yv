@@ -679,3 +679,72 @@ func TestConnReqAnswer(t *testing.T) {
 		}
 	})
 }
+
+// --- a peer in the middle of a transfer is not "gone" ---
+
+// The bug this guards: a large transfer outlasts PeerTTL, mDNS says nothing in
+// the meantime, and the sweep declares the peer lost — which took its dinosaur
+// off the map and the dialog off the screen while the bytes were still moving.
+func TestSweepKeepsAPeerThatIsTransferring(t *testing.T) {
+	n := New(nil)
+	id := testPeerID(t)
+
+	old := time.Now().Add(-2 * PeerTTL)
+	n.peers[id] = &peerRec{announced: true, lastSeen: old}
+
+	release := n.beginTransfer(id)
+	n.sweep(time.Now())
+
+	if _, ok := n.peers[id]; !ok {
+		t.Fatal("a peer mid-transfer was swept away")
+	}
+	// Its clock is refreshed too, so it does not expire the instant the
+	// transfer ends.
+	if got := n.peers[id].lastSeen; !got.After(old) {
+		t.Error("lastSeen was not refreshed while transferring")
+	}
+
+	// Once the transfer is done the ordinary TTL applies again.
+	release()
+	n.peers[id].lastSeen = old
+	n.sweep(time.Now())
+	if _, ok := n.peers[id]; ok {
+		t.Error("a stale peer survived the sweep after its transfer ended")
+	}
+}
+
+func TestTransferringTracksNesting(t *testing.T) {
+	n := New(nil)
+	id := testPeerID(t)
+
+	if n.transferring(id) {
+		t.Fatal("an idle peer reported as transferring")
+	}
+
+	first := n.beginTransfer(id)
+	second := n.beginTransfer(id)
+	if !n.transferring(id) {
+		t.Fatal("not reported as transferring")
+	}
+
+	// Two concurrent transfers with one peer — sending config while receiving
+	// files, say — must not have the first to finish clear the flag.
+	first()
+	if !n.transferring(id) {
+		t.Error("the flag cleared while a second transfer was still running")
+	}
+	second()
+	if n.transferring(id) {
+		t.Error("still transferring after everything finished")
+	}
+}
+
+// testPeerID returns a valid peer ID for tests that only need a map key.
+func testPeerID(t *testing.T) peer.ID {
+	t.Helper()
+	id, err := peer.Decode("12D3KooWA9hLzQqBFcHhSHiXqPXTPeXCXn9nZKNBg8pTQXpsMZ1a")
+	if err != nil {
+		t.Skipf("could not build a peer id: %v", err)
+	}
+	return id
+}

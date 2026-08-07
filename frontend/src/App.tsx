@@ -45,6 +45,7 @@ import {
   setPeers,
   setSharePeer,
   setIncomingConnect,
+  shareBusy,
   setSendProgress,
   setRecvProgress,
   incomingConnect,
@@ -204,10 +205,14 @@ export default function App() {
       }),
       runtime.EventsOn('peer:lost', (e: { id: string }) => {
         setPeers(prev => prev.filter(x => x.id !== e.id));
-        // A peer that vanished mid-share cannot receive anything, and one that
-        // vanished mid-connect cannot be let in.
-        setSharePeer(cur => (cur?.id === e.id ? null : cur));
+        // A peer that vanished mid-connect cannot be let in.
         setIncomingConnect(cur => (cur?.peerId === e.id ? null : cur));
+        // ...but a transfer in flight is not interrupted just because discovery
+        // stopped hearing about the device. Go now holds a peer alive while it
+        // is streaming, so this is a backstop: the transfer owns its own errors,
+        // and yanking the dialog would hide whichever one it reports.
+        if (shareBusy()) return;
+        setSharePeer(cur => (cur?.id === e.id ? null : cur));
       }),
       runtime.EventsOn('share:connect-request', (req: IncomingConnect) => {
         setIncomingConnect(req);

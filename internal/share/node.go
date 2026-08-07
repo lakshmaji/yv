@@ -26,6 +26,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -173,6 +174,10 @@ type Node struct {
 
 	// pending maps a transfer ID to the channel its blocked handler waits on.
 	pending sync.Map // string -> chan bool
+
+	// busy counts transfers in flight per peer, so a device we are actively
+	// talking to is never declared gone. See transferring.
+	busy sync.Map // peer.ID -> *atomic.Int64
 
 	// connPending maps a connection request ID to the request its blocked
 	// handler waits on. Separate from pending because a connection is answered
@@ -452,6 +457,36 @@ func (n *Node) handleHello(s network.Stream) {
 	})
 }
 
+// beginTransfer marks a peer as being mid-exchange and returns the release.
+//
+// This exists because liveness is otherwise inferred from mDNS announcements
+// and dial success, and neither survives a large transfer: a gigabyte over
+// Wi-Fi outlasts PeerTTL, and a confirming dial is exactly what a saturated
+// link is worst at answering. Reaping a peer we are streaming to would take its
+// dinosaur off the map and its dialog off the screen while the bytes were still
+// moving — which is precisely the case the TTL was never meant to catch.
+func (n *Node) beginTransfer(id peer.ID) func() {
+	v, _ := n.busy.LoadOrStore(id, new(atomic.Int64))
+	c, ok := v.(*atomic.Int64)
+	if !ok {
+		return func() {}
+	}
+	c.Add(1)
+	return func() { c.Add(-1) }
+}
+
+// transferring reports whether anything is in flight with a peer. An open
+// stream is far better evidence that a device is there than a missing multicast
+// packet is that it is not.
+func (n *Node) transferring(id peer.ID) bool {
+	v, ok := n.busy.Load(id)
+	if !ok {
+		return false
+	}
+	c, ok := v.(*atomic.Int64)
+	return ok && c.Load() > 0
+}
+
 // --- peer removal ---
 
 // onDisconnected reacts to a lost connection. A disconnect is a hint, not a
@@ -476,6 +511,20 @@ func (n *Node) probe(id peer.ID, addrs []ma.Multiaddr) {
 	select {
 	case <-time.After(probeDelay):
 	case <-n.ctx.Done():
+		return
+	}
+
+	// A transfer in progress settles it without a dial. One transport dropping
+	// mid-stream is exactly when the confirming dial is least likely to get
+	// through, and evicting the peer then would pull the dialog out from under
+	// a transfer that is still running.
+	if n.transferring(id) {
+		n.mu.Lock()
+		if rec, ok := n.peers[id]; ok {
+			rec.probing = false
+			rec.lastSeen = time.Now()
+		}
+		n.mu.Unlock()
 		return
 	}
 
@@ -532,6 +581,12 @@ func (n *Node) sweep(now time.Time) {
 	var expired []peer.ID
 	for id, rec := range n.peers {
 		if rec.greeting || rec.probing {
+			continue
+		}
+		// An in-flight transfer outranks the TTL: the peer is demonstrably
+		// there, whatever mDNS has or has not said lately.
+		if n.transferring(id) {
+			rec.lastSeen = now
 			continue
 		}
 		if now.Sub(rec.lastSeen) > PeerTTL {

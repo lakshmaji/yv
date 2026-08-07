@@ -58,6 +58,8 @@ func (n *Node) SendFiles(ctx context.Context, peerID string, offer models.ShareO
 		return fmt.Errorf("bad peer id: %w", err)
 	}
 
+	defer n.beginTransfer(id)()
+
 	s, err := h.NewStream(ctx, id, FileProto)
 	if err != nil {
 		if isUnsupported(err) {
@@ -160,6 +162,8 @@ func (n *Node) handleFiles(s network.Stream) {
 	if !read {
 		return
 	}
+	defer n.beginTransfer(in.remote)()
+
 	// This transport carries nothing else; a connect request belongs on
 	// ShareProto and arriving here means a peer that does not follow it.
 	if in.offer.Kind != "" {
