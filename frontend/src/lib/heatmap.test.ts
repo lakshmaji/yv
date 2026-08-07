@@ -48,7 +48,32 @@ describe('heatLevel', () => {
   it('has a colour for every level', () => {
     expect(HEAT_COLORS).toHaveLength(5);
   });
+
+  // Busier is darker. The ramp reads correctly either way round at a glance,
+  // so nothing else would catch it being reversed — hence an explicit check on
+  // the direction rather than just the count.
+  it('darkens monotonically as activity rises', () => {
+    const active = HEAT_COLORS.slice(1).map(luminance);
+    for (let i = 1; i < active.length; i++) {
+      expect(active[i]).toBeLessThan(active[i - 1]);
+    }
+  });
+
+  // The busiest level still has to stand apart from an empty day, which is the
+  // cost of darkening rather than brightening on a dark card.
+  it('keeps the busiest level distinct from an empty one', () => {
+    const empty = luminance(HEAT_COLORS[0]);
+    const busiest = luminance(HEAT_COLORS[4]);
+    expect(busiest).toBeGreaterThan(empty * 1.5);
+  });
 });
+
+/** Relative luminance, enough to compare two swatches of the same hue. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
 
 describe('buildHeatmapGrid', () => {
   const today = new Date(2024, 2, 15); // Friday 2024-03-15

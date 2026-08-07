@@ -2421,12 +2421,13 @@
     .heat-cell:hover { outline: 1px solid var(--text); }
     .heat-pad { background: transparent; box-shadow: none; }
 
-    /* Single-hue sequential ramp — matches HEAT_COLORS in lib/heatmap.ts. */
+    /* Single-hue sequential ramp — matches HEAT_COLORS in lib/heatmap.ts.
+       Pale for a quiet day, deep for a busy one. */
     .heat-l0 { background: #232b36; }
-    .heat-l1 { background: #184f95; }
-    .heat-l2 { background: #256abf; }
-    .heat-l3 { background: #3987e5; }
-    .heat-l4 { background: #86b6ef; }
+    .heat-l1 { background: #86b6ef; }
+    .heat-l2 { background: #3987e5; }
+    .heat-l3 { background: #256abf; }
+    .heat-l4 { background: #184f95; }
 
     .heat-footer {
       display: flex;

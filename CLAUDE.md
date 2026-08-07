@@ -1780,3 +1780,16 @@ sit outside the grid and would otherwise inherit the stretched size.
 Two invariants the CSS now depends on, and which are invisible from the
 stylesheet, are asserted in `heatmap.test.ts`: every month label's column falls
 inside the week range, and every week is padded to seven rows.
+
+### The ramp runs pale → deep
+
+Levels 1–4 were the other way round: a busy day came out pale and a quiet one
+deep. Reversed, so busier is darker — the ink-on-paper reading, where a heavy
+day is a heavy mark. That is the opposite direction to GitHub's, whose ramp
+brightens with activity because it is tuned for a light background.
+
+The cost of darkening rather than brightening on a dark card is that the busiest
+level moves *towards* the empty one. It still clears it comfortably — luminance
+72 against 42, a 1.7x gap — and `heatmap.test.ts` now asserts both the direction
+(monotonically darkening) and that headroom, because a reversed ramp looks
+plausible at a glance and nothing else would catch it flipping back.

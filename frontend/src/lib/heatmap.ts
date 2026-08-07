@@ -5,13 +5,17 @@ import type { ActivityDay } from '../types';
 
 /**
  * Sequential ramp for the heatmap: a single blue hue stepping monotonically
- * from dark to light, so the colour encodes magnitude rather than identity.
+ * from pale to deep, so the colour encodes magnitude rather than identity.
+ *
+ * Busier is darker, which is the ink-on-paper reading — a heavy day is a heavy
+ * mark. The order runs the opposite way to GitHub's, whose ramp brightens with
+ * activity because it is tuned for a light background.
  *
  * Level 0 is a faint blue-grey rather than the card's own --surface. Matching
  * the card made empty days invisible, so a year of history looked like a few
  * floating weeks instead of a full calendar with quiet stretches.
  */
-export const HEAT_COLORS = ['#232b36', '#184f95', '#256abf', '#3987e5', '#86b6ef'] as const;
+export const HEAT_COLORS = ['#232b36', '#86b6ef', '#3987e5', '#256abf', '#184f95'] as const;
 
 export type HeatLevel = 0 | 1 | 2 | 3 | 4;
 
