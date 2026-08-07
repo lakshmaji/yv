@@ -2875,6 +2875,91 @@
       0%, 100% { opacity: .58; transform: scale(1); }
       50%      { opacity: .82; transform: scale(1.006); }
     }
+    /* Sea life. One cycle per nested layer, because an element runs one transform
+       at a time — the same arrangement the dinosaurs and the drone use. The lap
+       around the island is not here: it is a script animation over route data,
+       driven from SeaLife.tsx. Everything below is what the body does while it
+       swims, and it runs on the animal's own beat rather than on the lap, which
+       is minutes long. */
+    /* Small: a body seen from above swings a few degrees as it swims, and past
+       that it stops looking like propulsion and starts looking like a wobble. */
+    @keyframes land-sea-yaw {
+      0%, 100% { transform: rotate(-2.4deg); }
+      50%      { transform: rotate(2.4deg); }
+    }
+    /* The wave that drives the thing, in two joints. The after-body swings at the
+       shoulder and the fluke follows a quarter-beat later — that lag is the whole
+       trick, because a body wave is a delay travelling down an animal. Beating
+       both together, or beating only the fluke, gives a rigid plank with a
+       flapping tail: a pulse rather than a swimmer. */
+    @keyframes land-sea-flex {
+      0%, 100% { transform: rotate(-5deg); }
+      50%      { transform: rotate(5deg); }
+    }
+    @keyframes land-sea-fluke {
+      0%, 100% { transform: rotate(-9deg); }
+      50%      { transform: rotate(9deg); }
+    }
+    /* --fin-dir mirrors the sign for the far limb, so a pair strokes outward
+       together instead of both swinging one way and rowing the animal sideways.
+       --fin-amp is per limb: a turtle's back legs kick shallower than its front
+       ones, which is the difference between rowing and paddling. */
+    @keyframes land-sea-fin {
+      0%, 100% { transform: rotate(calc(var(--fin-dir, 1) * var(--fin-amp, 8deg) * -1)); }
+      50%      { transform: rotate(calc(var(--fin-dir, 1) * var(--fin-amp, 8deg))); }
+    }
+    /* A porpoise, from above. There is no height to draw from up here, so the
+       leap is told three ways at once: the animal grows as it comes up toward the
+       viewer, its shadow slides out from under it, and it throws a splash on the
+       way back in. Any one of the three alone reads as a glitch.
+
+       Most of the cycle is flat — the animal is in the water, which is where a
+       dolphin mostly is. The arc is the last fifth of it. */
+    @keyframes land-sea-leap {
+      /* Under the surface, gathering. Dimmed, because that is what an animal a
+         foot down looks like from above, and because it is what lets the arc
+         start and finish somewhere different without a visible snap back. */
+      0%   { opacity: .45; transform: translate(0, 0) scale(.94); }
+      56%  { opacity: .5;  transform: translate(0, 0) scale(.96); }
+      /* Out, up and forward. */
+      64%  { opacity: 1; }
+      76%  { opacity: 1; transform: translate(calc(var(--leap-dx, 0px) * .55), calc(var(--leap-dy, 0px) * .55)) scale(1.22); }
+      /* Nose down, in. */
+      90%  { opacity: 1; transform: translate(var(--leap-dx, 0px), var(--leap-dy, 0px)) scale(1.02); }
+      94%  { opacity: .45; transform: translate(var(--leap-dx, 0px), var(--leap-dy, 0px)) scale(.94); }
+      /* Back to station, under water the whole way. */
+      100% { opacity: .45; transform: translate(0, 0) scale(.94); }
+    }
+    @keyframes land-sea-air-shadow {
+      0%, 62%, 100% { opacity: 0; }
+      74%           { opacity: .3; }
+      88%           { opacity: .16; }
+    }
+    /* Only at the moment of entry, and gone almost at once — a splash that
+       lingered would be a puddle. */
+    @keyframes land-sea-splash {
+      0%, 88% { opacity: 0; transform: scale(.3); }
+      93%     { opacity: .9; transform: scale(.8); }
+      100%    { opacity: 0; transform: scale(1.45); }
+    }
+
+    /* Water pushed aside, going out astern and dying. Never reaches full
+       strength: this is a disturbance on dark water, not a splash. */
+    @keyframes land-sea-wake {
+      0%   { opacity: 0; transform: scale(.86); }
+      30%  { opacity: .2; }
+      100% { opacity: 0; transform: scale(1.3); }
+    }
+    /* A blow is an event, not a shimmer: nothing for most of the cycle, then a
+       short throw of spray that spreads and falls. */
+    @keyframes land-sea-blow {
+      0%, 62%  { opacity: 0; transform: scale(.35); }
+      70%      { opacity: .85; transform: scale(.8); }
+      88%      { opacity: .5; transform: scale(1.25); }
+      100%     { opacity: 0; transform: scale(1.5); }
+    }
+
+
     @keyframes land-foam-pulse {
       0%, 100% { opacity: .28; }
       50%      { opacity: .55; }
@@ -3047,7 +3132,80 @@
       transform-origin: 800px 450px;
       animation: land-surf-breathe 9s ease-in-out infinite;
     }
-    .land-sea-patches, .land-surf, .land-caps { pointer-events: none; }
+    .land-surf, .land-caps { pointer-events: none; }
+
+    /* Scenery, and it crosses nothing that is clickable — but the herd taught this
+       map once already that a layer over something interactive swallows its
+       clicks, so it says so rather than relying on where it happens to be drawn. */
+    .land-sealife { pointer-events: none; }
+
+    /* The lap itself is a script animation — see SeaLife.tsx. Only the hint lives
+       here; a transform this element does not own would fight it. */
+    .land-sea-creature { will-change: transform; }
+    /* Every rotation below pivots on a point in world coordinates — the body's
+       centre, a peduncle, a limb root — which the component writes into
+       transform-origin. So no transform-box here: view-box is the initial value
+       and the one these numbers are in. fill-box would silently re-anchor each
+       rotation to its own bounding box and swing the parts off the animal. */
+    .land-sea-yaw {
+      animation: land-sea-yaw calc(var(--beat, 2s) * 2.4) ease-in-out infinite;
+      animation-delay: var(--beat-delay, 0s);
+    }
+    .land-sea-flex {
+      animation: land-sea-flex var(--beat, 2s) ease-in-out infinite;
+      animation-delay: var(--beat-delay, 0s);
+    }
+    /* A quarter of a beat behind the shoulder: the wave arriving at the tail. */
+    .land-sea-fluke {
+      animation: land-sea-fluke var(--beat, 2s) ease-in-out infinite;
+      animation-delay: calc(var(--beat-delay, 0s) + var(--beat, 2s) * 0.25);
+    }
+    .land-sea-fin {
+      animation: land-sea-fin calc(var(--beat, 2s) * 1.35) ease-in-out infinite;
+      animation-delay: var(--beat-delay, 0s);
+    }
+    /* Half a beat behind the front pair — the diagonal gait, which is most of
+       what makes a turtle look like it is swimming rather than being carried. */
+    .land-sea-fin.trailing {
+      animation-delay: calc(var(--beat-delay, 0s) + var(--beat, 2s) * 0.68);
+    }
+    /* Only what actually leaves the water. The class is load-bearing: without it
+       this ran on every animal, and a whale that grows and shrinks on the spot
+       once a second is a heartbeat with a fluke on it. */
+    .land-sea-leap.leaping {
+      animation: land-sea-leap var(--leap, 8s) ease-in-out infinite;
+      animation-delay: var(--leap-delay, 0s);
+    }
+    .land-sea-air-shadow {
+      opacity: 0;
+      animation: land-sea-air-shadow var(--leap, 8s) ease-in-out infinite;
+      animation-delay: var(--leap-delay, 0s);
+    }
+    .land-sea-splash {
+      transform-box: fill-box;
+      transform-origin: center;
+      opacity: 0;
+      animation: land-sea-splash var(--leap, 8s) ease-out infinite;
+      animation-delay: var(--leap-delay, 0s);
+    }
+    /* transform-origin comes from the component, in world coordinates: the arcs
+       travel out from the animal, so fill-box — each arc's own box — would grow
+       every one of them in place instead. */
+    .land-sea-wake {
+      opacity: 0;
+      animation: land-sea-wake calc(var(--beat, 2s) * 3.5) ease-out infinite;
+      /* Its share of the cycle, plus the animal's own phase, so neither the three
+         rings nor two animals pulse together. */
+      animation-delay: calc(var(--beat-delay, 0s) - var(--beat, 2s) * 3.5 * var(--wake-offset, 0));
+    }
+    .land-sea-spout {
+      transform-box: fill-box;
+      transform-origin: center;
+      opacity: 0;
+      /* A whale blows every few breaths, not every stroke. */
+      animation: land-sea-blow calc(var(--beat, 2s) * 7) ease-out infinite;
+      animation-delay: var(--beat-delay, 0s);
+    }
 
     /* fill-box puts the rotation origin at the tree's own bounding box, so a
        conifer pivots about its trunk rather than about the map's origin. */
@@ -3267,6 +3425,16 @@
     .landscape-stage.no-motion .land-river-shoal,
     .landscape-stage.no-motion .land-foam,
     .landscape-stage.no-motion .land-tree,
+    .landscape-stage.no-motion .land-sea-creature,
+    .landscape-stage.no-motion .land-sea-yaw,
+    .landscape-stage.no-motion .land-sea-flex,
+    .landscape-stage.no-motion .land-sea-fluke,
+    .landscape-stage.no-motion .land-sea-fin,
+        .landscape-stage.no-motion .land-sea-wake,
+    .landscape-stage.no-motion .land-sea-leap.leaping,
+    .landscape-stage.no-motion .land-sea-air-shadow,
+    .landscape-stage.no-motion .land-sea-splash,
+    .landscape-stage.no-motion .land-sea-spout,
     .landscape-stage.no-motion .land-dino-bob,
     .landscape-stage.no-motion .land-dino-sway,
     .landscape-stage.no-motion .land-dino-eye,
@@ -3307,6 +3475,16 @@
       .land-river-shoal,
       .land-foam,
       .land-tree,
+      .land-sea-creature,
+      .land-sea-yaw,
+      .land-sea-flex,
+      .land-sea-fluke,
+      .land-sea-fin,
+      .land-sea-wake,
+      .land-sea-leap.leaping,
+      .land-sea-air-shadow,
+      .land-sea-splash,
+      .land-sea-spout,
       .land-dino-bob,
       .land-dino-sway,
       .land-dino-eye,

@@ -15,7 +15,7 @@
 // output is asserted on all over world.test.ts; the swell is presentation derived
 // from the coast, the same arrangement river.ts has with River.
 
-import { catmullRomPath, centroid, jitterRing, pointInPolygon, type Pt } from './geometry';
+import { catmullRomPath, centroid, pointInPolygon, type Pt } from './geometry';
 import { makeRng, type Rng } from './rng';
 import { ringPath } from './world';
 
@@ -135,13 +135,15 @@ export interface Swell {
 }
 
 /* ---------------------------------------------------------------------------- *
- * Surf, whitecaps and surface patches.
+ * Surf and whitecaps.
  *
- * The swell above answers "which way is the water going". These three answer
- * "is this water at all" — and they are what the paper-cut reference is mostly
- * made of. Without them the sea is a dark rectangle with a few pale scratches on
- * it, because a gradient has no surface and the crests alone are too sparse to
- * read as one.
+ * The swell above answers "which way is the water going". These two answer "is
+ * this water at all", at the shore and out on the open sea.
+ *
+ * There was a third — broad flat tone patches under everything, standing in for
+ * the paper-cut reference's surface. They went when the sea got animals in it:
+ * texture and a subject were doing the same job, and a whale does it better than
+ * a blob does.
  * ---------------------------------------------------------------------------- */
 
 /** How far the white collar of surf reaches out from the shore, in world px. */
@@ -165,9 +167,6 @@ export const MAX_WHITECAPS = 46;
 /** How far out from the coast a whitecap may sit before it is dropped. */
 const CAP_MAX_OFFSHORE = 260;
 
-/** Broad flat tone patches over the open sea. */
-export const SEA_PATCHES = 9;
-
 /** The white collar of broken water hugging the shore. */
 export interface Surf {
   /** Filled band between the shoreline and the scalloped outer edge of the spray. */
@@ -182,13 +181,6 @@ export interface Whitecap {
   opacity: number;
   dur: number;
   delay: number;
-}
-
-/** A broad flat patch of surface tone. */
-export interface SeaPatch {
-  d: string;
-  tone: number;
-  opacity: number;
 }
 
 /**
@@ -469,32 +461,4 @@ export function whitecaps(
     });
   }
   return caps;
-}
-
-/**
- * Broad flat tone patches over the whole sea.
- *
- * The reference's water is not a gradient, it is overlapping areas of slightly
- * different flat colour — which is why it reads as a *surface* seen from above rather
- * than as a lit volume. These sit under everything else and never move: they are the
- * water's colour, not an animation, and drifting them would make the sea slide.
- *
- * `tone` picks between the sea tones in the palette rather than carrying a colour, so
- * the palette stays the single place the map's colours live.
- */
-export function seaPatches(width: number, height: number, seed: number): SeaPatch[] {
-  const rng = makeRng(seed ^ 0x6a17b2);
-  const patches: SeaPatch[] = [];
-  for (let i = 0; i < SEA_PATCHES; i++) {
-    const cx = rng.range(-60, width + 60);
-    const cy = rng.range(-40, height + 40);
-    const rx = rng.range(180, 460);
-    const ry = rng.range(90, 240);
-    patches.push({
-      d: ringPath(jitterRing(cx, cy, rx, ry, 12, rng, 0.3)),
-      tone: rng.int(0, 2),
-      opacity: rng.range(0.22, 0.44),
-    });
-  }
-  return patches;
 }

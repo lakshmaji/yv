@@ -1,6 +1,7 @@
 import { For, Show, createMemo } from 'solid-js';
 import { LAND } from '../../lib/landscape/palette';
-import { coastalSurf, coastalSwell, seaPatches, whitecaps } from '../../lib/landscape/sea';
+import { coastalSurf, coastalSwell, whitecaps } from '../../lib/landscape/sea';
+import { seaLife } from '../../lib/landscape/sealife';
 import { ringPath, type World } from '../../lib/landscape/world';
 import type { Dino } from '../../lib/dino';
 import type { Drone as DroneData } from '../../lib/drone';
@@ -13,6 +14,7 @@ import Scenery from './Scenery';
 import Trails from './Trails';
 import Settlements from './Settlements';
 import Clouds from './Clouds';
+import SeaLife from './SeaLife';
 
 /**
  * The whole scene, drawn in painter's order: ocean, shelf, land, water bodies,
@@ -47,9 +49,6 @@ export default function LandscapeMap(props: {
   const coastPath = () => ringPath(props.world.coast);
   const swell = createMemo(() => coastalSwell(props.world.coast, props.world.seed));
   const surf = createMemo(() => coastalSurf(props.world.coast, props.world.seed));
-  const patches = createMemo(() =>
-    seaPatches(props.world.width, props.world.height, props.world.seed),
-  );
   const caps = createMemo(() =>
     whitecaps(
       props.world.coast,
@@ -59,7 +58,15 @@ export default function LandscapeMap(props: {
       props.world.seed,
     ),
   );
-  const seaTone = [LAND.seaTeal, LAND.seaTealLight, LAND.seaGreen];
+  const creatures = createMemo(() =>
+    seaLife(
+      props.world.coast,
+      props.world.islets,
+      props.world.width,
+      props.world.height,
+      props.world.seed,
+    ),
+  );
 
   return (
     <svg
@@ -104,16 +111,6 @@ export default function LandscapeMap(props: {
       </defs>
 
       <rect x="0" y="0" width={props.world.width} height={props.world.height} fill="url(#ocean-grad)" />
-
-      {/* The sea's surface. Broad flat areas of slightly different tone, which is what
-          makes water read as a surface seen from above rather than as a lit volume —
-          a gradient alone has no surface. Deliberately motionless: this is the water's
-          colour, and drifting it would make the whole sea slide. */}
-      <g class="land-sea-patches">
-        <For each={patches()}>
-          {(p) => <path d={p.d} fill={seaTone[p.tone] ?? LAND.seaTeal} opacity={p.opacity} />}
-        </For>
-      </g>
 
       {/* Slow-drifting swells: the cheapest convincing "the sea is alive" cue. */}
       <g class="land-swells" filter="url(#swell-blur)">
@@ -204,6 +201,13 @@ export default function LandscapeMap(props: {
       </Show>
 
       <path class="land-foam" d={coastPath()} fill="none" stroke={LAND.foam} stroke-width="5" opacity="0.45" />
+
+      {/* Whales, dolphins and turtles. Above the swell and the caps, so an animal
+          is not crossed by a crest, and below the island, which casts its shadow
+          out over the water they are swimming in. `seaLife` keeps every one of
+          them in open sea — outside the coast ring, which is also what puts them
+          clear of the rivers and the lakes inside it. */}
+      <SeaLife creatures={creatures()} motion={props.motion} />
 
       <Terrain world={props.world} />
       <Water world={props.world} />

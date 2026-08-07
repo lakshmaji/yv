@@ -11,17 +11,12 @@ export const LAND = {
   foam: '#8fd0e8',
 
   /**
-   * Surface tones for the open sea, and the white of breaking water.
+   * The white of breaking water.
    *
-   * The reference is a paper-cut sea: broad flat patches of slightly different
-   * greens and blues covering the whole surface, and genuine near-white where the
-   * water breaks. `foam` above is a pale blue, which is right for a glint on a
-   * river but reads as haze rather than spray at the shore — surf is white, and
-   * that is most of what makes a coastline in that style read as one.
+   * `foam` above is a pale blue, which is right for a glint on a river but reads
+   * as haze rather than spray at the shore — surf is white, and that is most of
+   * what makes a coastline in this style read as one.
    */
-  seaTeal: '#17506e',
-  seaTealLight: '#1f6b8a',
-  seaGreen: '#1a5f6e',
   surf: '#e8f6fb',
 
   /** Grass biome, lit from the top-left. */

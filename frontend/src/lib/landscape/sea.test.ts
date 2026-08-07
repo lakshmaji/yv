@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { centroid, type Pt } from './geometry';
 import {
   MAX_WHITECAPS,
-  SEA_PATCHES,
   SURF_REACH,
   SWELL_REACH,
   SWELL_RINGS,
   coastalSurf,
   coastalSwell,
-  seaPatches,
   whitecaps,
 } from './sea';
 import { WORLD_H, WORLD_W, generateWorld } from './world';
@@ -349,27 +347,5 @@ describe('whitecaps', () => {
 
   it('is empty for a degenerate coast', () => {
     expect(whitecaps([], [], WORLD_W, WORLD_H, 1)).toEqual([]);
-  });
-});
-
-describe('seaPatches', () => {
-  it('covers the sea with closed flat areas and a tone the palette can index', () => {
-    for (const seed of SEEDS) {
-      const patches = seaPatches(WORLD_W, WORLD_H, seed);
-      expect(patches, `seed ${seed}`).toHaveLength(SEA_PATCHES);
-      for (const patch of patches) {
-        expect(patch.d.endsWith('Z'), `seed ${seed}`).toBe(true);
-        expect(patch.d, `seed ${seed}`).not.toContain('NaN');
-        expect(patch.tone, `seed ${seed}`).toBeGreaterThanOrEqual(0);
-        expect(patch.tone, `seed ${seed}`).toBeLessThanOrEqual(2);
-        expect(patch.opacity, `seed ${seed}`).toBeGreaterThan(0);
-        expect(patch.opacity, `seed ${seed}`).toBeLessThan(0.5);
-      }
-    }
-  });
-
-  it('is stable for a seed and differs between seeds', () => {
-    expect(seaPatches(WORLD_W, WORLD_H, 7)).toEqual(seaPatches(WORLD_W, WORLD_H, 7));
-    expect(seaPatches(WORLD_W, WORLD_H, 7)).not.toEqual(seaPatches(WORLD_W, WORLD_H, 8));
   });
 });
