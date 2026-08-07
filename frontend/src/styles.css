@@ -3799,6 +3799,11 @@
       border: 1px solid rgba(63,185,80,.35);
       border-radius: var(--radius);
       padding: 10px 11px;
+      /* This message carries the folder files landed in, and a deep home
+         directory has no spaces to break on — without this it would widen the
+         dialog rather than wrap. The path is the useful part of the sentence,
+         so it has to stay readable. */
+      overflow-wrap: anywhere;
     }
 
     .share-incoming-body {

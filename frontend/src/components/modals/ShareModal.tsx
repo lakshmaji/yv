@@ -16,9 +16,6 @@ import { go } from '../../wails';
 import { formatBytes } from '../../lib/utils';
 import type { ShareScope } from '../../types';
 
-/** How long a success message stays up before the modal closes itself. */
-const DONE_MS = 1600;
-
 /**
  * Mirrors share.MaxFileBytes and share.MaxTotalBytes on the Go side. Only used
  * to say what the limits are — Go enforces them, and does so from file metadata
@@ -49,8 +46,6 @@ export default function ShareModal() {
   const [files, setFiles] = createSignal<string[]>([]);
   const [picking, setPicking] = createSignal(false);
 
-  let doneTimer: ReturnType<typeof setTimeout> | undefined;
-
   // With no project selected, "this project" has nothing to mean.
   const canPickProject = () => projects.length > 0;
 
@@ -78,14 +73,10 @@ export default function ShareModal() {
       }
     };
     window.addEventListener('keydown', onKey);
-    onCleanup(() => {
-      window.removeEventListener('keydown', onKey);
-      clearTimeout(doneTimer);
-    });
+    onCleanup(() => window.removeEventListener('keydown', onKey));
   });
 
   function close(): void {
-    clearTimeout(doneTimer);
     resetShareState();
   }
 
@@ -134,9 +125,11 @@ export default function ShareModal() {
         return;
       }
       // Go only returns ok once the receiver confirmed it applied the payload,
-      // so this genuinely means "landed", not "sent".
+      // so this genuinely means "landed", not "sent". The dialog then waits to
+      // be dismissed rather than closing itself — after a transfer that took a
+      // minute, a message that disappears on a timer is one the sender may
+      // never see.
       setShareDone(doneMessage(target.name));
-      doneTimer = setTimeout(close, DONE_MS);
     } catch (e) {
       setShareError(friendlyError(String(e)));
     } finally {
@@ -171,6 +164,11 @@ export default function ShareModal() {
 
         <Show when={shareDone()}>
           <div class="share-done">✓ {shareDone()}</div>
+          <div class="modal-footer">
+            <button class="btn-primary" onClick={close}>
+              Done
+            </button>
+          </div>
         </Show>
 
         <Show when={!shareDone()}>

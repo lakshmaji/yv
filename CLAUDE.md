@@ -1651,3 +1651,34 @@ on `SharePayload` for one to hide in.
 | `frontend/src/components/modals/{Share,IncomingShare}Modal.tsx` | Progress bar; limits reworded |
 | `frontend/src/{App,store,types}.ts` | `share:progress`, `sendProgress`/`recvProgress` |
 | `frontend/src/styles.css` | `.share-progress` |
+
+### Follow-up: the dialogs wait to be dismissed
+
+Both transfer dialogs closed themselves on a timer — 1.6s on the sender, 10s on
+the receiver. That was tolerable when a transfer was 40 KB of config and over
+before you looked up. It is wrong for a file transfer that takes a minute: the
+receiver's summary is the only place the destination folder is named, and a
+message that vanishes on its own takes it away from anyone who was not watching.
+
+Both timers are gone. Each dialog now ends on a **Done** button, and the
+receiver's success screen carries a **Show downloaded folder** button —
+`ShowReceivedFiles` creates the folder if it does not exist yet, so it cannot
+fail with "no such directory" on a device that has been sent nothing. It opens a
+`file://` URL through the Wails runtime rather than shelling out to
+`open`/`xdg-open`: already platform-resolved, and built through `url.URL` so a
+home directory with a space still produces something the OS will open. A failure
+says so inline, since the path is on screen directly above.
+
+Removing the timers exposed two things they had been covering:
+
+- **A failed inbound transfer had nowhere to report.** `share:error` is emitted
+  by both ends, and the receiver's handler was setting the *outbound* error
+  state — on a machine with no outbound dialog open, that went nowhere, and the
+  prompt would have sat on "Receiving…" forever. It now routes to a new
+  `incomingError` when `incomingBusy()`, with its own screen and a Close button.
+  Separate from `incomingResult` because that one renders with a tick.
+- **Escape still meant "decline"** after the transfer had already happened.
+  It now dismisses once there is a result, since there is nothing left to refuse.
+
+`.share-done` gained `overflow-wrap: anywhere` — it now carries a filesystem
+path, and a deep home directory has no spaces to break on.

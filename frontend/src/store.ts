@@ -160,6 +160,10 @@ const [recvProgress, setRecvProgress] = createSignal<ShareProgress | null>(null)
 const [incomingShare, setIncomingShare] = createSignal<IncomingShare | null>(null);
 const [incomingBusy, setIncomingBusy] = createSignal(false);
 const [incomingResult, setIncomingResult] = createSignal<string | null>(null);
+// Set when an inbound transfer fails. Its own signal rather than reusing
+// incomingResult, which is rendered as a success and would put a tick next to a
+// failure.
+const [incomingError, setIncomingError] = createSignal<string | null>(null);
 
 /**
  * Opens the outbound flow for a peer, at whichever step that peer requires.
@@ -464,6 +468,7 @@ export {
   incomingShare, setIncomingShare,
   incomingBusy, setIncomingBusy,
   incomingResult, setIncomingResult,
+  incomingError, setIncomingError,
   settingsModalOpen, setSettingsModalOpen,
   appSettings, setAppSettings, loadAppSettings,
   dashGroupBy, setDashGroupBy,

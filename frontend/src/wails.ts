@@ -77,6 +77,8 @@ interface GoApp {
   InitiateShare(peerID: string, scope: ShareScope, projectID: string): Promise<string>;
   /** Native multi-select picker for files to send. Empty when cancelled. */
   PickFilesToShare(): Promise<string[]>;
+  /** Opens the folder received files land in, creating it if needed. */
+  ShowReceivedFiles(): Promise<string>;
   /** Sends files off this machine's disk to a peer. "ok" or "error: …". */
   InitiateFileShare(peerID: string, paths: string[]): Promise<string>;
   /** Delivers the user's decision to a waiting inbound transfer. */

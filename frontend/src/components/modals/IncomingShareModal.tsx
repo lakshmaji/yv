@@ -1,4 +1,4 @@
-import { For, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import {
   incomingShare,
   setIncomingShare,
@@ -6,13 +6,13 @@ import {
   setIncomingBusy,
   incomingResult,
   setIncomingResult,
+  incomingError,
+  setIncomingError,
   recvProgress,
+  setRecvProgress,
 } from '../../store';
 import { go } from '../../wails';
 import { formatBytes } from '../../lib/utils';
-
-/** How long the merge summary stays up before the modal closes itself. */
-const DONE_MS = 2400;
 
 /**
  * Asks whether to accept config another device is offering.
@@ -24,8 +24,11 @@ const DONE_MS = 2400;
 export default function IncomingShareModal() {
   const offer = () => incomingShare();
 
+  // Set if opening the folder fails, which is the only way the user would learn
+  // that clicking the button did nothing.
+  const [openFailed, setOpenFailed] = createSignal(false);
+
   let declineRef: HTMLButtonElement | undefined;
-  let doneTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
     // Decline takes the focus, so a stray Return or Space does not import
@@ -33,23 +36,26 @@ export default function IncomingShareModal() {
     declineRef?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !incomingBusy()) {
-        e.preventDefault();
-        void respond(false);
+      if (e.key !== 'Escape' || incomingBusy()) return;
+      e.preventDefault();
+      // Once there is a result, Escape dismisses rather than declines — there is
+      // nothing left to refuse, and the transfer has already happened.
+      if (incomingResult() || incomingError()) {
+        close();
+        return;
       }
+      void respond(false);
     };
     window.addEventListener('keydown', onKey);
-    onCleanup(() => {
-      window.removeEventListener('keydown', onKey);
-      clearTimeout(doneTimer);
-    });
+    onCleanup(() => window.removeEventListener('keydown', onKey));
   });
 
   function close(): void {
-    clearTimeout(doneTimer);
     setIncomingShare(null);
     setIncomingBusy(false);
     setIncomingResult(null);
+    setIncomingError(null);
+    setRecvProgress(null);
   }
 
   async function respond(accept: boolean): Promise<void> {
@@ -65,13 +71,20 @@ export default function IncomingShareModal() {
       return;
     }
 
-    if (!accept) {
-      close();
-      return;
+    // On acceptance the modal stays up until the user dismisses it. Nothing
+    // closes it on a timer: the summary says where files landed, and a dialog
+    // that vanishes on its own takes that away from anyone who looked up.
+    if (!accept) close();
+  }
+
+  async function showFolder(): Promise<void> {
+    setOpenFailed(false);
+    try {
+      const res = await go.ShowReceivedFiles();
+      if (res.startsWith('error:')) setOpenFailed(true);
+    } catch {
+      setOpenFailed(true);
     }
-    // On acceptance the modal stays up: the share:imported event carries the
-    // merge summary, and closing before it arrives would hide the outcome.
-    doneTimer = setTimeout(close, DONE_MS + 8000);
   }
 
   /** What they are offering, in words rather than a scope enum. */
@@ -98,14 +111,38 @@ export default function IncomingShareModal() {
         <Show when={incomingResult()}>
           <div class="modal-title">Received from {offer()?.fromName}</div>
           <div class="share-done">✓ {incomingResult()}</div>
+
+          <Show when={openFailed()}>
+            <div class="share-hint">
+              Could not open the folder — the path is above.
+            </div>
+          </Show>
+
           <div class="modal-footer">
+            {/* Only for files: a config share lands in the app, so there is no
+                folder to show. */}
+            <Show when={isFiles()}>
+              <button class="btn-cancel" onClick={() => void showFolder()}>
+                Show downloaded folder
+              </button>
+            </Show>
             <button class="btn-primary" onClick={close}>
               Done
             </button>
           </div>
         </Show>
 
-        <Show when={!incomingResult()}>
+        <Show when={incomingError()}>
+          <div class="modal-title">Transfer from {offer()?.fromName} failed</div>
+          <div class="share-error">{incomingError()}</div>
+          <div class="modal-footer">
+            <button class="btn-primary" onClick={close}>
+              Close
+            </button>
+          </div>
+        </Show>
+
+        <Show when={!incomingResult() && !incomingError()}>
           <div class="modal-title">{offer()?.fromName} wants to share</div>
 
           <div class="share-incoming-body">

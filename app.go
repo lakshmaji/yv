@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -348,6 +349,31 @@ func (a *App) PickFilesToShare() []string {
 		return []string{}
 	}
 	return paths
+}
+
+// ShowReceivedFiles opens the folder that received files land in.
+//
+// The folder is created if it does not exist yet, so the button never fails
+// with "no such directory" on a device that has been sent nothing — an empty
+// folder answers "where do these go?" perfectly well.
+//
+// A file:// URL through the Wails runtime rather than an exec of open/xdg-open:
+// it is already platform-resolved, and shelling out to a path that came from
+// the user's home directory is a habit worth not forming.
+func (a *App) ShowReceivedFiles() string {
+	dir, err := share.ReceiveDir()
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "error: " + err.Error()
+	}
+
+	// Built through url.URL rather than concatenated, so a home directory with
+	// a space or a non-ASCII character still produces a URL the OS will open.
+	u := url.URL{Scheme: "file", Path: dir}
+	wailsRuntime.BrowserOpenURL(a.getCtx(), u.String())
+	return "ok"
 }
 
 // InitiateFileShare sends files off this machine's disk to a peer.

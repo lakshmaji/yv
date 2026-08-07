@@ -53,6 +53,9 @@ import {
   incomingShare,
   setIncomingShare,
   setIncomingResult,
+  incomingBusy,
+  setIncomingBusy,
+  setIncomingError,
 } from './store';
 
 /**
@@ -233,7 +236,16 @@ export default function App() {
           .then(loaded => setProjects(loaded as any))
           .catch(() => { /* it is on disk either way */ });
       }),
+      // Both ends emit this. A receiver mid-transfer owns the failure — its
+      // dialog is the one on screen, and without this it would sit on
+      // "Receiving…" forever now that nothing closes it on a timer.
       runtime.EventsOn('share:error', (e: { message: string }) => {
+        if (incomingBusy()) {
+          setIncomingBusy(false);
+          setIncomingError(e.message);
+          setRecvProgress(null);
+          return;
+        }
         setShareBusy(false);
         setShareError(e.message);
       }),
