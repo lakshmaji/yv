@@ -395,7 +395,7 @@ func TestShareOfferHeaderRoundTrips(t *testing.T) {
 	want := models.ShareOffer{
 		TransferID:   "t-1",
 		FromName:     "Rexy",
-		Scope:        ScopeFiles,
+		Scope:        ScopeProject,
 		ProjectName:  "POS",
 		ProjectCount: 2,
 		FileNames:    []string{"notes.txt", "blob.bin"},
@@ -418,36 +418,6 @@ func TestShareOfferHeaderRoundTrips(t *testing.T) {
 	}
 	if len(got.FileNames) != 2 || got.FileNames[1] != "blob.bin" {
 		t.Errorf("file names lost: %+v", got.FileNames)
-	}
-}
-
-// A files payload is bigger than a config one on purpose, and the bound is
-// picked from the scope. Getting these the wrong way round would either cap
-// file transfers at 16 MB or hand a config sender a 128 MB allocation.
-func TestPayloadLimitFollowsTheScope(t *testing.T) {
-	if payloadLimit(ScopeFiles) <= payloadLimit(ScopeApp) {
-		t.Error("a files payload should be allowed to be larger than config")
-	}
-	if payloadLimit(ScopeProject) != maxPayload {
-		t.Error("config scopes should keep the tight bound")
-	}
-	// Anything unrecognised gets the tight bound, not the generous one.
-	if payloadLimit("something-new") != maxPayload {
-		t.Error("an unknown scope should get the conservative limit")
-	}
-	if payloadDeadline(ScopeFiles) <= payloadDeadline(ScopeApp) {
-		t.Error("a files transfer should be given longer")
-	}
-}
-
-// The sender's own cap must be inside what the receiver will read, or a
-// transfer the sender was allowed to build would be rejected on arrival.
-func TestSenderCapFitsTheReceiverLimit(t *testing.T) {
-	if MaxTotalBytes >= maxFilePayload {
-		t.Errorf("MaxTotalBytes (%d) is not below maxFilePayload (%d)", MaxTotalBytes, maxFilePayload)
-	}
-	if MaxFileBytes > MaxTotalBytes {
-		t.Errorf("a single file may exceed a whole transfer: %d > %d", MaxFileBytes, MaxTotalBytes)
 	}
 }
 

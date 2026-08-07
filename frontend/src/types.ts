@@ -147,6 +147,20 @@ export interface PeerInfo {
   pinRequired: boolean;
 }
 
+/**
+ * Bytes moved so far on a file transfer, throttled by the sender.
+ *
+ * `total` is what the offer promised, so a bar can be drawn before the first
+ * byte lands. Config transfers do not report progress — they are small enough
+ * that a bar would flash and vanish.
+ */
+export interface ShareProgress {
+  transferId: string;
+  direction: 'send' | 'receive';
+  bytes: number;
+  total: number;
+}
+
 /** A nearby device asking to connect, awaiting the code it is reading out. */
 export interface IncomingConnect {
   requestId: string;

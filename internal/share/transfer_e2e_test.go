@@ -1,12 +1,16 @@
 package share
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +41,7 @@ func newTestNode(t *testing.T, name string, onPayload func(models.SharePayload) 
 
 	h.SetStreamHandler(HelloProto, n.handleHello)
 	h.SetStreamHandler(ShareProto, n.handleShare)
+	h.SetStreamHandler(FileProto, n.handleFiles)
 
 	t.Cleanup(func() {
 		n.cancel()
@@ -341,65 +346,6 @@ func waitForPending(n *Node, within time.Duration) (string, bool) {
 
 func encodeJSON(w io.Writer, v any) error {
 	return json.NewEncoder(w).Encode(v)
-}
-
-// --- file transfer ---
-
-func TestSendFiles(t *testing.T) {
-	got := make(chan models.SharePayload, 1)
-
-	receiver := newTestNode(t, "Bronte", func(p models.SharePayload) string {
-		got <- p
-		return "Saved 2 files"
-	})
-	sender := newTestNode(t, "Rexy", nil)
-	connect(t, sender, receiver)
-	letIn(t, receiver, sender)
-
-	autoRespond(t, receiver, true)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Binary, so this also proves the base64 round-trip is byte-exact rather
-	// than merely surviving for text.
-	binary := make([]byte, 4096)
-	for i := range binary {
-		binary[i] = byte(i % 251)
-	}
-
-	payload := models.SharePayload{
-		Scope: ScopeFiles,
-		Files: []models.SharedFile{
-			{Name: "notes.txt", Size: 5, Data: []byte("hello")},
-			{Name: "blob.bin", Size: int64(len(binary)), Data: binary},
-		},
-	}
-	offer := models.ShareOffer{
-		TransferID: "1",
-		Scope:      ScopeFiles,
-		FileNames:  []string{"notes.txt", "blob.bin"},
-		TotalBytes: int64(5 + len(binary)),
-	}
-
-	if err := sender.Send(ctx, receiver.host.ID().String(), offer, payload); err != nil {
-		t.Fatalf("Send: %v", err)
-	}
-
-	select {
-	case p := <-got:
-		if len(p.Files) != 2 {
-			t.Fatalf("got %d files, want 2", len(p.Files))
-		}
-		if string(p.Files[0].Data) != "hello" {
-			t.Errorf("text file arrived as %q", p.Files[0].Data)
-		}
-		if !bytes.Equal(p.Files[1].Data, binary) {
-			t.Error("binary file did not survive the round trip")
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("files never reached the receiver")
-	}
 }
 
 // --- the connection handshake ---
@@ -716,5 +662,337 @@ func TestOldPeerIsReportedAsOutOfDate(t *testing.T) {
 func TestShareProtocolIsVersioned(t *testing.T) {
 	if ShareProto == "/yv/share/1.0.0" {
 		t.Error("ShareProto is back on 1.0.0, which an old build would answer wrongly")
+	}
+}
+
+// --- file transport ---
+
+// fileSink wires a node's file sink to a directory and reports what landed.
+func fileSink(t *testing.T, n *Node) (string, <-chan []string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	done := make(chan []string, 1)
+
+	n.SetFileSink(func(offer models.ShareOffer, body io.Reader, onProgress func(int64)) (string, error) {
+		written, err := ReadFiles(bufio.NewReader(body), dir, MaxTotalBytes, onProgress)
+		if err != nil {
+			return "", err
+		}
+		done <- written
+		return fmt.Sprintf("Saved %d files", len(written)), nil
+	})
+	return dir, done
+}
+
+func TestSendFilesEndToEnd(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+	letIn(t, receiver, sender)
+
+	dir, landed := fileSink(t, receiver)
+	autoRespond(t, receiver, true)
+
+	// Spans many chunks and ends ragged, so a boundary bug shows up.
+	binary := make([]byte, 5*copyBufSize+123)
+	for i := range binary {
+		binary[i] = byte(i % 251)
+	}
+	src := sourceFor(t, "app-release.apk", binary)
+	text := sourceFor(t, "notes.txt", []byte("hello"))
+
+	files := []FileSource{src, text}
+	offer := models.ShareOffer{
+		TransferID: "1",
+		Scope:      ScopeFiles,
+		FileNames:  FileNames(files),
+		TotalBytes: TotalBytes(files),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files); err != nil {
+		t.Fatalf("SendFiles: %v", err)
+	}
+
+	select {
+	case written := <-landed:
+		if len(written) != 2 {
+			t.Fatalf("landed %d files, want 2", len(written))
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("files never reached the receiver")
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "app-release.apk"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, binary) {
+		t.Error("the binary did not survive the wire")
+	}
+}
+
+// The gate is shared, so the connection requirement must hold on this transport
+// exactly as it does on the config one.
+func TestSendFilesWithoutConnectingIsRefused(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+
+	_, landed := fileSink(t, receiver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	src := sourceFor(t, "a.txt", []byte("data"))
+	files := []FileSource{src}
+	offer := models.ShareOffer{TransferID: "1", Scope: ScopeFiles, TotalBytes: TotalBytes(files)}
+
+	err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files)
+	if !errors.Is(err, ErrNotConnected) {
+		t.Fatalf("SendFiles err = %v, want ErrNotConnected", err)
+	}
+
+	if _, waiting := anyPending(receiver); waiting {
+		t.Error("an unconnected peer raised a file prompt")
+	}
+	select {
+	case w := <-landed:
+		t.Fatalf("files landed without a connection: %v", w)
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+func TestSendFilesDeclined(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+	letIn(t, receiver, sender)
+
+	_, landed := fileSink(t, receiver)
+	autoRespond(t, receiver, false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	files := []FileSource{sourceFor(t, "a.txt", []byte("data"))}
+	offer := models.ShareOffer{TransferID: "1", Scope: ScopeFiles, TotalBytes: TotalBytes(files)}
+
+	if err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files); !errors.Is(err, ErrDeclined) {
+		t.Fatalf("SendFiles err = %v, want ErrDeclined", err)
+	}
+	select {
+	case w := <-landed:
+		t.Fatalf("files landed despite a decline: %v", w)
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+// The whole point of the split: a peer missing the file protocol still shares
+// config perfectly well, and only the file transfer reports a version problem.
+func TestOldPeerKeepsConfigButNotFiles(t *testing.T) {
+	got := make(chan models.SharePayload, 1)
+
+	old := newTestNode(t, "Bronte", func(p models.SharePayload) string {
+		got <- p
+		return "Imported 1 project(s)"
+	})
+	// A build that predates the file transport: ShareProto only.
+	old.host.RemoveStreamHandler(FileProto)
+
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, old)
+	letIn(t, old, sender)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	files := []FileSource{sourceFor(t, "a.txt", []byte("data"))}
+	err := sender.SendFiles(ctx, old.host.ID().String(),
+		models.ShareOffer{TransferID: "1", Scope: ScopeFiles, TotalBytes: TotalBytes(files)}, files)
+	if !errors.Is(err, ErrOldVersion) {
+		t.Fatalf("SendFiles err = %v, want ErrOldVersion", err)
+	}
+
+	// ...and config still works against that same peer.
+	autoRespond(t, old, true)
+	if err := sender.Send(ctx, old.host.ID().String(),
+		models.ShareOffer{TransferID: "2", Scope: ScopeApp}, samplePayload()); err != nil {
+		t.Fatalf("config share to an older peer failed: %v", err)
+	}
+	select {
+	case <-got:
+	case <-time.After(10 * time.Second):
+		t.Fatal("config never arrived")
+	}
+}
+
+// A transfer bigger than the disk is refused before anyone is asked about it.
+func TestNoSpaceIsRefusedWithoutPrompting(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+	letIn(t, receiver, sender)
+
+	_, landed := fileSink(t, receiver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	files := []FileSource{sourceFor(t, "a.txt", []byte("data"))}
+	// Claim far more than any disk has. The offer's TotalBytes is what the
+	// precheck measures against, which is exactly why it can answer before the
+	// first body byte is sent.
+	offer := models.ShareOffer{
+		TransferID: "1",
+		Scope:      ScopeFiles,
+		TotalBytes: 1 << 62,
+	}
+
+	err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files)
+	if !errors.Is(err, ErrNoSpace) {
+		t.Fatalf("SendFiles err = %v, want ErrNoSpace", err)
+	}
+	if _, waiting := anyPending(receiver); waiting {
+		t.Error("a transfer that cannot fit still raised a prompt")
+	}
+	select {
+	case w := <-landed:
+		t.Fatalf("files landed despite no space: %v", w)
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+// Progress must reach the frontend from both ends, or a large transfer looks
+// hung on whichever side is quiet.
+func TestFileTransferEmitsProgress(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+	letIn(t, receiver, sender)
+
+	var seen []int64
+	dir := t.TempDir()
+	receiver.SetFileSink(func(_ models.ShareOffer, body io.Reader, onProgress func(int64)) (string, error) {
+		written, err := ReadFiles(bufio.NewReader(body), dir, MaxTotalBytes, func(n int64) {
+			seen = append(seen, n)
+			onProgress(n)
+		})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Saved %d files", len(written)), nil
+	})
+	autoRespond(t, receiver, true)
+
+	content := bytes.Repeat([]byte("q"), 6*copyBufSize)
+	files := []FileSource{sourceFor(t, "big.bin", content)}
+	offer := models.ShareOffer{TransferID: "1", Scope: ScopeFiles, TotalBytes: TotalBytes(files)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files); err != nil {
+		t.Fatalf("SendFiles: %v", err)
+	}
+
+	if len(seen) < 2 {
+		t.Fatalf("receiver saw %d progress callbacks, want several", len(seen))
+	}
+	if got := seen[len(seen)-1]; got != int64(len(content)) {
+		t.Errorf("final progress = %d, want %d", got, len(content))
+	}
+}
+
+// The point of the whole change: a file far larger than the old 32 MB cap goes
+// across intact, and memory does not scale with it.
+//
+// Compared by hash rather than by holding both copies in a []byte, so the test
+// itself does not do the thing the transport was rewritten to avoid.
+func TestSendLargeFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("moves 64 MB over loopback")
+	}
+
+	const size = 64 << 20
+
+	src := filepath.Join(t.TempDir(), "large.bin")
+	f, err := os.Create(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pseudo-random rather than zeros: a run of identical bytes would sail
+	// through a chunking bug that reordered or repeated a buffer.
+	sum := sha256.New()
+	chunk := make([]byte, 1<<20)
+	for i := range chunk {
+		chunk[i] = byte(i*7 + 3)
+	}
+	for written := 0; written < size; written += len(chunk) {
+		if _, err := f.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+		sum.Write(chunk)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	want := sum.Sum(nil)
+
+	receiver := newTestNode(t, "Bronte", nil)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+	letIn(t, receiver, sender)
+
+	dir, landed := fileSink(t, receiver)
+	autoRespond(t, receiver, true)
+
+	files, err := StatFiles([]string{src})
+	if err != nil {
+		t.Fatalf("StatFiles: %v", err)
+	}
+	offer := models.ShareOffer{
+		TransferID: "1",
+		Scope:      ScopeFiles,
+		FileNames:  FileNames(files),
+		TotalBytes: TotalBytes(files),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	if err := sender.SendFiles(ctx, receiver.host.ID().String(), offer, files); err != nil {
+		t.Fatalf("SendFiles: %v", err)
+	}
+
+	select {
+	case <-landed:
+	case <-time.After(2 * time.Minute):
+		t.Fatal("the file never arrived")
+	}
+
+	got, err := os.Open(filepath.Join(dir, "large.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = got.Close() }()
+
+	st, err := got.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Size() != size {
+		t.Fatalf("arrived at %d bytes, want %d", st.Size(), size)
+	}
+
+	check := sha256.New()
+	if _, err := io.Copy(check, got); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(check.Sum(nil), want) {
+		t.Error("the file arrived corrupted")
 	}
 }

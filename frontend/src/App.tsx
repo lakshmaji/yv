@@ -39,11 +39,14 @@ import type {
   PeerInfo,
   IncomingShare,
   IncomingConnect,
+  ShareProgress,
 } from './types';
 import {
   setPeers,
   setSharePeer,
   setIncomingConnect,
+  setSendProgress,
+  setRecvProgress,
   incomingConnect,
   setShareBusy,
   setShareError,
@@ -215,7 +218,14 @@ export default function App() {
         setIncomingResult(null);
         setIncomingShare(offer);
       }),
+      // Throttled on the Go side, so this fires a few times a second rather
+      // than once per chunk.
+      runtime.EventsOn('share:progress', (p: ShareProgress) => {
+        if (p.direction === 'send') setSendProgress(p);
+        else setRecvProgress(p);
+      }),
       runtime.EventsOn('share:imported', (e: { summary: string }) => {
+        setRecvProgress(null);
         setIncomingResult(e.summary);
         // The projects file was written underneath us; reload so the sidebar
         // shows what arrived without needing a restart.

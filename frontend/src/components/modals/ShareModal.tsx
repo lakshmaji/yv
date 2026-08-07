@@ -9,20 +9,23 @@ import {
   setShareError,
   shareDone,
   setShareDone,
+  sendProgress,
   resetShareState,
 } from '../../store';
 import { go } from '../../wails';
+import { formatBytes } from '../../lib/utils';
 import type { ShareScope } from '../../types';
 
 /** How long a success message stays up before the modal closes itself. */
 const DONE_MS = 1600;
 
 /**
- * Mirrors share.MaxTotalBytes on the Go side, so an over-sized selection is
- * refused while the user can still see which file caused it — Go enforces the
- * real limit, this only spares them a round trip to be told.
+ * Mirrors share.MaxFileBytes and share.MaxTotalBytes on the Go side. Only used
+ * to say what the limits are — Go enforces them, and does so from file metadata
+ * before reading a single byte off disk.
  */
-const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const MAX_FILE_MB = 500;
+const MAX_TOTAL_GB = 1;
 
 /**
  * Chooses what to send to the peer whose dinosaur was tapped.
@@ -140,6 +143,15 @@ export default function ShareModal() {
       setShareBusy(false);
     }
   }
+
+  /**
+   * Once bytes are moving, "Waiting for them to accept…" is a lie — they have
+   * accepted, and what is left is the transfer itself.
+   */
+  const sendLabel = () => {
+    if (!shareBusy()) return 'Send';
+    return sendProgress() ? 'Sending…' : 'Waiting for them to accept…';
+  };
 
   function doneMessage(peerName: string): string {
     if (scope() === 'files') {
@@ -271,11 +283,29 @@ export default function ShareModal() {
                 </>
               }
             >
-              {files().length} file{files().length === 1 ? '' : 's'} will be sent, up to{' '}
-              {MAX_TOTAL_BYTES / (1024 * 1024)} MB in total. They are saved to that device's
-              Downloads folder, and nothing on it is overwritten.
+              {files().length} file{files().length === 1 ? '' : 's'} will be sent — up to{' '}
+              {MAX_FILE_MB} MB each, {MAX_TOTAL_GB} GB in total. They are saved to that
+              device's Downloads folder, and nothing on it is overwritten.
             </Show>
           </div>
+
+          {/* Only file transfers report progress — config is small enough that
+              a bar would flash and vanish. */}
+          <Show when={shareBusy() && sendProgress()}>
+            {(p) => (
+              <div class="share-progress">
+                <div class="share-progress-track">
+                  <div
+                    class="share-progress-fill"
+                    style={{ width: `${percent(p().bytes, p().total)}%` }}
+                  />
+                </div>
+                <div class="share-progress-label">
+                  {formatBytes(p().bytes)} of {formatBytes(p().total)}
+                </div>
+              </div>
+            )}
+          </Show>
 
           <Show when={shareError()}>
             <div class="share-error">{shareError()}</div>
@@ -286,13 +316,22 @@ export default function ShareModal() {
               Cancel
             </button>
             <button class="btn-primary" disabled={!ready()} onClick={() => void send()}>
-              {shareBusy() ? 'Waiting for them to accept…' : 'Send'}
+              {sendLabel()}
             </button>
           </div>
         </Show>
       </div>
     </div>
   );
+}
+
+/**
+ * Clamped to 100 so a sender that overshoots its own estimate cannot push the
+ * fill past the end of the track.
+ */
+function percent(bytes: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.round((bytes / total) * 100));
 }
 
 /** Last path segment, for a list that has no room for absolute paths. */

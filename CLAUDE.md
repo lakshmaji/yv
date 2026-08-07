@@ -1532,3 +1532,122 @@ a colleague what their screen says.
 | `frontend/src/components/modals/SettingsModal.tsx` | "Your name" row in the Sharing section, hostname placeholder, rune-counted validation |
 | `frontend/src/{types,wails}.ts` | `AppSettings.username`, `GetDefaultDeviceName` binding |
 | `frontend/src/styles.css` | `.modal-box .settings-username-input` — ancestor named for the same specificity reason as the old PIN field |
+
+
+---
+
+## Implemented: Files get their own transport, up to 500 MB
+
+### Goal
+
+Raise the file-sharing limit from 32 MB to 500 MB. Bumping the constant alone
+would have been a trap, so the transport changed instead.
+
+### Why the number was not the problem
+
+File bytes rode the config payload: `os.ReadFile` into a `[]byte`, base64'd into
+JSON by `encoding/json`, gzip'd, and decoded the same way on the far side. A
+500 MB file needs **~1.2 GB of RAM per machine** that way — 500 MB read plus
+~667 MB of base64 in the encoder's buffer, mirrored on decode. The 32 MB cap was
+not a policy about what is worth sending; it was the memory ceiling.
+
+Streaming makes the size irrelevant: **one 32 KB buffer per side**, whatever the
+file.
+
+### Two transports, one gate
+
+`ShareProto` `/yv/share/1.1.0` is **untouched** — connection requests and config.
+`FileProto` `/yv/files/1.0.0` is new and purely additive.
+
+A second protocol rather than a version bump, because that is what lets a peer
+missing one still use the other: `isUnsupported` turns the failed negotiation
+into "that device is running an older version of yv" **for file shares only**,
+while config keeps working across the skew.
+`TestOldPeerKeepsConfigButNotFiles` is the guard on exactly that.
+
+What both share is `gate()` — the connection check, the identity resolution, the
+user's prompt and the response byte — extracted from `handleShare` so "a peer we
+have not connected to gets nothing" has one implementation rather than two that
+drift. `readOffer` and `gate` are the seam; only the body differs. No interface:
+libp2p already dispatches on the protocol id, and each protocol has exactly one
+implementation, so an interface would add indirection with nothing to substitute.
+
+### The body is opaque, and that is what the framing has to guarantee
+
+Only a ~60 byte header per file is structured:
+
+```
+{"name":"app-release.apk","size":52428800}\n   <- the one JSON line
+<exactly 52428800 bytes, copied verbatim>      <- never parsed, never scanned
+```
+
+then `CloseWrite`; EOF is the terminator, so there is no count on the wire to
+disagree with what arrived.
+
+**The length prefix is what makes arbitrary binary safe.** The reader copies
+exactly `size` bytes and never looks *inside* a body for anything, so a `.zip`
+containing newlines, `}`, null bytes or an entire JSON document is just bytes.
+A delimiter-framed format would have to escape the payload — which is precisely
+the base64 tax being removed. `TestStreamCarriesAdversarialBodies` and
+`TestFramingSurvivesABodyThatLooksLikeAHeader` hold that line: the second plants
+a valid-looking header *inside* a file and asserts that exactly two files land
+and no third is conjured from the contents.
+
+No gzip here — `.apk`, `.zip`, `.mp4` are already compressed, so deflating them
+again burns CPU on 500 MB to save nothing. Config keeps gzip; it is text.
+
+### Deadlines bound silence, not duration
+
+A fixed timeout cannot suit both 1 MB and 1 GB. `touchReader`/`touchWriter` push
+the stream deadline forward on every chunk, so the bound is 60s of *no progress*.
+A stalled peer still dies; a slow one is left alone.
+
+### What the receiver refuses, and when
+
+- **Not connected** → `respNoConn`, no prompt. Same gate as config.
+- **Will not fit** → `respNoSpace`, **before** the prompt. Asking someone to
+  accept a transfer that cannot land is worse than refusing it for them; the
+  sender is told it is the other device's disk. An unmeasurable filesystem
+  counts as room enough, since refusing because we could not look would block
+  transfers that would have worked.
+- Files land via `name.part`, renamed only once the last promised byte arrives,
+  so an interruption never leaves something that looks complete.
+- Written `0644` — no execute bit, whatever the extension — and never run.
+  On macOS they get the `com.apple.quarantine` xattr, so a `.dmg` or `.pkg` from
+  another laptop faces the same Gatekeeper check as a browser download.
+
+### Limits
+
+500 MB per file, 1 GB per transfer, 64 files. `StatFiles` enforces all three from
+metadata **before reading anything**, so a transfer refused for size costs no
+disk reads. Config keeps its own 16 MB bound.
+
+### Progress
+
+`share:progress` from both ends, throttled to 250 ms — at 32 KB a chunk, a
+500 MB transfer would otherwise emit ~16,000 events nobody can see. The Send
+button switches from "Waiting for them to accept…" to "Sending…" once bytes are
+moving, because the first is untrue by then.
+
+### Net simplification
+
+`SharedFile`, `SharePayload.Files`, `maxFilePayload`, `filePayloadTimeout`,
+`payloadLimit` and `payloadDeadline` are all **deleted**. The config path no
+longer switches limits on scope, and `applySharedPayload` no longer branches on
+it — files cannot reach that function at all, because there is no longer a field
+on `SharePayload` for one to hide in.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/share/files.go` | `PrepareFiles`/`SaveFiles` → `StatFiles`, `WriteFiles`, `ReadFiles`, `copyChunks`, `readLine`; `SafeName`/`uniquePath`/`ReceiveDir`/`HumanSize` unchanged |
+| `internal/share/fileproto.go` | New — `FileProto`, `SendFiles`, `handleFiles`, `spaceCheck`, `progressReporter`, `touchReader`/`touchWriter` |
+| `internal/share/transfer.go` | `readOffer` + `gate` extracted; `respNoSpace`, `ErrNoSpace`; scope-switched limits deleted |
+| `internal/share/node.go` | Registers `FileProto`; `onFiles` sink, `SetFileSink`, `EventProgress` |
+| `internal/share/{quarantine,freespace}_*.go` | New — build-tagged, following `app_fullscreen_*.go` |
+| `internal/models/models.go` | `SharedFile` and `SharePayload.Files` removed |
+| `app.go` | `InitiateFileShare` stats then streams; `receiveSharedFiles` drains to disk |
+| `frontend/src/components/modals/{Share,IncomingShare}Modal.tsx` | Progress bar; limits reworded |
+| `frontend/src/{App,store,types}.ts` | `share:progress`, `sendProgress`/`recvProgress` |
+| `frontend/src/styles.css` | `.share-progress` |

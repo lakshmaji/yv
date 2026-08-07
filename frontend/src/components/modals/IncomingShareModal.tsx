@@ -6,6 +6,7 @@ import {
   setIncomingBusy,
   incomingResult,
   setIncomingResult,
+  recvProgress,
 } from '../../store';
 import { go } from '../../wails';
 import { formatBytes } from '../../lib/utils';
@@ -141,6 +142,24 @@ export default function IncomingShareModal() {
               </span>
             </Show>
           </div>
+
+          <Show when={incomingBusy() && recvProgress()}>
+            {(p) => (
+              <div class="share-progress">
+                <div class="share-progress-track">
+                  <div
+                    class="share-progress-fill"
+                    style={{
+                      width: `${p().total > 0 ? Math.min(100, Math.round((p().bytes / p().total) * 100)) : 0}%`,
+                    }}
+                  />
+                </div>
+                <div class="share-progress-label">
+                  {formatBytes(p().bytes)} of {formatBytes(p().total)}
+                </div>
+              </div>
+            )}
+          </Show>
 
           <div class="modal-footer">
             <button

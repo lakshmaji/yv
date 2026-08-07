@@ -49,7 +49,8 @@ const (
 	// HelloProto exchanges display metadata that mDNS cannot carry.
 	HelloProto protocol.ID = "/yv/hello/1.0.0"
 
-	// ShareProto carries a connection request or a transfer.
+	// ShareProto carries a connection request or a config transfer. Files have
+	// their own protocol — see FileProto in fileproto.go.
 	//
 	// Bumped to 1.1.0 when connecting became its own step. The version is what
 	// stops an older build misreading a connection request as a transfer offer
@@ -111,8 +112,10 @@ const (
 	// EventConnected and EventConnectClosed take that prompt off screen again.
 	EventConnected     = "share:connected"
 	EventConnectClosed = "share:connect-closed"
-	EventImported      = "share:imported"
-	EventError         = "share:error"
+	// EventProgress reports bytes moved during a file transfer, throttled.
+	EventProgress = "share:progress"
+	EventImported = "share:imported"
+	EventError    = "share:error"
 )
 
 // hello is the metadata a peer serves about itself.
@@ -177,10 +180,22 @@ type Node struct {
 	// several times before it is answered at all.
 	connPending sync.Map // string -> *connReq
 
-	// onPayload applies a received payload and returns a human summary.
+	// onPayload applies a received config payload and returns a human summary.
 	onPayload func(models.SharePayload) string
 
+	// onFiles drains a file transfer to disk and returns a human summary. It is
+	// handed the reader rather than the bytes, because the whole point of this
+	// path is that the payload is never assembled in memory.
+	onFiles func(offer models.ShareOffer, body io.Reader, onProgress func(int64)) (string, error)
+
 	started bool
+}
+
+// SetFileSink registers what to do with an inbound file transfer. Separate from
+// New because where files land is the app's policy, while the framing that gets
+// them there is this package's.
+func (n *Node) SetFileSink(fn func(offer models.ShareOffer, body io.Reader, onProgress func(int64)) (string, error)) {
+	n.onFiles = fn
 }
 
 // New creates a Node. Nothing is opened until Start.
@@ -257,6 +272,7 @@ func (n *Node) Start(wailsCtx context.Context) error {
 
 	h.SetStreamHandler(HelloProto, n.handleHello)
 	h.SetStreamHandler(ShareProto, n.handleShare)
+	h.SetStreamHandler(FileProto, n.handleFiles)
 
 	h.Network().Notify(&network.NotifyBundle{
 		DisconnectedF: func(_ network.Network, c network.Conn) {

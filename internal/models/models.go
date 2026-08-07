@@ -176,28 +176,16 @@ type PeerInfo struct {
 
 // SharePayload is the config one peer sends another.
 //
+// Files are deliberately not here. They travel on their own protocol, streamed
+// to disk, precisely so that a large one is never assembled in memory as
+// base64 inside this struct.
+//
 // Environments are deliberately absent. Secrets live in their own file so they
 // never travel with exported config, and the same rule holds over the wire —
 // do not add them here for convenience.
 type SharePayload struct {
-	Scope    string    `json:"scope"` // "app" | "project" | "files"
+	Scope    string    `json:"scope"` // "app" | "project"
 	Projects []Project `json:"projects"`
-	// Files carries arbitrary files the user picked off their own disk. Only
-	// populated for the "files" scope; config and files never travel together,
-	// because they land in completely different places on the far side.
-	Files []SharedFile `json:"files,omitempty"`
-}
-
-// SharedFile is one file travelling with a share.
-//
-// Data is a []byte, which encoding/json renders as base64 — the whole payload is
-// gzip'd afterwards, so text files still compress. Name is a bare filename with
-// no directory part: a share drops files into one folder, and honouring a path
-// from another machine is how a transfer turns into an arbitrary write.
-type SharedFile struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	Data []byte `json:"data"`
 }
 
 // ShareOffer is the header a sender writes before any payload bytes, and what

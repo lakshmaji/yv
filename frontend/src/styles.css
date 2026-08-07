@@ -3741,6 +3741,39 @@
 
     .share-file-add { align-self: flex-start; }
 
+    /* ── Transfer progress ──────────────────────────────── */
+
+    .share-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .share-progress-track {
+      height: 5px;
+      border-radius: 3px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* Transitioned, because the events behind it are throttled to ~4/s and an
+       untweened bar would visibly jump between them. Just under the interval, so
+       one step finishes as the next arrives. */
+    .share-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width .22s linear;
+    }
+
+    .share-progress-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
     /* The inbound list is read-only, so it drops the hover affordances. */
     .share-incoming-files .share-file-row { color: var(--text); }
 

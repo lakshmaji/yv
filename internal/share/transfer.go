@@ -30,6 +30,10 @@ const (
 	// tells the sender to start the connection step again rather than reporting
 	// a failure the user cannot act on.
 	respNoConn byte = 0x05
+	// respNoSpace refuses a file transfer that will not fit on the receiver's
+	// disk. Answered before the user is prompted: asking somebody to accept
+	// something that cannot land is worse than refusing it for them.
+	respNoSpace byte = 0x07
 	// respNoAnswer means nobody answered — the prompt sat untouched until it expired.
 	// Distinct from respDecline because "they said no" and "they were not at
 	// their desk" are different things to be told, and the sender's next move
@@ -55,16 +59,6 @@ const (
 	// through the decompressor.
 	maxPayload = 16 << 20 // 16 MB
 
-	// maxFilePayload is the same bound for a "files" transfer, which is
-	// legitimately larger. It is MaxTotalBytes plus headroom for base64 and the
-	// JSON around it, so a transfer the sender was allowed to build is one the
-	// receiver will accept.
-	maxFilePayload = MaxTotalBytes*2 + (1 << 20)
-
-	// filePayloadTimeout bounds a file stream. Separate from payloadTimeout
-	// because tens of megabytes over a slow link is not the same problem as a
-	// few kilobytes of config.
-	filePayloadTimeout = 10 * time.Minute
 )
 
 const (
@@ -95,6 +89,10 @@ var (
 	// ErrOldVersion is a peer that does not speak this share protocol. Reported
 	// on its own because no amount of retrying will help.
 	ErrOldVersion = errors.New("that device is running an older version of yv")
+
+	// ErrNoSpace is the receiver's disk, not ours — worth saying plainly so the
+	// sender does not go looking for a fault at their end.
+	ErrNoSpace = errors.New("not enough space on that device")
 )
 
 // Send offers a payload to a peer and, if accepted, streams it.
@@ -165,6 +163,9 @@ func (n *Node) Send(ctx context.Context, peerID string, offer models.ShareOffer,
 	case respNoAnswer:
 		ok = true
 		return ErrNoAnswer
+	case respNoSpace:
+		ok = true
+		return ErrNoSpace
 	case respDecline:
 		ok = true
 		return ErrDeclined
@@ -206,12 +207,129 @@ func (n *Node) Send(ctx context.Context, peerID string, offer models.ShareOffer,
 	return nil
 }
 
-// handleShare serves an inbound stream: either a connection request, or a
-// transfer from a peer that has already connected.
+// offerDecision is what the shared gate concluded about an inbound offer.
+type offerDecision int
+
+const (
+	// offerAccepted means the user said yes and the accept byte is on the wire;
+	// the caller now reads the body.
+	offerAccepted offerDecision = iota
+	// offerRefused means a response byte was written and the exchange is over.
+	// A refusal is a completed conversation, so the stream closes gracefully.
+	offerRefused
+	// offerBroken means the stream is unusable and should be reset.
+	offerBroken
+)
+
+// inbound is a decoded, identity-checked offer and the reader positioned at its
+// body.
+type inbound struct {
+	offer  models.ShareOffer
+	remote peer.ID
+	// body must be used for everything that follows: the JSON decoder that read
+	// the header buffers ahead, so reading the stream directly would skip
+	// whatever it already pulled in.
+	body *bufio.Reader
+	// code is the connection code hash, carried only on a connect request.
+	code string
+}
+
+// readOffer decodes the header and resolves who actually sent it.
+func (n *Node) readOffer(s network.Stream) (*inbound, bool) {
+	remote := s.Conn().RemotePeer()
+
+	_ = s.SetReadDeadline(time.Now().Add(offerTimeout))
+	// bufio because the JSON decoder would otherwise read past the header and
+	// swallow the first bytes of whatever follows it.
+	br := bufio.NewReader(s)
+
+	var offer models.ShareOffer
+	if err := json.NewDecoder(br).Decode(&offer); err != nil {
+		return nil, false
+	}
+
+	// Trust the connection for identity, not the header: FromName is display
+	// text from another machine, so fall back to what we already resolved for
+	// this peer rather than showing whatever it claims.
+	offer.TransferID = newTransferID(remote, offer.TransferID)
+	offer.FromName = n.displayName(remote, offer.FromName)
+
+	in := &inbound{offer: offer, remote: remote, body: br, code: offer.PIN}
+	in.offer.PIN = ""
+	return in, true
+}
+
+// gate runs everything between a decoded offer and the first byte of its body:
+// the connection check, an optional protocol-specific precheck, the user's
+// prompt, and the response byte.
+//
+// Both transports call it, so "a peer we have not connected to gets nothing"
+// and "the user is always asked" have one implementation rather than two that
+// can drift apart.
+//
+// precheck may veto before the user is troubled — the file transport uses it to
+// refuse a transfer that cannot fit on disk. Returning 0 continues; returning a
+// response byte refuses with it.
+func (n *Node) gate(s network.Stream, in *inbound, precheck func(models.ShareOffer) byte) offerDecision {
+	refuse := func(b byte) offerDecision {
+		_ = s.SetWriteDeadline(time.Now().Add(offerTimeout))
+		if _, err := s.Write([]byte{b}); err != nil {
+			return offerBroken
+		}
+		return offerRefused
+	}
+
+	// A transfer from a peer that never connected is refused without a prompt.
+	// The connection step is where this device's owner decided to talk to them
+	// at all, and skipping it must not be a way around that decision.
+	if !n.conns.Connected(in.remote, time.Now()) {
+		return refuse(respNoConn)
+	}
+	n.conns.Touch(in.remote, time.Now())
+
+	if precheck != nil {
+		if b := precheck(in.offer); b != 0 {
+			return refuse(b)
+		}
+	}
+
+	decision := make(chan bool, 1)
+	n.pending.Store(in.offer.TransferID, decision)
+	defer n.pending.Delete(in.offer.TransferID)
+
+	n.emit(EventIncoming, in.offer)
+
+	var accepted, answered bool
+	select {
+	case accepted = <-decision:
+		answered = true
+	case <-time.After(n.decisionWait):
+	case <-n.ctx.Done():
+		return offerBroken
+	}
+
+	if !accepted {
+		// Saying "they declined" when nobody touched the prompt names a decision
+		// that was never made, so the two are distinct on the wire.
+		if answered {
+			return refuse(respDecline)
+		}
+		return refuse(respNoAnswer)
+	}
+
+	_ = s.SetWriteDeadline(time.Now().Add(offerTimeout))
+	if _, err := s.Write([]byte{respAccept}); err != nil {
+		return offerBroken
+	}
+	return offerAccepted
+}
+
+// handleShare serves an inbound stream on ShareProto: either a connection
+// request, or a config transfer from a peer that has already connected.
 func (n *Node) handleShare(s network.Stream) {
-	// As in Send: a completed exchange — including a refused one — closes
-	// gracefully so the response byte is actually delivered. Only a broken or
-	// malformed exchange resets.
+	// A completed exchange — including a refused one — closes gracefully so the
+	// response byte is actually delivered. Only a broken or malformed exchange
+	// resets.
 	ok := false
 	defer func() {
 		if ok {
@@ -221,78 +339,29 @@ func (n *Node) handleShare(s network.Stream) {
 		_ = s.Reset()
 	}()
 
-	remote := s.Conn().RemotePeer()
-
-	_ = s.SetReadDeadline(time.Now().Add(offerTimeout))
-	// bufio because the JSON decoder would otherwise read past the header and
-	// swallow the first bytes of the gzip stream that follows it.
-	br := bufio.NewReader(s)
-
-	var offer models.ShareOffer
-	if err := json.NewDecoder(br).Decode(&offer); err != nil {
+	in, read := n.readOffer(s)
+	if !read {
 		return
 	}
 
-	// Trust the connection for identity, not the header: FromName is display
-	// text from another machine, so fall back to what we already resolved for
-	// this peer rather than showing whatever it claims.
-	offer.TransferID = newTransferID(remote, offer.TransferID)
-	offer.FromName = n.displayName(remote, offer.FromName)
-	code := offer.PIN
-	offer.PIN = ""
-
-	if offer.Kind == models.OfferKindConnect {
-		ok = n.handleConnect(s, remote, offer, code)
+	if in.offer.Kind == models.OfferKindConnect {
+		ok = n.handleConnect(s, in.remote, in.offer, in.code)
 		return
 	}
 
-	// A transfer from a peer that never connected is refused without a prompt.
-	// The connection step is where this device's owner decided to talk to them
-	// at all, and skipping it must not be a way around that decision.
-	if !n.conns.Connected(remote, time.Now()) {
-		_ = s.SetWriteDeadline(time.Now().Add(offerTimeout))
-		if _, err := s.Write([]byte{respNoConn}); err == nil {
-			ok = true
-		}
+	switch n.gate(s, in, nil) {
+	case offerRefused:
+		ok = true
 		return
-	}
-	n.conns.Touch(remote, time.Now())
-
-	decision := make(chan bool, 1)
-	n.pending.Store(offer.TransferID, decision)
-	defer n.pending.Delete(offer.TransferID)
-
-	n.emit(EventIncoming, offer)
-
-	var accepted, answered bool
-	select {
-	case accepted = <-decision:
-		answered = true
-	case <-time.After(n.decisionWait):
-	case <-n.ctx.Done():
+	case offerBroken:
 		return
 	}
 
-	_ = s.SetWriteDeadline(time.Now().Add(offerTimeout))
-	if !accepted {
-		resp := respNoAnswer
-		if answered {
-			resp = respDecline
-		}
-		if _, err := s.Write([]byte{resp}); err == nil {
-			ok = true
-		}
-		return
-	}
-	if _, err := s.Write([]byte{respAccept}); err != nil {
-		return
-	}
-
-	_ = s.SetReadDeadline(time.Now().Add(payloadDeadline(offer.Scope)))
-	payload, err := readPayload(br, payloadLimit(offer.Scope))
+	_ = s.SetReadDeadline(time.Now().Add(payloadTimeout))
+	payload, err := readPayload(in.body, maxPayload)
 	if err != nil {
 		n.emit(EventError, map[string]string{
-			"transferId": offer.TransferID,
+			"transferId": in.offer.TransferID,
 			"message":    "Transfer failed: " + err.Error(),
 		})
 		return
@@ -311,8 +380,8 @@ func (n *Node) handleShare(s network.Stream) {
 	}
 
 	n.emit(EventImported, map[string]any{
-		"transferId": offer.TransferID,
-		"fromName":   offer.FromName,
+		"transferId": in.offer.TransferID,
+		"fromName":   in.offer.FromName,
 		"summary":    summary,
 	})
 }
@@ -453,23 +522,6 @@ func readPayload(r io.Reader, limit int64) (models.SharePayload, error) {
 		return out, fmt.Errorf("decode: %w", err)
 	}
 	return out, nil
-}
-
-// payloadLimit and payloadDeadline are chosen from the offer's scope rather than
-// being one generous constant, so a config transfer keeps the tight bound it has
-// always had and only a file transfer pays for the larger one.
-func payloadLimit(scope string) int64 {
-	if scope == ScopeFiles {
-		return maxFilePayload
-	}
-	return maxPayload
-}
-
-func payloadDeadline(scope string) time.Duration {
-	if scope == ScopeFiles {
-		return filePayloadTimeout
-	}
-	return payloadTimeout
 }
 
 // RequestConnect asks a peer to open a conversation, before anything has been

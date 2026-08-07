@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,6 +61,7 @@ func NewApp() *App {
 	// StartDiscovery, so a user who never visits the Discovery view never puts
 	// this machine on the network.
 	a.share = share.New(a.applySharedPayload)
+	a.share.SetFileSink(a.receiveSharedFiles)
 	// The name peers see follows the setting, and keeps following it: someone
 	// who renames themselves mid-session should not have to restart the app to
 	// stop being "Rexy.local" to the person sitting next to them.
@@ -353,30 +356,23 @@ func (a *App) PickFilesToShare() []string {
 // take different arguments and build entirely different payloads; folding them
 // together would mean a signature where half the parameters are always empty.
 func (a *App) InitiateFileShare(peerID string, paths []string) string {
-	files, err := share.PrepareFiles(paths)
+	// Sizes only — nothing is read until the receiver has accepted, so a
+	// transfer refused for size or space costs no disk reads at all.
+	files, err := share.StatFiles(paths)
 	if err != nil {
 		return "error: " + err.Error()
-	}
-
-	var total int64
-	names := make([]string, 0, len(files))
-	for _, f := range files {
-		total += f.Size
-		names = append(names, f.Name)
 	}
 
 	offer := models.ShareOffer{
 		TransferID: fmt.Sprintf("%d", time.Now().UnixNano()),
 		Scope:      share.ScopeFiles,
-		FileNames:  names,
-		TotalBytes: total,
+		FileNames:  share.FileNames(files),
+		TotalBytes: share.TotalBytes(files),
 	}
-	payload := models.SharePayload{Scope: share.ScopeFiles, Files: files}
 
-	ctx, cancel := context.WithTimeout(a.getCtx(), fileSendTimeout)
-	defer cancel()
-
-	if err := a.share.Send(ctx, peerID, offer, payload); err != nil {
+	// No overall deadline: a gigabyte over slow Wi-Fi is legitimately long, and
+	// the stream's own idle deadline is what catches a peer that has gone away.
+	if err := a.share.SendFiles(a.getCtx(), peerID, offer, files); err != nil {
 		return "error: " + err.Error()
 	}
 	return "ok"
@@ -393,10 +389,6 @@ func (a *App) RespondToShare(transferID string, accept bool) string {
 // shareSendTimeout bounds a whole outbound transfer, including the time the
 // other person spends deciding.
 const shareSendTimeout = 3 * time.Minute
-
-// fileSendTimeout is longer because the payload can be tens of megabytes and
-// the decision wait sits in front of it either way.
-const fileSendTimeout = 12 * time.Minute
 
 // connectTimeout bounds a connection request. There is a person deciding at the
 // other end, so it is measured in the same minutes as a transfer rather than in
@@ -441,19 +433,14 @@ func (a *App) buildShare(scope, projectID string) (models.SharePayload, models.S
 	return payload, offer, nil
 }
 
-// applySharedPayload applies a received payload. Runs on a libp2p handler
+// applySharedPayload merges a received config payload. Runs on a libp2p handler
 // goroutine, after the user has accepted.
 //
-// A files payload is written to disk and nothing else; it never touches config,
-// and config is never written from a files transfer. Which one it is comes from
-// the payload's own scope rather than from which fields happen to be populated,
-// so a payload claiming to be config cannot smuggle files past the prompt the
-// user actually saw.
+// Config only. Files cannot reach this function at all — they arrive on their
+// own protocol and are streamed to disk by receiveSharedFiles — so a payload
+// accepted as config has no way to write anything outside the app's own
+// storage.
 func (a *App) applySharedPayload(p models.SharePayload) string {
-	if p.Scope == share.ScopeFiles {
-		return a.saveSharedFiles(p.Files)
-	}
-
 	summary, err := a.cfg.ImportProjectsFromSlice(p.Projects)
 	if err != nil {
 		return "Import failed: " + err.Error()
@@ -461,31 +448,47 @@ func (a *App) applySharedPayload(p models.SharePayload) string {
 	return summary
 }
 
-// saveSharedFiles writes received files and reports where they went — the path
-// is the whole point of the summary, since a file the user cannot find is one
-// they did not receive.
-func (a *App) saveSharedFiles(files []models.SharedFile) string {
-	if len(files) == 0 {
-		return "Received nothing"
-	}
-
+// receiveSharedFiles drains an inbound file transfer to disk and reports where
+// it went — the path is the whole point of the summary, since a file the user
+// cannot find is one they did not receive.
+//
+// The body is a reader rather than bytes: a 500 MB file is written as it
+// arrives, so memory does not scale with the size of the transfer.
+func (a *App) receiveSharedFiles(offer models.ShareOffer, body io.Reader, onProgress func(int64)) (string, error) {
 	dir, err := share.ReceiveDir()
 	if err != nil {
-		return "Could not save files: " + err.Error()
-	}
-	written, err := share.SaveFiles(dir, files)
-	if err != nil {
-		if len(written) == 0 {
-			return "Could not save files: " + err.Error()
-		}
-		return fmt.Sprintf("Saved %d of %d file(s) to %s — %v",
-			len(written), len(files), dir, err)
+		return "", fmt.Errorf("could not find a place to save files: %w", err)
 	}
 
-	if len(written) == 1 {
-		return "Saved " + filepath.Base(written[0]) + " to " + dir
+	br, okBuf := body.(*bufio.Reader)
+	if !okBuf {
+		br = bufio.NewReader(body)
 	}
-	return fmt.Sprintf("Saved %d files to %s", len(written), dir)
+
+	limit := offer.TotalBytes
+	if limit <= 0 || limit > share.MaxTotalBytes {
+		limit = share.MaxTotalBytes
+	}
+
+	written, err := share.ReadFiles(br, dir, limit, onProgress)
+	if err != nil {
+		// Say what did land. "Transfer failed" on its own would leave the user
+		// wondering whether the files in their Downloads folder are real.
+		if len(written) > 0 {
+			return "", fmt.Errorf("saved %d of %d file(s) to %s before failing: %w",
+				len(written), len(offer.FileNames), dir, err)
+		}
+		return "", err
+	}
+
+	switch len(written) {
+	case 0:
+		return "Received nothing", nil
+	case 1:
+		return "Saved " + filepath.Base(written[0]) + " to " + dir, nil
+	default:
+		return fmt.Sprintf("Saved %d files to %s", len(written), dir), nil
+	}
 }
 
 // --- Audio ---

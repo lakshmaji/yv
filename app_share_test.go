@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -229,82 +230,6 @@ func marshalForInspection(v any) (string, error) {
 	return string(raw), err
 }
 
-// A files payload writes to disk and must not touch config. The two scopes go to
-// completely different places, and the receiver only agreed to one of them.
-func TestApplySharedPayloadSavesFiles(t *testing.T) {
-	a := newShareTestApp(t, sampleProjects())
-
-	// newShareTestApp already redirected HOME, and ReceiveDir resolves through
-	// it — so overriding it again here would move the config store out from
-	// under the app mid-test.
-	home := mustHome(t)
-
-	summary := a.applySharedPayload(models.SharePayload{
-		Scope: "files",
-		Files: []models.SharedFile{
-			{Name: "notes.txt", Size: 5, Data: []byte("hello")},
-			{Name: "second.txt", Size: 3, Data: []byte("bye")},
-		},
-	})
-
-	if !strings.Contains(summary, "Saved 2 files") {
-		t.Errorf("summary = %q, want it to report 2 saved files", summary)
-	}
-
-	dir := filepath.Join(home, share.ReceiveDirName)
-	got, err := os.ReadFile(filepath.Join(dir, "notes.txt"))
-	if err != nil {
-		t.Fatalf("reading the saved file: %v", err)
-	}
-	if string(got) != "hello" {
-		t.Errorf("saved contents = %q, want %q", got, "hello")
-	}
-
-	if n := len(a.cfg.LoadProjects()); n != 2 {
-		t.Errorf("have %d projects, want the original 2 — a files share must not touch config", n)
-	}
-}
-
-// The scope decides what happens, not which fields are populated. Otherwise a
-// payload that the user accepted as config could still drop files on their disk.
-func TestApplySharedPayloadIgnoresFilesOnAConfigScope(t *testing.T) {
-	a := newShareTestApp(t, sampleProjects())
-	home := mustHome(t)
-
-	a.applySharedPayload(models.SharePayload{
-		Scope:    "app",
-		Projects: []models.Project{{ID: "p-new", Name: "Analytics"}},
-		Files:    []models.SharedFile{{Name: "sneaky.sh", Data: []byte("rm -rf /")}},
-	})
-
-	if _, err := os.Stat(filepath.Join(home, share.ReceiveDirName)); !os.IsNotExist(err) {
-		t.Error("a config-scoped payload wrote files to disk")
-	}
-}
-
-// Conversely, a files payload must not be able to add projects.
-func TestApplySharedPayloadIgnoresProjectsOnAFilesScope(t *testing.T) {
-	a := newShareTestApp(t, sampleProjects())
-
-	a.applySharedPayload(models.SharePayload{
-		Scope:    "files",
-		Projects: []models.Project{{ID: "p-new", Name: "Analytics"}},
-		Files:    []models.SharedFile{{Name: "notes.txt", Data: []byte("hi")}},
-	})
-
-	if n := len(a.cfg.LoadProjects()); n != 2 {
-		t.Errorf("have %d projects, want the original 2 — a files share must not add projects", n)
-	}
-}
-
-func TestApplySharedPayloadEmptyFileListIsHarmless(t *testing.T) {
-	a := newShareTestApp(t, sampleProjects())
-
-	if summary := a.applySharedPayload(models.SharePayload{Scope: "files"}); summary == "" {
-		t.Error("no summary for an empty files payload")
-	}
-}
-
 // mustHome reads the home directory the test harness redirected, which is where
 // ReceiveDir will have put anything the app saved.
 func mustHome(t *testing.T) string {
@@ -314,4 +239,86 @@ func mustHome(t *testing.T) string {
 		t.Fatalf("home directory: %v", err)
 	}
 	return home
+}
+
+// Files arrive on their own protocol and are streamed straight to disk, so they
+// cannot reach the config merge at all. This is stronger than the scope check it
+// replaces: there is no field on SharePayload for a file to hide in.
+func TestReceiveSharedFilesWritesToDiskOnly(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+	// newShareTestApp already redirected HOME, and ReceiveDir resolves through
+	// it — so overriding it again would move the config store out from under the
+	// app mid-test.
+	home := mustHome(t)
+
+	src := filepath.Join(t.TempDir(), "notes.txt")
+	if err := os.WriteFile(src, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err := share.StatFiles([]string{src})
+	if err != nil {
+		t.Fatalf("StatFiles: %v", err)
+	}
+
+	var wire bytes.Buffer
+	if err := share.WriteFiles(&wire, files, nil); err != nil {
+		t.Fatalf("WriteFiles: %v", err)
+	}
+
+	offer := models.ShareOffer{
+		Scope:      "files",
+		FileNames:  share.FileNames(files),
+		TotalBytes: share.TotalBytes(files),
+	}
+	summary, err := a.receiveSharedFiles(offer, &wire, nil)
+	if err != nil {
+		t.Fatalf("receiveSharedFiles: %v", err)
+	}
+	if !strings.Contains(summary, "notes.txt") {
+		t.Errorf("summary = %q, want it to name the file", summary)
+	}
+
+	dir := filepath.Join(home, share.ReceiveDirName)
+	got, err := os.ReadFile(filepath.Join(dir, "notes.txt"))
+	if err != nil || string(got) != "hello" {
+		t.Fatalf("saved file = %q, %v", got, err)
+	}
+
+	if n := len(a.cfg.LoadProjects()); n != 2 {
+		t.Errorf("have %d projects, want the original 2 — a file transfer must not touch config", n)
+	}
+}
+
+// A truncated transfer reports what landed rather than claiming success, and
+// leaves no half-written file behind.
+func TestReceiveSharedFilesReportsATruncatedStream(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+	home := mustHome(t)
+
+	src := filepath.Join(t.TempDir(), "big.bin")
+	if err := os.WriteFile(src, bytes.Repeat([]byte("x"), 200_000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err := share.StatFiles([]string{src})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wire bytes.Buffer
+	if err := share.WriteFiles(&wire, files, nil); err != nil {
+		t.Fatal(err)
+	}
+	full := wire.Bytes()
+	cut := bytes.NewReader(full[:len(full)/2])
+
+	offer := models.ShareOffer{Scope: "files", TotalBytes: share.TotalBytes(files)}
+	if _, err := a.receiveSharedFiles(offer, cut, nil); err == nil {
+		t.Fatal("a truncated transfer was reported as successful")
+	}
+
+	dir := filepath.Join(home, share.ReceiveDirName)
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		t.Errorf("left behind %q after a truncated transfer", e.Name())
+	}
 }

@@ -16,6 +16,7 @@ import type {
   PeerInfo,
   IncomingShare,
   IncomingConnect,
+  ShareProgress,
 } from './types';
 import { variantById } from './lib/drone';
 
@@ -150,6 +151,11 @@ const [sharePin, setSharePin] = createSignal('');
 // A nearby device asking to connect to us. Null when nothing is pending.
 const [incomingConnect, setIncomingConnect] = createSignal<IncomingConnect | null>(null);
 
+// Bytes moved on the transfer in flight, one per direction. Cleared when the
+// dialog that shows them closes, so a stale bar cannot outlive its transfer.
+const [sendProgress, setSendProgress] = createSignal<ShareProgress | null>(null);
+const [recvProgress, setRecvProgress] = createSignal<ShareProgress | null>(null);
+
 // Inbound share awaiting a decision.
 const [incomingShare, setIncomingShare] = createSignal<IncomingShare | null>(null);
 const [incomingBusy, setIncomingBusy] = createSignal(false);
@@ -167,6 +173,7 @@ function openShareWith(peer: PeerInfo): void {
   setShareDone(null);
   setShareBusy(false);
   setSharePin('');
+  setSendProgress(null);
   // Always the connect step. Every device requires a code, so there is no
   // branch here to get wrong.
   setShareStage('connect');
@@ -188,6 +195,7 @@ function resetShareState(): void {
   setShareDone(null);
   setSharePin('');
   setShareStage('connect');
+  setSendProgress(null);
 }
 
 // Global settings modal (opened from View → Settings… / ⌘,)
@@ -450,6 +458,8 @@ export {
   sharePin, setSharePin,
   openShareWith, pinAccepted,
   incomingConnect, setIncomingConnect,
+  sendProgress, setSendProgress,
+  recvProgress, setRecvProgress,
   resetShareState,
   incomingShare, setIncomingShare,
   incomingBusy, setIncomingBusy,
