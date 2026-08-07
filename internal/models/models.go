@@ -115,6 +115,16 @@ type Settings struct {
 	RetentionDays  int      `json:"retentionDays"`
 	Panels         []string `json:"panels"`
 
+	// Username is what this device calls itself to nearby peers. Optional: the
+	// zero value means the machine's hostname, which is what shipped before this
+	// existed, so an older settings file needs no migration.
+	//
+	// It is not only a label — the name seeds the peer's dinosaur on the
+	// Discovery map and the roar it is given, so changing it changes the animal
+	// other people see. That is the point: "Rexy.local" says nothing about who
+	// is offering you a file.
+	Username string `json:"username,omitempty"`
+
 	// SoundMuted silences the dinosaur roars in the Discovery view. Stored
 	// inverted — muted rather than enabled — because the zero value has to mean
 	// the default, and the default is audible.

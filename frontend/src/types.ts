@@ -98,6 +98,12 @@ export interface AppSettings {
   metricsEnabled: boolean;
   retentionDays: number;
   panels: PanelId[];
+  /**
+   * What this device calls itself to nearby peers. Optional — empty means the
+   * machine's hostname. It seeds the peer's dinosaur and its roar on the other
+   * end's Discovery map, so it is an identity rather than a caption.
+   */
+  username?: string;
   /** Inverted on purpose: the Go zero value must mean the default, and roars are on. */
   soundMuted: boolean;
   /** The user's own sound files. Empty means the dinosaurs are silent. */

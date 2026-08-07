@@ -12,10 +12,19 @@ import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
 const MIN_RETENTION = 1;
 const MAX_RETENTION = 3650;
 
+// Mirrors internal/settings.MaxUsernameLen. Counted in code points, as the Go
+// side does — [...name].length, not name.length, or a name of emoji is cut at a
+// fraction of the characters the user can see.
+const MAX_USERNAME = 32;
+
 export default function SettingsModal() {
   const [enabled, setEnabled] = createSignal(false);
   const [retention, setRetention] = createSignal('365');
   const [panels, setPanels] = createSignal<PanelId[]>([]);
+  const [username, setUsername] = createSignal('');
+  // The hostname the device falls back to. Shown as the placeholder so the
+  // default is visible rather than something the user has to ask a colleague.
+  const [defaultName, setDefaultName] = createSignal('');
   const [soundOn, setSoundOn] = createSignal(true);
   const [waterOn, setWaterOn] = createSignal(true);
   const [clips, setClips] = createSignal<string[]>([]);
@@ -46,6 +55,7 @@ export default function SettingsModal() {
     setEnabled(current.metricsEnabled);
     setRetention(String(current.retentionDays));
     setPanels([...(current.panels || [])]);
+    setUsername(current.username || '');
     setSoundOn(!current.soundMuted);
     setWaterOn(!current.waterStill);
     setClips([...(current.audioClips || [])]);
@@ -58,6 +68,7 @@ export default function SettingsModal() {
     stopPreview();
 
     void refreshStorage();
+    void refreshDefaultName();
   });
 
   // A clip left mid-roar would keep playing over the app once the modal is gone.
@@ -68,6 +79,15 @@ export default function SettingsModal() {
       setStorage(await go.GetMetricsStorageInfo());
     } catch {
       setStorage(null);
+    }
+  }
+
+  /** The hostname is only ever a placeholder, so a failure just leaves it blank. */
+  async function refreshDefaultName() {
+    try {
+      setDefaultName(await go.GetDefaultDeviceName());
+    } catch {
+      setDefaultName('');
     }
   }
 
@@ -145,6 +165,9 @@ export default function SettingsModal() {
     if (!Number.isInteger(days) || days < MIN_RETENTION || days > MAX_RETENTION) {
       return `Retention must be a whole number between ${MIN_RETENTION} and ${MAX_RETENTION} days.`;
     }
+    if ([...username().trim()].length > MAX_USERNAME) {
+      return `Your name must be at most ${MAX_USERNAME} characters.`;
+    }
     return '';
   }
 
@@ -160,6 +183,7 @@ export default function SettingsModal() {
       metricsEnabled: enabled(),
       retentionDays: Number(retention()),
       panels: panels(),
+      username: username().trim(),
       soundMuted: !soundOn(),
       waterStill: !waterOn(),
       audioClips: clips(),
@@ -580,6 +604,31 @@ export default function SettingsModal() {
               Nearby devices running yv appear as dinosaurs in Discovery, and can offer to share
               their commands with you. Environment variables are never shared.
             </div>
+
+            <label class="settings-row">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Your name</div>
+                <div class="settings-row-hint">
+                  {username().trim()
+                    ? 'What nearby devices call you, and the dinosaur they see. Leave it empty to go back to this computer’s name.'
+                    : `Optional. Nearby devices currently see ${
+                        defaultName() || 'this computer’s name'
+                      } — set a name if that isn’t how you want to be recognised.`}
+                </div>
+              </div>
+              <span class="settings-row-control">
+                <input
+                  type="text"
+                  class="settings-username-input"
+                  placeholder={defaultName()}
+                  // Deliberately no maxlength: it counts UTF-16 units, so it
+                  // would stop a name of emoji at half the characters validate()
+                  // and the Go side both allow.
+                  value={username()}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
+                />
+              </span>
+            </label>
 
             {/* There is nothing to configure. Every connection is gated by a
                 code generated for that one attempt, so there is no stored PIN

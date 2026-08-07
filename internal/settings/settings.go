@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
 
 	"yv/internal/audio"
 	"yv/internal/models"
@@ -36,6 +37,10 @@ const (
 
 	// MaxVariantIDLen bounds a stored drone variant id. Slugs, not prose.
 	MaxVariantIDLen = 32
+
+	// MaxUsernameLen bounds the display name sent to nearby peers. It is drawn
+	// under a dinosaur and read aloud over a desk, not written in a form.
+	MaxUsernameLen = 32
 
 	schemaVersion = 1
 )
@@ -205,6 +210,7 @@ func Normalize(in models.Settings) models.Settings {
 		out.RetentionDays = MaxRetentionDays
 	}
 
+	out.Username = NormalizeUsername(out.Username)
 	out.Panels = NormalizePanels(out.Panels)
 	out.AudioClips = audio.NormalizePaths(out.AudioClips)
 	out.DroneVariant = strings.TrimSpace(out.DroneVariant)
@@ -257,6 +263,9 @@ func Validate(in models.Settings) error {
 		sort.Strings(unknown)
 		return fmt.Errorf("unknown panel(s): %v", unknown)
 	}
+	if err := ValidateUsername(in.Username); err != nil {
+		return err
+	}
 	if err := ValidateDroneVariant(in.DroneVariant); err != nil {
 		return err
 	}
@@ -271,6 +280,34 @@ func Validate(in models.Settings) error {
 		}
 	}
 	return audio.ValidatePaths(in.AudioClips)
+}
+
+// NormalizeUsername trims a stored name and strips the control characters that
+// would otherwise reach a peer's screen. Normalising rather than rejecting
+// whitespace matters because the empty result is meaningful: it is what makes
+// the name optional, and it sends the device back to its hostname.
+func NormalizeUsername(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\n' || r == '\r' {
+			return ' '
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name)
+	return strings.TrimSpace(strings.Join(strings.Fields(name), " "))
+}
+
+// ValidateUsername accepts an empty name — the default, meaning the hostname —
+// or one short enough to sit under a dinosaur. Length is measured in runes:
+// bounding bytes would cut a name of emoji or CJK characters at a third of the
+// characters the user can see.
+func ValidateUsername(name string) error {
+	if len([]rune(NormalizeUsername(name))) > MaxUsernameLen {
+		return fmt.Errorf("name must be at most %d characters", MaxUsernameLen)
+	}
+	return nil
 }
 
 // ValidateDroneVariant accepts an empty id — the default — or a short slug.

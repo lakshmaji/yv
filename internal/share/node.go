@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,6 +150,11 @@ type Node struct {
 	host host.Host
 	mdns mdns.Service
 
+	// localName is what we call ourselves in a hello. It is guarded by nameMu
+	// rather than mu because it is written from the settings observer while a
+	// hello may be being served on another goroutine, and it must not wait on
+	// the peer table.
+	nameMu    sync.RWMutex
 	localName string
 
 	// conns holds per-peer connection codes and live connections.
@@ -186,6 +192,35 @@ func New(onPayload func(models.SharePayload) string) *Node {
 		decisionWait: decisionTimeout,
 		onPayload:    onPayload,
 	}
+}
+
+// SetLocalName sets the name this device announces to peers. An empty or
+// whitespace-only name falls back to the hostname, so clearing the field in
+// Settings restores the default rather than leaving the device nameless — a
+// blank name would strand the peer on a short peer ID at the other end.
+//
+// Safe to call while the node is running: a hello is served per discovery, so
+// the next one carries the new name. Peers that already have us on screen keep
+// the old one until they rediscover us, which is the honest reading — that is
+// the name they were told.
+func (n *Node) SetLocalName(name string) {
+	// Trimmed, not run through NormalizeName: that one strips a ".local"
+	// suffix, which is right for a hostname the OS reported and wrong for a
+	// name a person typed.
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = LocalName()
+	}
+	n.nameMu.Lock()
+	n.localName = name
+	n.nameMu.Unlock()
+}
+
+// LocalName is the name currently announced to peers.
+func (n *Node) LocalName() string {
+	n.nameMu.RLock()
+	defer n.nameMu.RUnlock()
+	return n.localName
 }
 
 // Start brings up the libp2p host, registers the stream handlers, and begins
@@ -396,7 +431,7 @@ func (n *Node) handleHello(s network.Stream) {
 
 	_ = s.SetWriteDeadline(time.Now().Add(helloTimeout))
 	_ = json.NewEncoder(s).Encode(hello{
-		Name:        n.localName,
+		Name:        n.LocalName(),
 		PINRequired: true,
 	})
 }

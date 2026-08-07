@@ -3573,3 +3573,22 @@
     }
     .modal-box .settings-pin-input:focus { outline: none; border-color: var(--accent); }
     .settings-pin-input::placeholder { letter-spacing: 0; font-family: var(--sans, inherit); }
+
+    /* The username, in Settings. Wider than the PIN and in the reading face —
+       it is a name, not a code — but it names the ancestor for the same
+       specificity reason: `.modal-box input` would otherwise stretch it across
+       the row and collapse its own label. */
+    .modal-box .settings-username-input {
+      flex-shrink: 0;
+      width: 180px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    .modal-box .settings-username-input:focus { outline: none; border-color: var(--accent); }
+    /* The placeholder is the hostname — a fact about the machine, not a hint at
+       what to type — so it is dimmer than an ordinary one. */
+    .settings-username-input::placeholder { color: var(--muted); }

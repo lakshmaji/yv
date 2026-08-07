@@ -361,6 +361,76 @@ func TestSavedFileIsValidJSON(t *testing.T) {
 	}
 }
 
+func TestNormalizeUsername(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"left alone", "Lakshmaji", "Lakshmaji"},
+		{"padded", "  Lakshmaji  ", "Lakshmaji"},
+		{"empty stays empty, which is what makes it optional", "", ""},
+		{"whitespace only is empty, not a blank name", "   \t ", ""},
+		{"inner runs collapse", "Lakshmaji   M", "Lakshmaji M"},
+		{"newlines cannot draw a second line on a peer's map", "Rexy\nT-Rex", "Rexy T-Rex"},
+		{"control characters are dropped", "Re\x00x\x07y", "Rexy"},
+		{"emoji and CJK survive", "🦖 恐竜", "🦖 恐竜"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeUsername(tt.in); got != tt.want {
+				t.Errorf("NormalizeUsername(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateUsername(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		wantErr bool
+	}{
+		{"empty is the default", "", false},
+		{"ordinary name", "Lakshmaji", false},
+		{"at the limit", strings.Repeat("a", MaxUsernameLen), false},
+		{"one over", strings.Repeat("a", MaxUsernameLen+1), true},
+		{"padding does not count toward the limit", " " + strings.Repeat("a", MaxUsernameLen) + " ", false},
+		// Bytes would cut this at a third of the characters the user can see.
+		{"multi-byte runes are counted as characters", strings.Repeat("恐", MaxUsernameLen), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateUsername(tt.in)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateUsername(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestUsernameSurvivesTheStore(t *testing.T) {
+	isolateHome(t)
+	s := NewStore()
+
+	if _, err := s.Save(models.Settings{Username: "  Lakshmaji  "}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if got := s.Get().Username; got != "Lakshmaji" {
+		t.Errorf("Username = %q, want %q", got, "Lakshmaji")
+	}
+
+	// Clearing it must mean "back to the hostname", not "a device with no name".
+	if _, err := s.Save(models.Settings{Username: ""}); err != nil {
+		t.Fatalf("Save empty: %v", err)
+	}
+	if got := s.Get().Username; got != "" {
+		t.Errorf("cleared Username = %q, want empty", got)
+	}
+}
+
 func TestValidateDroneVariant(t *testing.T) {
 	tests := []struct {
 		name    string

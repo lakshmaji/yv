@@ -118,6 +118,34 @@ func TestNormalizeNameIsStableAcrossForms(t *testing.T) {
 	}
 }
 
+func TestSetLocalName(t *testing.T) {
+	host := LocalName()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"a chosen name is announced", "Lakshmaji", "Lakshmaji"},
+		{"padding is trimmed", "  Lakshmaji  ", "Lakshmaji"},
+		// Not NormalizeName: that strips ".local" because a hostname carries it.
+		// A person who types it meant it.
+		{"a typed name keeps a dotted suffix", "Rexy.local", "Rexy.local"},
+		{"empty falls back to the hostname", "", host},
+		{"whitespace falls back too — a blank name is not a name", "   ", host},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := New(nil)
+			n.SetLocalName(tt.in)
+			if got := n.LocalName(); got != tt.want {
+				t.Errorf("after SetLocalName(%q), LocalName() = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestReadPayloadRoundTrip(t *testing.T) {
 	want := models.SharePayload{
 		Scope: "project",

@@ -1469,3 +1469,66 @@ sit outside those lists — the problem `Drone.tsx` has to handle by hand.
 | `frontend/src/lib/landscape/sea.test.ts` | Band-not-stroke, scalloped-edge, never-on-land, near-the-island, stable-per-seed |
 | `frontend/src/components/discovery/LandscapeMap.tsx` | Patches under the swells, caps and collar above the crests |
 | `frontend/src/styles.css` | `land-cap-crest`, `land-surf-breathe`; `.land-cap`/`.land-surf` in all three opt-out lists |
+
+---
+
+## Implemented: An optional username
+
+### Goal
+
+Let the user say what nearby devices call this one. Until now the only answer was
+the hostname, so a room full of Macs introduced themselves as `Rexy.local` and
+`MacBook-Pro-3` — names their owners did not choose and cannot be recognised by.
+
+### Optional means the hostname, not a blank
+
+The zero value has to mean the default, like every other field on
+`models.Settings`, so an empty username is not "a device with no name" — it is the
+hostname. `Node.SetLocalName` does that fallback itself rather than trusting the
+caller: a blank name would strand the peer on a short peer ID at the far end,
+which is the one outcome worse than a hostname.
+
+It is trimmed but **not** run through `NormalizeName`. That helper strips a
+`.local` suffix, which is right for a name the OS reported and wrong for one a
+person typed.
+
+### The name is an identity, not a caption
+
+It seeds the peer's dinosaur and the roar it is given on the other end's map, so
+changing it changes the animal other people see. That is the point of having it.
+
+Control characters are stripped and whitespace runs collapse in
+`NormalizeUsername`, because the value is drawn on someone else's screen. Length
+is bounded in **runes**: bounding bytes would cut a name of emoji or CJK at a
+third of the characters the user can see. The frontend deliberately has no
+`maxlength` for the same reason — that attribute counts UTF-16 units, so it would
+stop at half the characters `validate()` and Go both allow.
+
+### It follows the setting while running
+
+`app.go` registers a `set.OnChange` observer, so renaming yourself mid-session
+does not need a restart. A hello is served per discovery, so the next one carries
+the new name; peers who already have you on screen keep the old one until they
+rediscover you, which is the honest reading — that is the name they were told.
+
+`localName` is guarded by its own `nameMu` rather than the peer-table mutex: it is
+written from the settings observer while a hello may be being served, and serving
+one must not wait on the peer table.
+
+`GetDefaultDeviceName` exposes the hostname so Settings can show it as the
+placeholder — otherwise the default is something the user can only learn by asking
+a colleague what their screen says.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/models/models.go` | `Settings.Username` (`omitempty`) |
+| `internal/settings/settings.go` | `NormalizeUsername`, `ValidateUsername`, `MaxUsernameLen`; wired into `Normalize`/`Validate` |
+| `internal/settings/settings_test.go` | Normalising, rune-counted bounds, store round-trip incl. clearing |
+| `internal/share/node.go` | `nameMu`, `SetLocalName`, `LocalName()`; `handleHello` reads it live |
+| `internal/share/share_test.go` | `TestSetLocalName` — trimming, dotted suffix kept, empty falls back |
+| `app.go` | Seeds the share name from settings and follows it via `OnChange`; `GetDefaultDeviceName` |
+| `frontend/src/components/modals/SettingsModal.tsx` | "Your name" row in the Sharing section, hostname placeholder, rune-counted validation |
+| `frontend/src/{types,wails}.ts` | `AppSettings.username`, `GetDefaultDeviceName` binding |
+| `frontend/src/styles.css` | `.modal-box .settings-username-input` — ancestor named for the same specificity reason as the old PIN field |

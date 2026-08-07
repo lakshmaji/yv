@@ -59,6 +59,11 @@ func NewApp() *App {
 	// StartDiscovery, so a user who never visits the Discovery view never puts
 	// this machine on the network.
 	a.share = share.New(a.applySharedPayload)
+	// The name peers see follows the setting, and keeps following it: someone
+	// who renames themselves mid-session should not have to restart the app to
+	// stop being "Rexy.local" to the person sitting next to them.
+	a.share.SetLocalName(set.Get().Username)
+	set.OnChange(func(s models.Settings) { a.share.SetLocalName(s.Username) })
 
 	return a
 }
@@ -222,6 +227,13 @@ func (a *App) StartDiscovery() string {
 		return "error: " + err.Error()
 	}
 	return "ok"
+}
+
+// GetDefaultDeviceName returns the hostname this device falls back to when no
+// username is set. Settings shows it as the field's placeholder, so the user
+// can see what peers call them today instead of having to ask someone else.
+func (a *App) GetDefaultDeviceName() string {
+	return share.LocalName()
 }
 
 // StopDiscovery takes this instance off the network.
