@@ -114,12 +114,6 @@ export interface AppSettings {
   droneFanClip?: string;
   /** Played once when a drone bursts after an empty sweep. Empty means silent. */
   droneCrashClip?: string;
-  /**
-   * Gates incoming config shares. Empty — the default — means any nearby peer
-   * may ask, which is still safe because an incoming share has to be accepted
-   * explicitly either way.
-   */
-  sharePIN?: string;
 }
 
 // --- peer sharing ---
@@ -135,10 +129,24 @@ export interface AppSettings {
 export interface PeerInfo {
   id: string;
   name: string;
+  /** Always true — every connection is gated by a code. Kept so an older peer
+      that answers false is still read truthfully rather than assumed open. */
   pinRequired: boolean;
 }
 
-export type ShareScope = 'app' | 'project';
+/** A nearby device asking to connect, awaiting the code it is reading out. */
+export interface IncomingConnect {
+  requestId: string;
+  peerId: string;
+  fromName: string;
+}
+
+/**
+ * What a share carries. 'app' and 'project' are config; 'files' is whatever the
+ * user picked off their own disk, and is the only scope that lands outside the
+ * app's own storage.
+ */
+export type ShareScope = 'app' | 'project' | 'files';
 
 /** An inbound offer awaiting the user's accept or decline. */
 export interface IncomingShare {
@@ -147,6 +155,9 @@ export interface IncomingShare {
   scope: ShareScope;
   projectName?: string;
   projectCount: number;
+  /** Present on a 'files' offer, so the prompt can name what is being sent. */
+  fileNames?: string[];
+  totalBytes?: number;
 }
 
 // --- metrics ---

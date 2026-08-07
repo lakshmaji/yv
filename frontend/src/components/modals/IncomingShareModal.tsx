@@ -1,4 +1,4 @@
-import { onCleanup, onMount, Show } from 'solid-js';
+import { For, onCleanup, onMount, Show } from 'solid-js';
 import {
   incomingShare,
   setIncomingShare,
@@ -8,6 +8,7 @@ import {
   setIncomingResult,
 } from '../../store';
 import { go } from '../../wails';
+import { formatBytes } from '../../lib/utils';
 
 /** How long the merge summary stays up before the modal closes itself. */
 const DONE_MS = 2400;
@@ -76,12 +77,19 @@ export default function IncomingShareModal() {
   const description = () => {
     const cur = offer();
     if (!cur) return '';
+    if (cur.scope === 'files') {
+      const n = cur.fileNames?.length ?? 0;
+      const size = cur.totalBytes ? ` (${formatBytes(cur.totalBytes)})` : '';
+      return `${n} file${n === 1 ? '' : 's'}${size}`;
+    }
     if (cur.scope === 'app') {
       const n = cur.projectCount;
       return `their entire setup — ${n} project${n === 1 ? '' : 's'}`;
     }
     return `the project "${cur.projectName ?? 'untitled'}"`;
   };
+
+  const isFiles = () => offer()?.scope === 'files';
 
   return (
     <div class="modal-overlay">
@@ -103,13 +111,35 @@ export default function IncomingShareModal() {
             <span class="share-incoming-what">
               They are offering {description()}.
             </span>
+
+            {/* Files are named, not just counted: a filename is the only thing
+                that tells the receiver whether this is the thing they were
+                expecting or something they should decline. */}
+            <Show when={isFiles() && (offer()?.fileNames?.length ?? 0) > 0}>
+              <ul class="share-file-list share-incoming-files">
+                <For each={offer()?.fileNames}>
+                  {(name) => <li class="share-file-row">{name}</li>}
+                </For>
+              </ul>
+            </Show>
+
             {/* Says what accepting does, in the terms the existing import uses,
                 so nobody has to guess whether this overwrites their work. */}
-            <span class="share-hint">
-              Projects you do not already have will be added. Anything with a
-              matching project is left alone, and your environment variables are
-              not touched.
-            </span>
+            <Show
+              when={isFiles()}
+              fallback={
+                <span class="share-hint">
+                  Projects you do not already have will be added. Anything with a
+                  matching project is left alone, and your environment variables
+                  are not touched.
+                </span>
+              }
+            >
+              <span class="share-hint">
+                Files are saved into a yv-received folder in your Downloads. Nothing
+                you already have is overwritten, and nothing is run.
+              </span>
+            </Show>
           </div>
 
           <div class="modal-footer">

@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -49,11 +48,27 @@ const (
 	// HelloProto exchanges display metadata that mDNS cannot carry.
 	HelloProto protocol.ID = "/yv/hello/1.0.0"
 
-	// ShareProto carries a config transfer.
-	ShareProto protocol.ID = "/yv/share/1.0.0"
+	// ShareProto carries a connection request or a transfer.
+	//
+	// Bumped to 1.1.0 when connecting became its own step. The version is what
+	// stops an older build misreading a connection request as a transfer offer
+	// — it would have prompted its user to accept a payload that never arrives,
+	// and answered this side with a refusal that reads as "they declined" when
+	// nobody was ever asked. An old peer now simply cannot open this stream, and
+	// the failure says so.
+	ShareProto protocol.ID = "/yv/share/1.1.0"
 
 	// connTag marks discovered peers as protected from connection trimming.
 	connTag = "yv-peer"
+)
+
+// Share scopes. "app" and "project" carry config; "files" carries whatever the
+// user picked off their own disk and is the only scope that writes outside the
+// app's own config.
+const (
+	ScopeApp     = "app"
+	ScopeProject = "project"
+	ScopeFiles   = "files"
 )
 
 const (
@@ -90,11 +105,20 @@ const (
 	EventPeerFound = "peer:found"
 	EventPeerLost  = "peer:lost"
 	EventIncoming  = "share:incoming"
-	EventImported  = "share:imported"
-	EventError     = "share:error"
+	// EventConnectRequest carries the code this device wants read back to it.
+	EventConnectRequest = "share:connect-request"
+	// EventConnected and EventConnectClosed take that prompt off screen again.
+	EventConnected     = "share:connected"
+	EventConnectClosed = "share:connect-closed"
+	EventImported      = "share:imported"
+	EventError         = "share:error"
 )
 
 // hello is the metadata a peer serves about itself.
+//
+// PINRequired is always true now that every connection is gated by a generated
+// code. It is still sent so an older build reads a truthful answer rather than
+// concluding it can share unprompted.
 type hello struct {
 	Name        string `json:"name"`
 	PINRequired bool   `json:"pinRequired"`
@@ -127,15 +151,25 @@ type Node struct {
 
 	localName string
 
-	// pinHash is read on every inbound offer and written whenever settings
-	// change, so it is an atomic rather than sitting under mu.
-	pinHash atomic.Value // string
+	// conns holds per-peer connection codes and live connections.
+	conns *connTable
+
+	// decisionWait is how long a prompt may sit unanswered. A field rather than
+	// the constant directly so a test can exercise the timeout branch without
+	// waiting two minutes for it.
+	decisionWait time.Duration
 
 	mu    sync.Mutex
 	peers map[peer.ID]*peerRec
 
 	// pending maps a transfer ID to the channel its blocked handler waits on.
 	pending sync.Map // string -> chan bool
+
+	// connPending maps a connection request ID to the request its blocked
+	// handler waits on. Separate from pending because a connection is answered
+	// with a typed code rather than a yes/no, and may be answered wrongly
+	// several times before it is answered at all.
+	connPending sync.Map // string -> *connReq
 
 	// onPayload applies a received payload and returns a human summary.
 	onPayload func(models.SharePayload) string
@@ -145,23 +179,13 @@ type Node struct {
 
 // New creates a Node. Nothing is opened until Start.
 func New(onPayload func(models.SharePayload) string) *Node {
-	n := &Node{
-		localName: LocalName(),
-		peers:     make(map[peer.ID]*peerRec),
-		onPayload: onPayload,
+	return &Node{
+		localName:    LocalName(),
+		peers:        make(map[peer.ID]*peerRec),
+		conns:        newConnTable(),
+		decisionWait: decisionTimeout,
+		onPayload:    onPayload,
 	}
-	n.pinHash.Store("")
-	return n
-}
-
-// SetPIN updates the PIN required of inbound offers. Safe to call at any time;
-// takes effect on the next offer without a restart.
-func (n *Node) SetPIN(pin string) { n.pinHash.Store(HashPIN(pin)) }
-
-// requiredPIN returns the current PIN hash, "" when none is set.
-func (n *Node) requiredPIN() string {
-	h, _ := n.pinHash.Load().(string)
-	return h
 }
 
 // Start brings up the libp2p host, registers the stream handlers, and begins
@@ -246,6 +270,10 @@ func (n *Node) teardown() {
 	n.mu.Lock()
 	n.peers = make(map[peer.ID]*peerRec)
 	n.mu.Unlock()
+
+	// Connections do not survive discovery being switched off: the codes that
+	// opened them are gone from every screen by then.
+	n.conns = newConnTable()
 }
 
 // Peers returns the currently known peers. Used to seed a frontend that mounts
@@ -369,7 +397,7 @@ func (n *Node) handleHello(s network.Stream) {
 	_ = s.SetWriteDeadline(time.Now().Add(helloTimeout))
 	_ = json.NewEncoder(s).Encode(hello{
 		Name:        n.localName,
-		PINRequired: n.requiredPIN() != "",
+		PINRequired: true,
 	})
 }
 
@@ -439,7 +467,9 @@ func (n *Node) sweepLoop() {
 		case <-n.ctx.Done():
 			return
 		case <-t.C:
-			n.sweep(time.Now())
+			now := time.Now()
+			n.sweep(now)
+			n.conns.Sweep(now)
 		}
 	}
 }

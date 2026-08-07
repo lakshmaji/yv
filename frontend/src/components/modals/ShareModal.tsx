@@ -18,20 +18,34 @@ import type { ShareScope } from '../../types';
 const DONE_MS = 1600;
 
 /**
- * Sends config to the peer whose dinosaur was tapped.
+ * Mirrors share.MaxTotalBytes on the Go side, so an over-sized selection is
+ * refused while the user can still see which file caused it — Go enforces the
+ * real limit, this only spares them a round trip to be told.
+ */
+const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Chooses what to send to the peer whose dinosaur was tapped.
  *
- * Environments are never included — secrets live in their own file precisely so
- * they do not travel with shared config — and the receiver still has to accept,
- * so nothing here can push config onto another machine unattended.
+ * By this point the two devices are connected: someone at the other end typed
+ * the code that was read to them. Nothing here can fail for a reason the user
+ * could have been told before they started choosing.
+ *
+ * Environments are never included in a config share — secrets live in their own
+ * file precisely so they do not travel with shared config — and the receiver
+ * still has to accept, so nothing here can push anything onto another machine
+ * unattended.
  */
 export default function ShareModal() {
   const peer = () => sharePeer();
 
   const [scope, setScope] = createSignal<ShareScope>('project');
   const [projectId, setProjectId] = createSignal(selectedId() ?? '');
-  const [pin, setPin] = createSignal('');
+  // Absolute paths on this machine; the file itself is only read in Go, at the
+  // moment of sending.
+  const [files, setFiles] = createSignal<string[]>([]);
+  const [picking, setPicking] = createSignal(false);
 
-  let pinRef: HTMLInputElement | undefined;
   let doneTimer: ReturnType<typeof setTimeout> | undefined;
 
   // With no project selected, "this project" has nothing to mean.
@@ -49,14 +63,11 @@ export default function ShareModal() {
   const ready = () => {
     if (shareBusy() || shareDone()) return false;
     if (scope() === 'project' && !chosenProject()) return false;
-    if (peer()?.pinRequired && pin().trim().length === 0) return false;
+    if (scope() === 'files' && files().length === 0) return false;
     return true;
   };
 
   onMount(() => {
-    // The PIN is the only thing the user has to type, so it takes the focus.
-    if (peer()?.pinRequired) pinRef?.focus();
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -80,6 +91,28 @@ export default function ShareModal() {
     if (e.target === e.currentTarget && !shareBusy()) close();
   }
 
+  async function pickFiles(): Promise<void> {
+    if (picking() || shareBusy()) return;
+    setPicking(true);
+    try {
+      const picked = await go.PickFilesToShare();
+      if (picked.length === 0) return; // cancelled
+      // Added to the list rather than replacing it, so a second trip to the
+      // dialog can reach a different folder without losing the first choice.
+      // De-duplicated by path: picking the same file twice would send it twice.
+      setFiles((cur) => [...new Set([...cur, ...picked])]);
+      setShareError(null);
+    } catch (e) {
+      setShareError(String(e));
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  function removeFile(path: string): void {
+    setFiles((cur) => cur.filter((p) => p !== path));
+  }
+
   async function send(): Promise<void> {
     const target = peer();
     if (!target || !ready()) return;
@@ -88,18 +121,18 @@ export default function ShareModal() {
     setShareBusy(true);
 
     try {
-      const res = await go.InitiateShare(target.id, scope(), projectId(), pin().trim());
+      const res =
+        scope() === 'files'
+          ? await go.InitiateFileShare(target.id, files())
+          : await go.InitiateShare(target.id, scope(), projectId());
+
       if (res.startsWith('error:')) {
         setShareError(friendlyError(res.slice(6).trim()));
         return;
       }
       // Go only returns ok once the receiver confirmed it applied the payload,
       // so this genuinely means "landed", not "sent".
-      setShareDone(
-        scope() === 'app'
-          ? `Sent ${projects.length} project${projects.length === 1 ? '' : 's'} to ${target.name}`
-          : `Sent ${chosenProject()?.name ?? 'project'} to ${target.name}`,
-      );
+      setShareDone(doneMessage(target.name));
       doneTimer = setTimeout(close, DONE_MS);
     } catch (e) {
       setShareError(friendlyError(String(e)));
@@ -108,7 +141,16 @@ export default function ShareModal() {
     }
   }
 
-  const isPinError = () => (shareError() ?? '').toLowerCase().includes('pin');
+  function doneMessage(peerName: string): string {
+    if (scope() === 'files') {
+      const n = files().length;
+      return `Sent ${n} file${n === 1 ? '' : 's'} to ${peerName}`;
+    }
+    if (scope() === 'app') {
+      return `Sent ${projects.length} project${projects.length === 1 ? '' : 's'} to ${peerName}`;
+    }
+    return `Sent ${chosenProject()?.name ?? 'project'} to ${peerName}`;
+  }
 
   return (
     <div class="modal-overlay" onClick={onOverlayClick}>
@@ -120,30 +162,6 @@ export default function ShareModal() {
         </Show>
 
         <Show when={!shareDone()}>
-          <Show when={peer()?.pinRequired}>
-            <div class="modal-field-label">PIN</div>
-            <input
-              ref={pinRef}
-              class="share-pin-input"
-              classList={{ 'input-error': isPinError() }}
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="Code shown on that device"
-              value={pin()}
-              disabled={shareBusy()}
-              onInput={(e) => {
-                setPin(e.currentTarget.value);
-                if (shareError()) setShareError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && ready()) void send();
-              }}
-            />
-            <div class="share-hint">
-              {peer()?.name} asks for a PIN. It is set in that device's Settings.
-            </div>
-          </Show>
-
           <div class="modal-field-label">What to share</div>
           <div class="share-scope">
             <button
@@ -168,6 +186,16 @@ export default function ShareModal() {
                 All {projects.length} project{projects.length === 1 ? '' : 's'}
               </span>
             </button>
+            <button
+              type="button"
+              class="share-scope-option"
+              classList={{ selected: scope() === 'files' }}
+              disabled={shareBusy()}
+              onClick={() => setScope('files')}
+            >
+              <span class="share-scope-name">Files</span>
+              <span class="share-scope-detail">Anything on this machine</span>
+            </button>
           </div>
 
           <Show when={scope() === 'project'}>
@@ -191,11 +219,62 @@ export default function ShareModal() {
             </select>
           </Show>
 
+          <Show when={scope() === 'files'}>
+            <div class="share-files">
+              <Show
+                when={files().length > 0}
+                fallback={<div class="share-files-empty">No files chosen yet.</div>}
+              >
+                <ul class="share-file-list">
+                  <For each={files()}>
+                    {(path) => (
+                      <li class="share-file-row">
+                        <span class="share-file-name" title={path}>
+                          {baseName(path)}
+                        </span>
+                        <button
+                          type="button"
+                          class="share-file-remove"
+                          title="Remove"
+                          disabled={shareBusy()}
+                          onClick={() => removeFile(path)}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+
+              <button
+                type="button"
+                class="share-file-add"
+                disabled={shareBusy() || picking()}
+                onClick={() => void pickFiles()}
+              >
+                {picking() ? 'Choosing…' : '+ Add files…'}
+              </button>
+            </div>
+          </Show>
+
           {/* Stated rather than assumed: someone sharing "everything" deserves to
-              know their secrets are not in it. */}
+              know their secrets are not in it, and someone sending a file
+              deserves to know it lands in a folder rather than in the app. */}
           <div class="share-note">
-            {commandCount()} command{commandCount() === 1 ? '' : 's'} will be sent. Environment
-            variables are never shared.
+            <Show
+              when={scope() === 'files'}
+              fallback={
+                <>
+                  {commandCount()} command{commandCount() === 1 ? '' : 's'} will be sent.
+                  Environment variables are never shared.
+                </>
+              }
+            >
+              {files().length} file{files().length === 1 ? '' : 's'} will be sent, up to{' '}
+              {MAX_TOTAL_BYTES / (1024 * 1024)} MB in total. They are saved to that device's
+              Downloads folder, and nothing on it is overwritten.
+            </Show>
           </div>
 
           <Show when={shareError()}>
@@ -216,6 +295,12 @@ export default function ShareModal() {
   );
 }
 
+/** Last path segment, for a list that has no room for absolute paths. */
+function baseName(path: string): string {
+  const parts = path.split(/[\\/]/);
+  return parts[parts.length - 1] || path;
+}
+
 /**
  * Go returns transport errors verbatim, which are accurate but unreadable
  * ("stream reset", "context deadline exceeded"). Map the ones a user can
@@ -223,9 +308,16 @@ export default function ShareModal() {
  */
 function friendlyError(raw: string): string {
   const lower = raw.toLowerCase();
-  if (lower.includes('incorrect pin')) return 'Incorrect PIN — check the code on that device.';
+  if (lower.includes('older version')) {
+    return 'That device is running an older version of yv.';
+  }
+  // The connection lapsed between connecting and sending — the fix is to start
+  // again, which is a different instruction from "they said no".
+  if (lower.includes('not connected')) {
+    return 'The connection expired. Close this and connect again.';
+  }
   if (lower.includes('declined')) return 'They declined the transfer.';
-  if (lower.includes('deadline') || lower.includes('timeout')) {
+  if (lower.includes('did not answer') || lower.includes('deadline') || lower.includes('timeout')) {
     return 'They did not respond in time.';
   }
   if (lower.includes('reset') || lower.includes('connect') || lower.includes('eof')) {

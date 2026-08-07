@@ -58,8 +58,25 @@ interface GoApp {
   StopDiscovery(): Promise<string>;
   /** Peers already known, for a view that mounts after discovery started. */
   GetPeers(): Promise<PeerInfo[]>;
+  /** A fresh connection code to read out. Generated locally, no network. */
+  NewConnectionCode(): Promise<string>;
+  /**
+   * Asks a peer to connect, blocking until their user types the code. Only the
+   * code's hash crosses the wire. "ok" or "error: …".
+   */
+  ConnectToPeer(peerID: string, code: string): Promise<string>;
+  /** Submits a typed code. "ok", "expired", or "wrong: <attempts left>". */
+  AnswerConnectRequest(requestID: string, code: string): Promise<string>;
+  /** Refuses a pending connection request. */
+  DeclineConnectRequest(requestID: string): Promise<string>;
+  /** Closes a connection accepted earlier, so that device must ask again. */
+  DisconnectPeer(peerID: string): Promise<string>;
   /** Offers config to a peer and streams it on acceptance. "ok" or "error: …". */
-  InitiateShare(peerID: string, scope: ShareScope, projectID: string, pin: string): Promise<string>;
+  InitiateShare(peerID: string, scope: ShareScope, projectID: string): Promise<string>;
+  /** Native multi-select picker for files to send. Empty when cancelled. */
+  PickFilesToShare(): Promise<string[]>;
+  /** Sends files off this machine's disk to a peer. "ok" or "error: …". */
+  InitiateFileShare(peerID: string, paths: string[]): Promise<string>;
   /** Delivers the user's decision to a waiting inbound transfer. */
   RespondToShare(transferID: string, accept: boolean): Promise<string>;
 

@@ -15,6 +15,7 @@ import type {
   ActivityHeatmap,
   PeerInfo,
   IncomingShare,
+  IncomingConnect,
 } from './types';
 import { variantById } from './lib/drone';
 
@@ -129,10 +130,55 @@ const [shareError, setShareError] = createSignal<string | null>(null);
 // Set once a transfer lands, so the modal can say so before closing itself.
 const [shareDone, setShareDone] = createSignal<string | null>(null);
 
+/**
+ * Which step of the outbound flow is on screen.
+ *
+ * Connecting is its own dialog because it is a different question, answered by
+ * a different person: it asks whether that device will talk to you at all, and
+ * it is settled by someone typing a code you read to them. Folding it into
+ * "what do you want to send?" meant composing a whole transfer before finding
+ * out you were not welcome.
+ */
+type ShareStage = 'connect' | 'transfer';
+const [shareStage, setShareStage] = createSignal<ShareStage>('connect');
+
+// The code that opened the connection. The transfer that follows no longer
+// needs it — the far end remembers who it let in — but it is kept so the share
+// dialog can say which session it belongs to.
+const [sharePin, setSharePin] = createSignal('');
+
+// A nearby device asking to connect to us. Null when nothing is pending.
+const [incomingConnect, setIncomingConnect] = createSignal<IncomingConnect | null>(null);
+
 // Inbound share awaiting a decision.
 const [incomingShare, setIncomingShare] = createSignal<IncomingShare | null>(null);
 const [incomingBusy, setIncomingBusy] = createSignal(false);
 const [incomingResult, setIncomingResult] = createSignal<string | null>(null);
+
+/**
+ * Opens the outbound flow for a peer, at whichever step that peer requires.
+ *
+ * One function rather than each call site deciding for itself, so the rule
+ * "nothing is offered to a device we have not connected to" holds wherever a
+ * share is started from.
+ */
+function openShareWith(peer: PeerInfo): void {
+  setShareError(null);
+  setShareDone(null);
+  setShareBusy(false);
+  setSharePin('');
+  // Always the connect step. Every device requires a code, so there is no
+  // branch here to get wrong.
+  setShareStage('connect');
+  setSharePeer(peer);
+}
+
+/** Called by the connect dialog once the far end has let us in. */
+function pinAccepted(pin: string): void {
+  setSharePin(pin);
+  setShareError(null);
+  setShareStage('transfer');
+}
 
 /** Clears every transient bit of outbound share state. */
 function resetShareState(): void {
@@ -140,6 +186,8 @@ function resetShareState(): void {
   setShareBusy(false);
   setShareError(null);
   setShareDone(null);
+  setSharePin('');
+  setShareStage('connect');
 }
 
 // Global settings modal (opened from View → Settings… / ⌘,)
@@ -388,6 +436,10 @@ export {
   shareBusy, setShareBusy,
   shareError, setShareError,
   shareDone, setShareDone,
+  shareStage, setShareStage,
+  sharePin, setSharePin,
+  openShareWith, pinAccepted,
+  incomingConnect, setIncomingConnect,
   resetShareState,
   incomingShare, setIncomingShare,
   incomingBusy, setIncomingBusy,

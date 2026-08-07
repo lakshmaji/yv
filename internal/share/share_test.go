@@ -140,7 +140,7 @@ func TestReadPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	got, err := readPayload(&buf)
+	got, err := readPayload(&buf, maxPayload)
 	if err != nil {
 		t.Fatalf("readPayload: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestReadPayloadRejectsGarbage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := readPayload(bytes.NewReader(tc.body)); err == nil {
+			if _, err := readPayload(bytes.NewReader(tc.body), maxPayload); err == nil {
 				t.Error("readPayload accepted garbage, want error")
 			}
 		})
@@ -220,7 +220,7 @@ func TestReadPayloadRejectsWrongShape(t *testing.T) {
 	_, _ = gz.Write([]byte(`"a bare string"`))
 	_ = gz.Close()
 
-	if _, err := readPayload(&buf); err == nil {
+	if _, err := readPayload(&buf, maxPayload); err == nil {
 		t.Error("readPayload accepted a bare JSON string, want error")
 	}
 }
@@ -359,4 +359,325 @@ func TestPeersOnlyReturnsAnnounced(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "Rexy" {
 		t.Errorf("Peers() = %+v, want only the announced peer", got)
 	}
+}
+
+// The offer header is JSON on the wire, so a missing tag on a new field would
+// show up as a receiver that cannot describe what it is being offered.
+func TestShareOfferHeaderRoundTrips(t *testing.T) {
+	want := models.ShareOffer{
+		TransferID:   "t-1",
+		FromName:     "Rexy",
+		Scope:        ScopeFiles,
+		ProjectName:  "POS",
+		ProjectCount: 2,
+		FileNames:    []string{"notes.txt", "blob.bin"},
+		TotalBytes:   4101,
+		Kind:         models.OfferKindConnect,
+		PIN:          "482910",
+	}
+
+	raw, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var got models.ShareOffer
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Scope != want.Scope || got.TotalBytes != want.TotalBytes || got.Kind != want.Kind {
+		t.Errorf("header lost fields: %+v", got)
+	}
+	if len(got.FileNames) != 2 || got.FileNames[1] != "blob.bin" {
+		t.Errorf("file names lost: %+v", got.FileNames)
+	}
+}
+
+// A files payload is bigger than a config one on purpose, and the bound is
+// picked from the scope. Getting these the wrong way round would either cap
+// file transfers at 16 MB or hand a config sender a 128 MB allocation.
+func TestPayloadLimitFollowsTheScope(t *testing.T) {
+	if payloadLimit(ScopeFiles) <= payloadLimit(ScopeApp) {
+		t.Error("a files payload should be allowed to be larger than config")
+	}
+	if payloadLimit(ScopeProject) != maxPayload {
+		t.Error("config scopes should keep the tight bound")
+	}
+	// Anything unrecognised gets the tight bound, not the generous one.
+	if payloadLimit("something-new") != maxPayload {
+		t.Error("an unknown scope should get the conservative limit")
+	}
+	if payloadDeadline(ScopeFiles) <= payloadDeadline(ScopeApp) {
+		t.Error("a files transfer should be given longer")
+	}
+}
+
+// The sender's own cap must be inside what the receiver will read, or a
+// transfer the sender was allowed to build would be rejected on arrival.
+func TestSenderCapFitsTheReceiverLimit(t *testing.T) {
+	if MaxTotalBytes >= maxFilePayload {
+		t.Errorf("MaxTotalBytes (%d) is not below maxFilePayload (%d)", MaxTotalBytes, maxFilePayload)
+	}
+	if MaxFileBytes > MaxTotalBytes {
+		t.Errorf("a single file may exceed a whole transfer: %d > %d", MaxFileBytes, MaxTotalBytes)
+	}
+}
+
+// --- generated connection codes ---
+
+func TestGeneratePINShape(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		code, err := GeneratePIN()
+		if err != nil {
+			t.Fatalf("GeneratePIN: %v", err)
+		}
+		if len(code) != PINLength {
+			t.Fatalf("len(%q) = %d, want %d", code, len(code), PINLength)
+		}
+		for _, r := range code {
+			if !strings.ContainsRune(pinAlphabet, r) {
+				t.Fatalf("%q contains %q, which is not in the alphabet", code, r)
+			}
+		}
+	}
+}
+
+// The homoglyphs are excluded on purpose: a code is transcribed by hand, and an
+// O read as a 0 fails with no clue as to why.
+func TestGeneratePINAvoidsAmbiguousCharacters(t *testing.T) {
+	for _, bad := range []rune{'0', 'O', '1', 'I', 'L'} {
+		if strings.ContainsRune(pinAlphabet, bad) {
+			t.Errorf("alphabet contains the ambiguous character %q", bad)
+		}
+	}
+}
+
+func TestGeneratePINIsNotRepetitive(t *testing.T) {
+	seen := make(map[string]bool)
+	for i := 0; i < 500; i++ {
+		code, err := GeneratePIN()
+		if err != nil {
+			t.Fatalf("GeneratePIN: %v", err)
+		}
+		if seen[code] {
+			t.Fatalf("GeneratePIN repeated %q within 500 draws", code)
+		}
+		seen[code] = true
+	}
+}
+
+// Every position must be able to vary — a bug that fixed one character would
+// still pass the shape and uniqueness checks above.
+func TestGeneratePINVariesInEveryPosition(t *testing.T) {
+	distinct := make([]map[byte]bool, PINLength)
+	for i := range distinct {
+		distinct[i] = make(map[byte]bool)
+	}
+
+	for i := 0; i < 400; i++ {
+		code, _ := GeneratePIN()
+		for pos := 0; pos < PINLength; pos++ {
+			distinct[pos][code[pos]] = true
+		}
+	}
+	for pos, set := range distinct {
+		if len(set) < 10 {
+			t.Errorf("position %d only ever took %d values", pos, len(set))
+		}
+	}
+}
+
+func TestNormalizePIN(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"ABCD2345", "ABCD2345"},
+		{"abcd2345", "ABCD2345"},
+		{"  AbCd2345  ", "ABCD2345"},
+		{"", ""},
+		{"   ", ""},
+		// Digits are unaffected, which is why a PIN set by an older build still
+		// matches after case folding was introduced.
+		{"482910", "482910"},
+	}
+
+	for _, tc := range tests {
+		if got := NormalizePIN(tc.in); got != tc.want {
+			t.Errorf("NormalizePIN(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCodeMatches(t *testing.T) {
+	tests := []struct {
+		name    string
+		want    string
+		offered string
+		ok      bool
+	}{
+		{"exact", "ABCD2345", "ABCD2345", true},
+		{"case folded", "ABCD2345", "abcd2345", true},
+		{"trimmed", "ABCD2345", " ABCD2345 ", true},
+		{"wrong", "ABCD2345", "ABCD2346", false},
+		{"prefix is not enough", "ABCD2345", "ABCD", false},
+		{"longer is not enough", "ABCD2345", "ABCD23456", false},
+		{"empty offered", "ABCD2345", "", false},
+		// An empty expectation must never match: it is the state of having no
+		// code at all, not a code that anything satisfies.
+		{"empty expectation matches nothing", "", "ABCD2345", false},
+		{"empty against empty", "", "", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CodeMatches(tc.want, tc.offered); got != tc.ok {
+				t.Errorf("CodeMatches(%q, %q) = %v, want %v", tc.want, tc.offered, got, tc.ok)
+			}
+		})
+	}
+}
+
+// --- the connection table ---
+
+func TestConnTable(t *testing.T) {
+	id, err := peer.Decode("12D3KooWA9hLzQqBFcHhSHiXqPXTPeXCXn9nZKNBg8pTQXpsMZ1a")
+	if err != nil {
+		t.Skipf("could not build a peer id: %v", err)
+	}
+	now := time.Now()
+
+	t.Run("unknown peers are not connected", func(t *testing.T) {
+		if newConnTable().Connected(id, now) {
+			t.Error("an unknown peer was reported as connected")
+		}
+	})
+
+	t.Run("opening connects, and it expires", func(t *testing.T) {
+		tab := newConnTable()
+		tab.Open(id, now)
+
+		if !tab.Connected(id, now) {
+			t.Error("not connected right after Open")
+		}
+		if !tab.Connected(id, now.Add(ConnTTL-time.Second)) {
+			t.Error("expired early")
+		}
+		if tab.Connected(id, now.Add(ConnTTL+time.Second)) {
+			t.Error("still connected past the TTL")
+		}
+	})
+
+	t.Run("touch extends a live connection", func(t *testing.T) {
+		tab := newConnTable()
+		tab.Open(id, now)
+
+		later := now.Add(ConnTTL - time.Minute)
+		tab.Touch(id, later)
+		if !tab.Connected(id, later.Add(ConnTTL-time.Second)) {
+			t.Error("Touch did not extend the connection")
+		}
+	})
+
+	// Otherwise a peer could keep itself connected forever by touching after it
+	// had already lapsed, which is exactly the case the TTL exists for.
+	t.Run("touch does not revive a lapsed connection", func(t *testing.T) {
+		tab := newConnTable()
+		tab.Open(id, now)
+
+		after := now.Add(ConnTTL + time.Minute)
+		tab.Touch(id, after)
+		if tab.Connected(id, after) {
+			t.Error("Touch revived an expired connection")
+		}
+	})
+
+	t.Run("forget closes immediately", func(t *testing.T) {
+		tab := newConnTable()
+		tab.Open(id, now)
+		tab.Forget(id)
+
+		if tab.Connected(id, now) {
+			t.Error("still connected after Forget")
+		}
+	})
+
+	t.Run("sweep drops only what has expired", func(t *testing.T) {
+		tab := newConnTable()
+		tab.Open(id, now)
+
+		tab.Sweep(now.Add(time.Minute))
+		if !tab.Connected(id, now.Add(time.Minute)) {
+			t.Error("sweep dropped a live connection")
+		}
+
+		tab.Sweep(now.Add(ConnTTL + time.Minute))
+		if len(tab.m) != 0 {
+			t.Errorf("sweep left %d expired entries", len(tab.m))
+		}
+	})
+}
+
+func TestConnReqAnswer(t *testing.T) {
+	newReq := func() *connReq {
+		return &connReq{codeHash: HashPIN("ABCD2345"), decision: make(chan bool, 1)}
+	}
+
+	t.Run("the right code releases the handler", func(t *testing.T) {
+		r := newReq()
+		matched, _ := r.Answer("ABCD2345")
+		if !matched {
+			t.Fatal("the right code did not match")
+		}
+		select {
+		case ok := <-r.decision:
+			if !ok {
+				t.Error("the handler was released with a refusal")
+			}
+		default:
+			t.Error("the handler was never released")
+		}
+	})
+
+	t.Run("wrong codes count down", func(t *testing.T) {
+		r := newReq()
+		for i := 1; i <= MaxCodeAttempts; i++ {
+			matched, remaining := r.Answer("WRONGCOD")
+			if matched {
+				t.Fatalf("attempt %d matched", i)
+			}
+			if want := MaxCodeAttempts - i; remaining != want {
+				t.Errorf("attempt %d: remaining = %d, want %d", i, remaining, want)
+			}
+		}
+		select {
+		case ok := <-r.decision:
+			if ok {
+				t.Error("running out of attempts accepted the connection")
+			}
+		default:
+			t.Error("running out of attempts did not release the handler")
+		}
+	})
+
+	// Once it is settled it stays settled — otherwise a late answer could
+	// reopen a request its user had already refused.
+	t.Run("a settled request accepts nothing further", func(t *testing.T) {
+		r := newReq()
+		r.Decline()
+
+		if matched, _ := r.Answer("ABCD2345"); matched {
+			t.Error("a declined request still accepted the right code")
+		}
+	})
+
+	t.Run("decline is idempotent", func(t *testing.T) {
+		r := newReq()
+		r.Decline()
+		r.Decline()
+
+		if len(r.decision) != 1 {
+			t.Errorf("decision channel holds %d values, want 1", len(r.decision))
+		}
+	})
 }

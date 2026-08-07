@@ -27,15 +27,24 @@ import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import SettingsModal from './components/modals/SettingsModal';
 import IncomingShareModal from './components/modals/IncomingShareModal';
+import IncomingConnectModal from './components/modals/IncomingConnectModal';
 import DashboardPanel from './components/DashboardPanel';
 import DiscoveryPanel from './components/DiscoveryPanel';
 import {
   setSidebarWidth, setGroupsWidth, setResourceStats,
 } from './store';
-import type { ResourceStats, ProcessStats, PeerInfo, IncomingShare } from './types';
+import type {
+  ResourceStats,
+  ProcessStats,
+  PeerInfo,
+  IncomingShare,
+  IncomingConnect,
+} from './types';
 import {
   setPeers,
   setSharePeer,
+  setIncomingConnect,
+  incomingConnect,
   setShareBusy,
   setShareError,
   incomingShare,
@@ -189,8 +198,18 @@ export default function App() {
       }),
       runtime.EventsOn('peer:lost', (e: { id: string }) => {
         setPeers(prev => prev.filter(x => x.id !== e.id));
-        // A peer that vanished mid-share cannot receive anything.
+        // A peer that vanished mid-share cannot receive anything, and one that
+        // vanished mid-connect cannot be let in.
         setSharePeer(cur => (cur?.id === e.id ? null : cur));
+        setIncomingConnect(cur => (cur?.peerId === e.id ? null : cur));
+      }),
+      runtime.EventsOn('share:connect-request', (req: IncomingConnect) => {
+        setIncomingConnect(req);
+      }),
+      // Emitted however the request ended — accepted, refused, or timed out —
+      // so a prompt is never left on screen for a stream that has gone.
+      runtime.EventsOn('share:connect-closed', (e: { requestId: string }) => {
+        setIncomingConnect(cur => (cur?.requestId === e.requestId ? null : cur));
       }),
       runtime.EventsOn('share:incoming', (offer: IncomingShare) => {
         setIncomingResult(null);
@@ -245,7 +264,10 @@ export default function App() {
       <EnvironmentsModal />
       <KeyboardShortcutsModal />
       <SettingsModal />
-      {/* Global, not inside DiscoveryPanel: an offer can arrive on any view. */}
+      {/* Global, not inside DiscoveryPanel: a request can arrive on any view. */}
+      <Show when={incomingConnect()}>
+        <IncomingConnectModal />
+      </Show>
       <Show when={incomingShare()}>
         <IncomingShareModal />
       </Show>

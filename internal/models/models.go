@@ -136,13 +136,6 @@ type Settings struct {
 	// Separate from the hum because they are different sounds doing different
 	// jobs — one is ambient and looped, the other is the end of the sweep.
 	DroneCrashClip string `json:"droneCrashClip,omitempty"`
-
-	// SharePIN gates incoming config shares. Empty — the zero value, and so the
-	// default — means any nearby peer may ask, which is still safe because the
-	// receiver has to accept the transfer explicitly either way. Stored in the
-	// clear because it is a convenience lock the user must be able to read back
-	// off their own screen to tell a colleague, not a credential.
-	SharePIN string `json:"sharePIN,omitempty"`
 }
 
 // --- peer sharing ---
@@ -165,8 +158,24 @@ type PeerInfo struct {
 // never travel with exported config, and the same rule holds over the wire —
 // do not add them here for convenience.
 type SharePayload struct {
-	Scope    string    `json:"scope"` // "app" | "project"
+	Scope    string    `json:"scope"` // "app" | "project" | "files"
 	Projects []Project `json:"projects"`
+	// Files carries arbitrary files the user picked off their own disk. Only
+	// populated for the "files" scope; config and files never travel together,
+	// because they land in completely different places on the far side.
+	Files []SharedFile `json:"files,omitempty"`
+}
+
+// SharedFile is one file travelling with a share.
+//
+// Data is a []byte, which encoding/json renders as base64 — the whole payload is
+// gzip'd afterwards, so text files still compress. Name is a bare filename with
+// no directory part: a share drops files into one folder, and honouring a path
+// from another machine is how a transfer turns into an arbitrary write.
+type SharedFile struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+	Data []byte `json:"data"`
 }
 
 // ShareOffer is the header a sender writes before any payload bytes, and what
@@ -177,10 +186,28 @@ type ShareOffer struct {
 	Scope        string `json:"scope"`
 	ProjectName  string `json:"projectName,omitempty"`
 	ProjectCount int    `json:"projectCount"`
+	// FileNames and TotalBytes describe a "files" offer, so the receiver's prompt
+	// can name what it is about to accept rather than showing a count alone.
+	FileNames  []string `json:"fileNames,omitempty"`
+	TotalBytes int64    `json:"totalBytes,omitempty"`
+	// Kind is "" for a real transfer and OfferKindConnect for the connection
+	// request that precedes one.
+	Kind string `json:"kind,omitempty"`
 	// PIN is sent in the clear over an already-encrypted libp2p stream. It is
 	// compared against the receiver's stored PIN.
 	PIN string `json:"pin,omitempty"`
 }
+
+// OfferKindConnect marks a connection request: a header with a PIN and nothing
+// else, sent before the sender has chosen anything.
+//
+// It is the first half of the two-step flow. Asking to connect and asking to
+// receive something are genuinely different questions — at connect time there
+// is no payload to describe, so a prompt naming one would be describing a
+// transfer that does not exist yet. Accepting it grants a conversation; the
+// transfer that follows is still asked separately, and is still the gate on
+// anything being written.
+const OfferKindConnect = "connect"
 
 // --- metrics: on-disk records ---
 //

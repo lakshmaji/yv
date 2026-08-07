@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"yv/internal/config"
 	"yv/internal/models"
+	"yv/internal/share"
 )
 
 // newShareTestApp gives an App backed by a throwaway config dir, so these tests
@@ -224,4 +227,91 @@ func TestApplySharedPayloadSkipsIDLessProjects(t *testing.T) {
 func marshalForInspection(v any) (string, error) {
 	raw, err := json.Marshal(v)
 	return string(raw), err
+}
+
+// A files payload writes to disk and must not touch config. The two scopes go to
+// completely different places, and the receiver only agreed to one of them.
+func TestApplySharedPayloadSavesFiles(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+
+	// newShareTestApp already redirected HOME, and ReceiveDir resolves through
+	// it — so overriding it again here would move the config store out from
+	// under the app mid-test.
+	home := mustHome(t)
+
+	summary := a.applySharedPayload(models.SharePayload{
+		Scope: "files",
+		Files: []models.SharedFile{
+			{Name: "notes.txt", Size: 5, Data: []byte("hello")},
+			{Name: "second.txt", Size: 3, Data: []byte("bye")},
+		},
+	})
+
+	if !strings.Contains(summary, "Saved 2 files") {
+		t.Errorf("summary = %q, want it to report 2 saved files", summary)
+	}
+
+	dir := filepath.Join(home, share.ReceiveDirName)
+	got, err := os.ReadFile(filepath.Join(dir, "notes.txt"))
+	if err != nil {
+		t.Fatalf("reading the saved file: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("saved contents = %q, want %q", got, "hello")
+	}
+
+	if n := len(a.cfg.LoadProjects()); n != 2 {
+		t.Errorf("have %d projects, want the original 2 — a files share must not touch config", n)
+	}
+}
+
+// The scope decides what happens, not which fields are populated. Otherwise a
+// payload that the user accepted as config could still drop files on their disk.
+func TestApplySharedPayloadIgnoresFilesOnAConfigScope(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+	home := mustHome(t)
+
+	a.applySharedPayload(models.SharePayload{
+		Scope:    "app",
+		Projects: []models.Project{{ID: "p-new", Name: "Analytics"}},
+		Files:    []models.SharedFile{{Name: "sneaky.sh", Data: []byte("rm -rf /")}},
+	})
+
+	if _, err := os.Stat(filepath.Join(home, share.ReceiveDirName)); !os.IsNotExist(err) {
+		t.Error("a config-scoped payload wrote files to disk")
+	}
+}
+
+// Conversely, a files payload must not be able to add projects.
+func TestApplySharedPayloadIgnoresProjectsOnAFilesScope(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+
+	a.applySharedPayload(models.SharePayload{
+		Scope:    "files",
+		Projects: []models.Project{{ID: "p-new", Name: "Analytics"}},
+		Files:    []models.SharedFile{{Name: "notes.txt", Data: []byte("hi")}},
+	})
+
+	if n := len(a.cfg.LoadProjects()); n != 2 {
+		t.Errorf("have %d projects, want the original 2 — a files share must not add projects", n)
+	}
+}
+
+func TestApplySharedPayloadEmptyFileListIsHarmless(t *testing.T) {
+	a := newShareTestApp(t, sampleProjects())
+
+	if summary := a.applySharedPayload(models.SharePayload{Scope: "files"}); summary == "" {
+		t.Error("no summary for an empty files payload")
+	}
+}
+
+// mustHome reads the home directory the test harness redirected, which is where
+// ReceiveDir will have put anything the app saved.
+func mustHome(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("home directory: %v", err)
+	}
+	return home
 }

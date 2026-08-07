@@ -3243,11 +3243,13 @@
 
     .share-modal { width: 420px; }
 
-    /* The two scope choices sit side by side because they are alternatives, not
-       a list — and the sizes differ enough that the labels alone would mislead. */
+    /* The scope choices sit side by side because they are alternatives, not a
+       list — and the sizes differ enough that the labels alone would mislead.
+       Equal columns rather than auto: "Everything" has the longest label and
+       would otherwise take a third more width than the option beside it. */
     .share-scope {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
 
@@ -3286,11 +3288,131 @@
     }
     .share-project-select:focus { outline: none; border-color: var(--accent); }
 
-    /* Wide tracking because this is read digit by digit off another screen. */
-    .share-pin-input {
+    /* The connect dialogs are narrower than the share form: each holds one
+       thing, and a 420px box around eight characters reads as a form somebody
+       forgot to finish. */
+    .connect-modal { width: 360px; }
+
+    /* The code is the entire content of this dialog, so it is typeset like a
+       thing to be read aloud: large, monospaced, and split 4 + 4, because eight
+       unbroken characters get read back wrongly far more often. */
+    .connect-code {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      padding: 14px 0;
       font-family: var(--mono);
-      letter-spacing: 3px;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: 6px;
+      /* The tracking is on the right of each glyph, which visually shifts the
+         group left; the indent puts it back on centre. */
+      text-indent: 6px;
+      color: var(--text);
+      user-select: text;
     }
+    .connect-code.loading { color: var(--muted); opacity: .4; }
+
+    .connect-waiting {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .connect-spinner {
+      width: 11px;
+      height: 11px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: connect-spin .8s linear infinite;
+    }
+    @keyframes connect-spin { to { transform: rotate(360deg); } }
+
+    /* Matches the code it is transcribing, so the two read as the same object on
+       two screens. */
+    .modal-box .connect-code-input {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 6px;
+      text-indent: 6px;
+      text-align: center;
+      padding: 10px 12px;
+      text-transform: uppercase;
+    }
+
+    /* ── Files to send ──────────────────────────────── */
+
+    .share-files {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Capped and scrolling: sixty-four files must not push the Send button off
+       the bottom of the dialog. */
+    .share-file-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .share-file-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+    .share-file-row + .share-file-row { border-top: 1px solid var(--border); }
+
+    /* min-width: 0 is what lets the ellipsis happen at all — a flex item's
+       default min-width is its content, so a long filename would otherwise
+       widen the row instead of truncating. The full path is on the title. */
+    .share-file-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .share-file-remove {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0 2px;
+      font-size: 12px;
+      opacity: 0;
+    }
+    .share-file-row:hover .share-file-remove,
+    .share-file-remove:focus-visible { opacity: 1; }
+    .share-file-remove:hover { color: var(--red); }
+
+    .share-files-empty {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      text-align: center;
+    }
+
+    .share-file-add { align-self: flex-start; }
+
+    /* The inbound list is read-only, so it drops the hover affordances. */
+    .share-incoming-files .share-file-row { color: var(--text); }
 
     .share-hint, .share-note {
       font-size: 11px;

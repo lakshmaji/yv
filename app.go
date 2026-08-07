@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -58,8 +59,6 @@ func NewApp() *App {
 	// StartDiscovery, so a user who never visits the Discovery view never puts
 	// this machine on the network.
 	a.share = share.New(a.applySharedPayload)
-	a.share.SetPIN(set.Get().SharePIN)
-	set.OnChange(func(s models.Settings) { a.share.SetPIN(s.SharePIN) })
 
 	return a
 }
@@ -243,16 +242,126 @@ func (a *App) GetPeers() []models.PeerInfo {
 
 // InitiateShare offers config to a peer and streams it if they accept.
 //
-// scope is "app" for every project or "project" for one. pin is the code the
-// target requires, ignored when it requires none. Returns "ok" or "error: …".
-func (a *App) InitiateShare(peerID, scope, projectID, pin string) string {
+// scope is "app" for every project or "project" for one. No code is passed: the
+// connection step already established who this is, and the far end refuses a
+// transfer from anyone it has not let in. Returns "ok" or "error: …".
+func (a *App) InitiateShare(peerID, scope, projectID string) string {
 	payload, offer, err := a.buildShare(scope, projectID)
 	if err != nil {
 		return "error: " + err.Error()
 	}
-	offer.PIN = pin
 
 	ctx, cancel := context.WithTimeout(a.getCtx(), shareSendTimeout)
+	defer cancel()
+
+	if err := a.share.Send(ctx, peerID, offer, payload); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// NewConnectionCode returns a fresh code for the user to read out.
+//
+// Generation is local and has nothing to do with the network, so the sender's
+// dialog can show the code the instant it opens rather than after a round trip
+// — the other person is usually already waiting on the phone.
+func (a *App) NewConnectionCode() string {
+	code, err := share.GeneratePIN()
+	if err != nil {
+		return ""
+	}
+	return code
+}
+
+// ConnectToPeer asks a peer to connect, and blocks until that device's user has
+// typed the code. Returns "ok" or "error: …".
+//
+// Only the code's hash goes over the wire — see share.RequestConnect.
+func (a *App) ConnectToPeer(peerID, code string) string {
+	ctx, cancel := context.WithTimeout(a.getCtx(), connectTimeout)
+	defer cancel()
+
+	if err := a.share.RequestConnect(ctx, peerID, code); err != nil {
+		return "error: " + err.Error()
+	}
+	return "ok"
+}
+
+// AnswerConnectRequest submits a code typed into the connection prompt.
+//
+// Returns "ok", "expired" when the request is no longer waiting, or
+// "wrong: <attempts left>" — the count is returned rather than kept quiet so
+// the dialog can warn before the last try rather than after it.
+func (a *App) AnswerConnectRequest(requestID, code string) string {
+	matched, remaining, found := a.share.AnswerConnect(requestID, code)
+	switch {
+	case !found:
+		return "expired"
+	case matched:
+		return "ok"
+	default:
+		return fmt.Sprintf("wrong: %d", remaining)
+	}
+}
+
+// DeclineConnectRequest refuses a pending connection request.
+func (a *App) DeclineConnectRequest(requestID string) string {
+	if !a.share.DeclineConnect(requestID) {
+		return "expired"
+	}
+	return "ok"
+}
+
+// DisconnectPeer closes a connection that was accepted earlier, so that device
+// has to ask again before it can send anything.
+func (a *App) DisconnectPeer(peerID string) string {
+	a.share.DismissConnect(peerID)
+	return "ok"
+}
+
+// PickFilesToShare opens a native multi-select picker for arbitrary files.
+// Cancelling and failing both yield an empty slice, never nil.
+func (a *App) PickFilesToShare() []string {
+	paths, err := wailsRuntime.OpenMultipleFilesDialog(a.getCtx(), wailsRuntime.OpenDialogOptions{
+		Title: "Choose files to send",
+	})
+	if err != nil {
+		log.Printf("[PickFilesToShare] %v", err)
+		return []string{}
+	}
+	if paths == nil {
+		return []string{}
+	}
+	return paths
+}
+
+// InitiateFileShare sends files off this machine's disk to a peer.
+//
+// Separate from InitiateShare rather than another scope on it because the two
+// take different arguments and build entirely different payloads; folding them
+// together would mean a signature where half the parameters are always empty.
+func (a *App) InitiateFileShare(peerID string, paths []string) string {
+	files, err := share.PrepareFiles(paths)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+
+	var total int64
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		total += f.Size
+		names = append(names, f.Name)
+	}
+
+	offer := models.ShareOffer{
+		TransferID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		Scope:      share.ScopeFiles,
+		FileNames:  names,
+		TotalBytes: total,
+	}
+	payload := models.SharePayload{Scope: share.ScopeFiles, Files: files}
+
+	ctx, cancel := context.WithTimeout(a.getCtx(), fileSendTimeout)
 	defer cancel()
 
 	if err := a.share.Send(ctx, peerID, offer, payload); err != nil {
@@ -272,6 +381,15 @@ func (a *App) RespondToShare(transferID string, accept bool) string {
 // shareSendTimeout bounds a whole outbound transfer, including the time the
 // other person spends deciding.
 const shareSendTimeout = 3 * time.Minute
+
+// fileSendTimeout is longer because the payload can be tens of megabytes and
+// the decision wait sits in front of it either way.
+const fileSendTimeout = 12 * time.Minute
+
+// connectTimeout bounds a connection request. There is a person deciding at the
+// other end, so it is measured in the same minutes as a transfer rather than in
+// network round trips.
+const connectTimeout = 3 * time.Minute
 
 // buildShare assembles the payload and its offer header.
 //
@@ -311,14 +429,51 @@ func (a *App) buildShare(scope, projectID string) (models.SharePayload, models.S
 	return payload, offer, nil
 }
 
-// applySharedPayload merges a received payload into the local config. Runs on a
-// libp2p handler goroutine, after the user has accepted.
+// applySharedPayload applies a received payload. Runs on a libp2p handler
+// goroutine, after the user has accepted.
+//
+// A files payload is written to disk and nothing else; it never touches config,
+// and config is never written from a files transfer. Which one it is comes from
+// the payload's own scope rather than from which fields happen to be populated,
+// so a payload claiming to be config cannot smuggle files past the prompt the
+// user actually saw.
 func (a *App) applySharedPayload(p models.SharePayload) string {
+	if p.Scope == share.ScopeFiles {
+		return a.saveSharedFiles(p.Files)
+	}
+
 	summary, err := a.cfg.ImportProjectsFromSlice(p.Projects)
 	if err != nil {
 		return "Import failed: " + err.Error()
 	}
 	return summary
+}
+
+// saveSharedFiles writes received files and reports where they went — the path
+// is the whole point of the summary, since a file the user cannot find is one
+// they did not receive.
+func (a *App) saveSharedFiles(files []models.SharedFile) string {
+	if len(files) == 0 {
+		return "Received nothing"
+	}
+
+	dir, err := share.ReceiveDir()
+	if err != nil {
+		return "Could not save files: " + err.Error()
+	}
+	written, err := share.SaveFiles(dir, files)
+	if err != nil {
+		if len(written) == 0 {
+			return "Could not save files: " + err.Error()
+		}
+		return fmt.Sprintf("Saved %d of %d file(s) to %s — %v",
+			len(written), len(files), dir, err)
+	}
+
+	if len(written) == 1 {
+		return "Saved " + filepath.Base(written[0]) + " to " + dir
+	}
+	return fmt.Sprintf("Saved %d files to %s", len(written), dir)
 }
 
 // --- Audio ---

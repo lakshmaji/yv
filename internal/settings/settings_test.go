@@ -361,52 +361,6 @@ func TestSavedFileIsValidJSON(t *testing.T) {
 	}
 }
 
-func TestValidateSharePIN(t *testing.T) {
-	tests := []struct {
-		name string
-		pin  string
-		ok   bool
-	}{
-		{"empty means no PIN", "", true},
-		{"whitespace is treated as empty", "   ", true},
-		{"four digits is the minimum", "1234", true},
-		{"twelve digits is the maximum", "123456789012", true},
-		{"surrounding space is tolerated", " 1234 ", true},
-		{"three digits is too short", "123", false},
-		{"thirteen digits is too long", "1234567890123", false},
-		{"letters are rejected", "12ab", false},
-		{"punctuation is rejected", "12-34", false},
-		{"inner space is rejected", "12 34", false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateSharePIN(tc.pin)
-			if tc.ok && err != nil {
-				t.Errorf("ValidateSharePIN(%q) = %v, want nil", tc.pin, err)
-			}
-			if !tc.ok && err == nil {
-				t.Errorf("ValidateSharePIN(%q) = nil, want an error", tc.pin)
-			}
-		})
-	}
-}
-
-func TestNormalizeTrimsSharePIN(t *testing.T) {
-	got := Normalize(models.Settings{SharePIN: "  4829  "})
-	if got.SharePIN != "4829" {
-		t.Errorf("SharePIN = %q, want %q", got.SharePIN, "4829")
-	}
-}
-
-// The zero value has to keep meaning "no PIN", or an older settings file would
-// suddenly require one.
-func TestZeroSettingsHasNoSharePIN(t *testing.T) {
-	if got := Normalize(models.Settings{}); got.SharePIN != "" {
-		t.Errorf("SharePIN = %q, want empty for zero settings", got.SharePIN)
-	}
-}
-
 func TestValidateDroneVariant(t *testing.T) {
 	tests := []struct {
 		name    string

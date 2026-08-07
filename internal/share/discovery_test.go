@@ -28,7 +28,6 @@ func TestMDNSDiscoversPeer(t *testing.T) {
 
 	b := New(nil)
 	b.localName = "Bronte"
-	b.SetPIN("482910")
 	if err := b.Start(nil); err != nil {
 		t.Fatalf("start b: %v", err)
 	}
@@ -45,15 +44,17 @@ func TestMDNSDiscoversPeer(t *testing.T) {
 	if found.Name != "Bronte" {
 		t.Errorf("Name = %q, want %q — the hello handshake did not resolve the hostname", found.Name, "Bronte")
 	}
+	// Every device requires a connection code; there is no setting that opens
+	// one up, so this is true of any peer that answers hello at all.
 	if !found.PINRequired {
-		t.Error("PINRequired = false, want true — b has a PIN set")
+		t.Error("PINRequired = false, want true — every device needs a code")
 	}
 
 	// Discovery is symmetric: both sides browse, so b should see a as well.
 	if back := waitForPeer(b, a.host.ID().String(), 30*time.Second); back == nil {
 		t.Error("b never discovered a")
-	} else if back.PINRequired {
-		t.Error("a was reported as needing a PIN, but none is set on it")
+	} else if !back.PINRequired {
+		t.Error("a was reported as needing no code")
 	}
 }
 

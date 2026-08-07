@@ -1070,3 +1070,154 @@ field escaped the same fate only because `.settings-row-control input[type="numb
 happens to be more specific. Fixed by naming the ancestor
 (`.modal-box .settings-pin-input`) and giving `.settings-row-main` `flex: 1`, so a
 control that turns out wider than expected can no longer collapse the label column.
+
+---
+
+## Implemented: Connect by code, then send anything
+
+### Goal
+
+Two changes to the share flow:
+
+1. **Connecting is its own step, gated by a code**, settled before the user
+   chooses anything to send.
+2. **Files can be sent**, not just config — anything on the local disk, picked
+   through the native file dialog.
+
+### The flow
+
+```
+tap a dinosaur
+  -> this device draws an 8-character code and shows it large
+  -> the user reads it out; the other screen says "<name> wants to connect"
+  -> that person types it             -> connected (15 min)
+  -> the share dialog opens: one project / everything / files
+  -> they accept the transfer itself  -> it lands
+```
+
+Two prompts, deliberately. The first asks *who*, the second asks *what*, and
+they are answered at different moments by different people.
+
+### Only the hash crosses the wire
+
+The code is generated on the **sending** side and never leaves it — the offer
+carries `HashPIN(code)`. So the receiving device *cannot display it*: the only
+way its user has the code is that someone told them. That is the entire
+mechanism. Possession of the code is evidence that two people actually spoke,
+which is precisely what a stranger on the same Wi-Fi cannot produce, however
+many times they ask. `TestConnectCodeNeverReachesTheReceiverInTheClear` guards it.
+
+It also means there is no network oracle to grind: wrong codes are typed locally
+into the receiver's own dialog, not submitted over the wire, so the only limit
+needed is `MaxCodeAttempts` (5) — after which the request is dropped. The dialog
+counts down out loud, because a request that vanishes on the fifth try without
+warning reads as a bug.
+
+**Mandatory, with no setting.** The stored `SharePIN` is gone from Settings
+entirely. A lock people can quietly leave open is one that is quietly left open,
+and a per-attempt code makes the old "leave it empty" default meaningless.
+`hello` therefore always reports `pinRequired: true`; the field survives only so
+an older peer that answers `false` is read truthfully rather than assumed open.
+
+### The connection is enforced, not just a screen
+
+`conns` records who has been let in, for `ConnTTL` (15 minutes, extended by use
+so a long browse for a file does not lapse mid-choice). A transfer from a peer
+that never connected is answered `respNoConn` **without a prompt** — skipping the
+connect step must not be a way around the decision made in it
+(`TestSendWithoutConnectingIsRefused`).
+
+### The alphabet is chosen for reading aloud
+
+31 symbols: uppercase and digits with every homoglyph removed — no `O` or `0`,
+no `I`, `L` or `1`. A transcription error surfaces only as a flat refusal with
+no hint which character was wrong, so the fix belongs in the alphabet. Matching
+folds case for the same reason. Drawn with `crypto/rand` by rejection sampling,
+because 31 does not divide 256 and a plain modulo would make the first few
+letters measurably likelier. Displayed 4 + 4: eight unbroken characters get read
+back wrongly far more often.
+
+### Files
+
+`SharePayload` gains `Files []SharedFile`, under scope `"files"`. Config and
+files never travel together, and **`applySharedPayload` branches on the payload's
+scope, not on which fields happen to be populated** — otherwise a payload the
+user accepted as config could still drop files on their disk.
+
+`SharedFile.Data` is a `[]byte`, so `encoding/json` renders it as base64 and the
+existing gzip'd-JSON transport carries it unchanged. No second codec, no
+chunking: the stream is already framed, ordered and encrypted by libp2p, and the
+bound that matters is memory, not the wire.
+
+Caps are the memory bound: 32 MB per file, 64 MB per transfer, 64 files. The
+receiver's decompression limit is derived from the sender's cap
+(`maxFilePayload = MaxTotalBytes*2 + 1MB`), with a test asserting the two do not
+drift — otherwise a transfer the sender was allowed to build would be refused on
+arrival. Config keeps its old tight 16 MB bound; the limit and the deadline are
+both chosen from the offer's scope.
+
+### The filename is the attack surface
+
+`SafeName` treats an inbound name as hostile, because it decides a path we are
+about to write to: both separator kinds (a Windows-shaped name can reach a Mac),
+the parent-directory entry, control characters and a leading dot are all
+removed, and an empty result becomes a placeholder rather than a name that
+resolves to the directory itself. `SaveFiles` sanitises **again** rather than
+trusting its caller — it is the last step before a path is written.
+
+An existing file is never overwritten; a collision becomes `name (2).ext`. The
+receiver agreed to accept a file, not to lose one.
+
+Files land in `~/Downloads/yv-received` because that is where every other app
+puts things that arrived from elsewhere, and it is not a directory anything of
+theirs depends on. The summary names the folder — a file the user cannot find is
+one they did not receive. The inbound prompt **lists the filenames**, not just a
+count: the name is the only thing that tells the receiver whether this is what
+they were expecting.
+
+### A refusal, a silence, and an old build are three different things
+
+The first version of this reported all three as "they did not accept the
+connection", which is worse than useless: it names a decision the other person
+never made. So the protocol distinguishes them.
+
+`respNoAnswer` is written when the prompt expires untouched, separately from
+`respDecline`. The sender says "no answer yet — they have not typed the code"
+rather than accusing anyone of refusing, and only one of the two is worth
+retrying.
+
+`ShareProto` moved to **1.1.0**. A build from before this change would read a
+connection request as a transfer offer — it would prompt its user to accept a
+payload that never arrives (this is where the phantom `the project "untitled"`
+prompt came from) and answer with a PIN refusal that reads here as a decline.
+Versioning the protocol makes that impossible: the stream simply cannot be
+opened, `isUnsupported` recognises the negotiation failure, and the dialog says
+"that device is running an older version of yv". `TestShareProtocolIsVersioned`
+guards the number against a careless revert.
+
+`decisionWait` is a field on `Node` rather than the constant inline, purely so a
+test can exercise the timeout branch without waiting two minutes for it.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/share/connect.go` | New — `connTable` (who is let in, `ConnTTL`), `connReq` (a pending request and its attempt count) |
+| `internal/share/helpers.go` | `GeneratePIN`, `pinAlphabet`, `NormalizePIN` (case folding), `CodeMatches` |
+| `internal/share/transfer.go` | `handleConnect`, `RequestConnect`, `AnswerConnect`, `DeclineConnect`, `respNoConn`/`respNoAnswer`, `isUnsupported`, scope-driven payload limits |
+| `internal/share/node.go` | `ShareProto` 1.1.0, `conns`, `connPending`, `decisionWait`, scope constants; `SetPIN`/`requiredPIN`/`pinFails` removed, `hello` always requires a code |
+| `internal/share/files.go` | New — `PrepareFiles`, `SafeName`, `SaveFiles`, `ReceiveDir`, `HumanSize`, size/count caps |
+| `internal/share/files_test.go` | New — sanitising (incl. a stays-inside-the-directory property), caps, no-overwrite |
+| `internal/share/*_test.go` | Handshake e2e, code generation/alphabet/case, conn table and attempt counting |
+| `internal/models/models.go` | `SharedFile`, `SharePayload.Files`, `ShareOffer.Kind`/`FileNames`/`TotalBytes`, `OfferKindConnect`; `Settings.SharePIN` removed |
+| `internal/settings/settings.go` | `ValidateSharePIN` and the PIN bounds removed |
+| `app.go` | `NewConnectionCode`, `ConnectToPeer`, `AnswerConnectRequest`, `DeclineConnectRequest`, `DisconnectPeer`, `PickFilesToShare`, `InitiateFileShare`, `saveSharedFiles` |
+| `app_share_test.go` | A files share must not touch config, and a config share must not write files |
+| `frontend/src/components/modals/PeerConnectModal.tsx` | New — draws the code, shows it, waits |
+| `frontend/src/components/modals/IncomingConnectModal.tsx` | New — types the code, counts attempts down |
+| `frontend/src/components/modals/ShareModal.tsx` | PIN field gone; third scope with file picker, list and per-row removal |
+| `frontend/src/components/modals/IncomingShareModal.tsx` | Names the offered files and says where they land |
+| `frontend/src/components/modals/SettingsModal.tsx` | The PIN row is now an explanation, not a control |
+| `frontend/src/store.ts` | `shareStage`, `openShareWith`, `pinAccepted`, `incomingConnect` |
+| `frontend/src/App.tsx` | `share:connect-request` / `share:connect-closed`; mounts the inbound connect dialog globally |
+| `frontend/src/styles.css` | `.connect-modal`, code typography, spinner, file list rows, three-column scope grid |

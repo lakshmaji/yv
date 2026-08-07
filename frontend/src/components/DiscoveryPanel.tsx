@@ -18,8 +18,8 @@ import {
   peers,
   setPeers,
   peerByName,
-  setSharePeer,
-  setShareError,
+  openShareWith,
+  shareStage,
   sharePeer,
 } from '../store';
 import { generateWorld, openGround, worldBiomeKinds, WORLD_H, WORLD_W } from '../lib/landscape/world';
@@ -43,6 +43,7 @@ import { go } from '../wails';
 import LandscapeMap from './discovery/LandscapeMap';
 import NoDevicesModal from './modals/NoDevicesModal';
 import ShareModal from './modals/ShareModal';
+import PeerConnectModal from './modals/PeerConnectModal';
 
 const BIOME_LABELS: Record<BiomeKind, string> = {
   grass: 'Lowland',
@@ -318,10 +319,7 @@ export default function DiscoveryPanel() {
     const peer = peerByName().get(dino.name);
     // A dinosaur with no peer behind it means the herd is mid-update; ignoring
     // the click is better than opening a modal that cannot send anything.
-    if (peer) {
-      setShareError(null);
-      setSharePeer(peer);
-    }
+    if (peer) openShareWith(peer);
   }
 
   function roar(dino: Dino): void {
@@ -638,7 +636,12 @@ export default function DiscoveryPanel() {
         </div>
       </div>
 
-      <Show when={sharePeer()}>
+      {/* Connecting comes first and on its own: nothing is composed until the
+          far end has let us in. */}
+      <Show when={sharePeer() && shareStage() === 'connect'}>
+        <PeerConnectModal />
+      </Show>
+      <Show when={sharePeer() && shareStage() === 'transfer'}>
         <ShareModal />
       </Show>
 
