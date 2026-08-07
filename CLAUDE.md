@@ -1732,3 +1732,51 @@ flag for the other.
 The frontend keeps a backstop: `peer:lost` no longer clears `sharePeer` while
 `shareBusy()`. The transfer reports its own errors, and pulling the dialog would
 hide whichever one it was about to give.
+
+
+---
+
+## Removed: the dev-only sample dashboard data
+
+The "Load sample data" button, the checked-in three-month spec, and the seeder
+behind them are gone.
+
+It never affected a release build — `app_nodev.go` was the production stub, so
+`SampleDataAvailable()` returned false and the button was hidden — but it was a
+whole feature's worth of surface (an embedded fixture, a build tag, a generator,
+three tests validating the fixture) earning its keep only during development,
+and the dashboard now has real metrics to render.
+
+Deleted: `testdata/dashboard-sample-3months.json`, `app_dev.go`, `app_nodev.go`,
+`internal/metrics/sample.go` and its test (`ExpandSample`, `ImportSample` and
+`SampleSpec` had no other callers — checked before removing), the two Wails
+bindings, the button and its `.dash-sample` styling.
+
+The `yvdev` build tag went with it, since `app_dev.go` was the only thing it
+compiled. `make run` and `make run-linux` no longer pass it, and `build-dev` —
+which existed purely to package a binary that could seed sample data — is gone.
+`LINUX_TAGS` stays: `webkit2_41` is a real platform tag and unrelated.
+
+## Fixed: the activity heatmap left most of the card empty
+
+Cells were a fixed 11px, so 53 weeks came to ~740px inside a full-width panel —
+about 600px of dead space to the right of the year.
+
+Everything is fractional now: weeks are `flex: 1 1 0`, cells stay square through
+`aspect-ratio`, and the year stretches to fill the card. Two alignments had to
+follow, and both would have drifted silently otherwise:
+
+- **Weekday labels** were on fixed 11px rows. They are now `repeat(7, 1fr)` in a
+  column stretched to the grid's height, so they track whatever the cells become.
+- **Month labels** are placed by week index, so the label grid takes its column
+  count from `grid().weeks.length`, with `minmax(9px, 1fr)` mirroring the weeks'
+  own floor — that way they stay aligned when a narrow window scrolls the grid
+  instead of shrinking it.
+
+`min-width` on a week is what makes a narrow window scroll rather than squash the
+year into slivers. The legend swatches are pinned to 11px explicitly, since they
+sit outside the grid and would otherwise inherit the stretched size.
+
+Two invariants the CSS now depends on, and which are invisible from the
+stylesheet, are asserted in `heatmap.test.ts`: every month label's column falls
+inside the week range, and every week is padded to seven rows.

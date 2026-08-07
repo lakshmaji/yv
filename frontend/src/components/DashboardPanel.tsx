@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { createEffect, createMemo, For, Show } from 'solid-js';
 import {
   appSettings,
   activityHeatmap,
@@ -38,21 +38,9 @@ const RANGE_OPTIONS: { days: number; label: string }[] = [
 export default function DashboardPanel() {
   const enabled = () => appSettings().metricsEnabled;
 
-  // Whether this build can seed sample data. Asked of Go rather than read from
-  // import.meta.env.DEV: Vite runs a production build under `make build-dev`
-  // too, so only the Go build tag knows the answer.
-  const [canSeed, setCanSeed] = createSignal(false);
-  onMount(async () => {
-    try {
-      setCanSeed(await go.SampleDataAvailable());
-    } catch {
-      setCanSeed(false);
-    }
-  });
-
   // Go groups by project ID, which is a UUID. Swap in the project name so the
-  // legend is readable; an ID with no matching project (a deleted project, or
-  // seeded sample data) falls back to the raw key.
+  // legend is readable; an ID with no matching project — a deleted one — falls
+  // back to the raw key.
   const resolved = createMemo(() => {
     const result = metricsResult();
     if (!result || result.groupBy !== 'project') return result;
@@ -84,17 +72,6 @@ export default function DashboardPanel() {
     const rangeDays = dashRangeDays();
     void loadDashboard({ metrics: go.GetMetrics, frequency: go.GetUsageFrequency, activity: go.GetActivityHeatmap }, { groupBy, rangeDays });
   });
-
-  // Development only — hidden unless Go reports the seeder is compiled in.
-  // the Go binding behind it lives behind the `yvdev` build tag.
-  async function loadSample() {
-    try {
-      const msg = await go.ImportSampleMetrics();
-      if (msg) refresh();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   function refresh() {
     void loadDashboard(
@@ -141,12 +118,6 @@ export default function DashboardPanel() {
               )}
             </For>
           </div>
-
-          <Show when={canSeed()}>
-            <button type="button" class="dash-sample" onClick={loadSample} title="Development only">
-              ⇣ Load sample data
-            </button>
-          </Show>
 
           <button type="button" class="dash-refresh" onClick={refresh} disabled={dashLoading()}>
             {dashLoading() ? 'Loading…' : '↻ Refresh'}

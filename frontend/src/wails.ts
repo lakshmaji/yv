@@ -83,11 +83,6 @@ interface GoApp {
   InitiateFileShare(peerID: string, paths: string[]): Promise<string>;
   /** Delivers the user's decision to a waiting inbound transfer. */
   RespondToShare(transferID: string, accept: boolean): Promise<string>;
-
-  /** True only in a build made with `-tags yvdev` (see app_dev.go). */
-  SampleDataAvailable(): Promise<boolean>;
-  /** Development builds only — rejects in a production build (see app_nodev.go). */
-  ImportSampleMetrics(): Promise<string>;
 }
 
 export type { GoApp };

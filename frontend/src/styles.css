@@ -2223,20 +2223,6 @@
       color: #fff;
     }
 
-    .dash-sample {
-      background: var(--card);
-      border: 1px dashed var(--border);
-      color: var(--muted);
-      border-radius: var(--radius);
-      font-size: 11px;
-      padding: 5px 11px;
-      cursor: pointer;
-      margin-left: auto;
-    }
-    .dash-sample:hover { border-color: var(--yellow); color: var(--yellow); }
-    /* When the dev-only sample button is present it takes over the spacer role. */
-    .dash-sample + .dash-refresh { margin-left: 0; }
-
     .dash-refresh {
       margin-left: auto;
       background: var(--card);
@@ -2372,15 +2358,18 @@
     }
 
     /* ── Activity heatmap ────────────────────────────────── */
-    /* 53 weeks at 14px is ~742px, so a narrow window needs to scroll. */
+    /* The year stretches to fill the card rather than sitting at a fixed 11px
+       cell, which left most of a full-width panel empty. Every track is 1fr, so
+       the month labels stay aligned to their week columns at any width, and the
+       cells stay square via aspect-ratio. min-width on a week is what makes a
+       narrow window scroll instead of squashing the year into slivers. */
     .heatmap-scroll { overflow-x: auto; padding-bottom: 4px; }
 
     .heat-summary { font-size: 11px; color: var(--muted); }
 
     .heat-months {
       display: grid;
-      grid-auto-columns: 14px;
-      grid-auto-flow: column;
+      gap: 3px;
       margin-left: 30px;
       height: 14px;
     }
@@ -2393,29 +2382,35 @@
 
     .heat-body { display: flex; gap: 3px; }
 
+    /* Rows are fractions of the stretched height rather than a fixed 11px, so
+       the labels keep lining up with the rows once the cells resize. */
     .heat-weekdays {
       display: grid;
-      grid-template-rows: repeat(7, 11px);
+      grid-template-rows: repeat(7, 1fr);
       gap: 3px;
       width: 27px;
       flex-shrink: 0;
     }
     .heat-weekday {
+      display: flex;
+      align-items: center;
       font-size: 9px;
       color: var(--muted);
-      line-height: 11px;
     }
 
-    .heatmap { display: flex; gap: 3px; }
+    .heatmap { display: flex; gap: 3px; flex: 1; min-width: 0; }
     .heat-week {
       display: grid;
-      grid-template-rows: repeat(7, 11px);
+      grid-template-rows: repeat(7, auto);
       gap: 3px;
+      flex: 1 1 0;
+      /* Below this the year stops being readable, so it scrolls instead. */
+      min-width: 9px;
     }
 
     .heat-cell {
-      width: 11px;
-      height: 11px;
+      width: 100%;
+      aspect-ratio: 1;
       border-radius: 2px;
       /* Distinct from the card behind it, so quiet days still read as days. */
       background: #232b36;
@@ -2449,6 +2444,14 @@
       font-size: 10px;
       color: var(--muted);
       margin-left: auto;
+    }
+    /* The legend sits outside the grid, so its swatches keep a fixed size
+       rather than inheriting the stretched one. */
+    .heat-legend .heat-cell {
+      width: 11px;
+      height: 11px;
+      aspect-ratio: auto;
+      flex-shrink: 0;
     }
     .heat-legend .heat-cell:hover { outline: none; }
 

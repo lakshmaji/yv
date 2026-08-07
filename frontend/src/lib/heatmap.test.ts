@@ -129,6 +129,25 @@ describe('buildHeatmapGrid', () => {
     expect([...cols].sort((a, b) => a - b)).toEqual(cols);
   });
 
+  // The layout places month labels by week index into a grid with one column
+  // per week, and pads every week to seven rows so the weekday labels line up.
+  // Both only hold if the grid keeps these shapes, and neither is visible from
+  // the CSS side.
+  it('keeps every month label inside the week range', () => {
+    const grid = buildHeatmapGrid([], today, 365);
+    for (const m of grid.monthLabels) {
+      expect(m.col).toBeGreaterThanOrEqual(0);
+      expect(m.col).toBeLessThan(grid.weeks.length);
+    }
+  });
+
+  it('pads every week to seven rows', () => {
+    const grid = buildHeatmapGrid([], today, 365);
+    for (const week of grid.weeks) {
+      expect(week).toHaveLength(7);
+    }
+  });
+
   it('handles a one-day span', () => {
     const grid = buildHeatmapGrid([day('2024-03-15', 3)], today, 1);
     const cells = grid.weeks.flat().filter(Boolean);

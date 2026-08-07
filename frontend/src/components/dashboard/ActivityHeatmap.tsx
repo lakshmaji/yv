@@ -36,7 +36,18 @@ export default function ActivityHeatmap(props: Props) {
         onFocusIn={handlePointerOver}
         onPointerLeave={() => setHovered('')}
       >
-        <div class="heat-months">
+        {/* One column per week, sized in fractions to match the grid below —
+            the weeks stretch to fill the card, so a fixed column width here
+            would drift further out of alignment the wider the panel got. */}
+        <div
+          class="heat-months"
+          style={{
+            // minmax mirrors the weeks' `flex: 1 1 0; min-width: 9px`, so the
+            // labels stay aligned when a narrow window makes the grid scroll
+            // rather than shrink.
+            'grid-template-columns': `repeat(${grid().weeks.length}, minmax(9px, 1fr))`,
+          }}
+        >
           <For each={grid().monthLabels}>
             {(m) => (
               <span class="heat-month" style={{ 'grid-column': `${m.col + 1}` }}>

@@ -18,26 +18,19 @@ else
   WEBKIT_DEV := libwebkit2gtk-4.0-dev
 endif
 
-.PHONY: run install fmt test test-go test-frontend build build-dev dmg \
+.PHONY: run install fmt test test-go test-frontend build dmg \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
         doctor-linux
 
 install:
 	go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1
 
-# The `yvdev` tag compiles app_dev.go, which enables importing sample dashboard
-# data. `build` deliberately omits it, so no seeding code ships to production.
 run: $(WAILS)
 ifeq ($(UNAME_S),Linux)
-	$(WAILS) dev -tags "yvdev $(LINUX_TAGS)"
+	$(WAILS) dev $(if $(LINUX_TAGS),-tags $(LINUX_TAGS),)
 else
-	$(WAILS) dev -tags yvdev
+	$(WAILS) dev
 endif
-
-# A production-shaped build with the dev tooling still available, for testing
-# the packaged app against sample data.
-build-dev: $(WAILS)
-	$(WAILS) build -platform darwin/arm64 -tags yvdev
 
 fmt:
 	gofmt -w $(shell find . -name "*.go" -not -path "*/wailsjs/*")
@@ -120,9 +113,9 @@ build-linux: $(WAILS)
 	@echo
 	@echo "Built build/bin/yv — run it directly, or 'make deb' to package it."
 
-# Same as build-linux but with the sample-data tooling compiled in.
+# The dev server on Linux, where the webkit tag matters.
 run-linux: $(WAILS)
-	$(WAILS) dev -tags "yvdev $(LINUX_TAGS)"
+	$(WAILS) dev $(if $(LINUX_TAGS),-tags $(LINUX_TAGS),)
 
 deb: build-linux
 	@bash build/linux/package-deb.sh
