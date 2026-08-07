@@ -32,8 +32,10 @@ frontend/package-lock.json
 frontend/package.json.md5
 
 # Local sound clips. No audio ships with the app — users add their own in
-# Settings, so these are samples for development only.
-assets/
+# Settings, so these are samples for development only. Anchored to the repo root:
+# an unanchored `assets/` also swallowed .github/assets/, so a new screenshot there
+# was ignored while the older ones survived only by already being tracked.
+/assets/
 
 # Binary
 yv
