@@ -1,15 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
   catmullRomPath,
+  catmullRomPoints,
   centroid,
   clampInside,
+  curvatures,
   dist,
   insetPolygon,
   jitterRing,
   lerp,
   nearestIndex,
+  normal,
   pointInPolygon,
   polygonPath,
+  resample,
+  sampleScalar,
+  tangents,
   type Pt,
 } from './geometry';
 import { makeRng } from './rng';
@@ -173,5 +179,166 @@ describe('nearestIndex', () => {
 
   it('is -1 for an empty list', () => {
     expect(nearestIndex({ x: 0, y: 0 }, [])).toBe(-1);
+  });
+});
+
+describe('catmullRomPoints', () => {
+  const OPEN: Pt[] = [
+    { x: 0, y: 0 },
+    { x: 50, y: 40 },
+    { x: 120, y: 10 },
+    { x: 180, y: 90 },
+  ];
+
+  it('samples every span and passes through every control point', () => {
+    const per = 6;
+    const out = catmullRomPoints(OPEN, per);
+    expect(out).toHaveLength((OPEN.length - 1) * per + 1);
+    for (let j = 0; j < OPEN.length; j++) {
+      expect(out[j * per].x).toBeCloseTo(OPEN[j].x, 6);
+      expect(out[j * per].y).toBeCloseTo(OPEN[j].y, 6);
+    }
+  });
+
+  it('lands on the curve the path string draws', () => {
+    // The final control point is the last coordinate pair the path emits, so the
+    // two representations must agree at least there — the samples are not a
+    // separate curve fitted alongside.
+    const d = catmullRomPath(OPEN, false);
+    const out = catmullRomPoints(OPEN, 4);
+    const end = out[out.length - 1];
+    expect(d.endsWith(`${end.x} ${end.y}`)).toBe(true);
+  });
+
+  it('survives degenerate input', () => {
+    expect(catmullRomPoints([], 4)).toEqual([]);
+    expect(catmullRomPoints([{ x: 3, y: 4 }], 4)).toEqual([{ x: 3, y: 4 }]);
+    const dupe = catmullRomPoints([{ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 1 }], 4);
+    for (const p of dupe) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+  });
+});
+
+describe('resample', () => {
+  const LINE: Pt[] = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+  ];
+
+  it('walks at a fixed spacing and keeps both ends', () => {
+    const out = resample(LINE, 20);
+    expect(out[0].p).toEqual({ x: 0, y: 0 });
+    expect(out[out.length - 1].p).toEqual({ x: 100, y: 100 });
+    for (let i = 1; i < out.length - 1; i++) {
+      expect(dist(out[i - 1].p, out[i].p)).toBeCloseTo(20, 6);
+    }
+  });
+
+  it('reports a monotone fractional index into the source', () => {
+    const out = resample(LINE, 7);
+    expect(out[0].at).toBe(0);
+    expect(out[out.length - 1].at).toBe(LINE.length - 1);
+    for (let i = 1; i < out.length; i++) expect(out[i].at).toBeGreaterThanOrEqual(out[i - 1].at);
+  });
+
+  it('does not divide by a zero-length span', () => {
+    const out = resample([{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 50, y: 5 }], 10);
+    for (const s of out) {
+      expect(Number.isFinite(s.p.x)).toBe(true);
+      expect(Number.isFinite(s.at)).toBe(true);
+    }
+  });
+
+  it('degrades safely', () => {
+    expect(resample([], 5)).toEqual([]);
+    expect(resample(LINE, 0)).toHaveLength(1);
+  });
+});
+
+describe('sampleScalar', () => {
+  const VALUES = [10, 20, 40];
+
+  it('reads exactly at whole indices and interpolates between them', () => {
+    expect(sampleScalar(VALUES, 0)).toBe(10);
+    expect(sampleScalar(VALUES, 2)).toBe(40);
+    expect(sampleScalar(VALUES, 1.5)).toBe(30);
+  });
+
+  it('clamps outside the range instead of extrapolating', () => {
+    expect(sampleScalar(VALUES, -4)).toBe(10);
+    expect(sampleScalar(VALUES, 9)).toBe(40);
+    expect(sampleScalar([], 1)).toBe(0);
+  });
+});
+
+describe('tangents / normal', () => {
+  it('is unit-length and constant along a straight line', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+      { x: 30, y: 0 },
+    ];
+    for (const t of tangents(line)) {
+      expect(Math.hypot(t.x, t.y)).toBeCloseTo(1, 9);
+      expect(t).toEqual({ x: 1, y: 0 });
+    }
+  });
+
+  it('never returns NaN when consecutive points coincide', () => {
+    // Reachable in the real data: a tributary ends exactly on a trunk vertex.
+    const dupes = [
+      { x: 4, y: 4 },
+      { x: 4, y: 4 },
+      { x: 40, y: 4 },
+      { x: 40, y: 4 },
+    ];
+    for (const t of tangents(dupes)) {
+      expect(Math.hypot(t.x, t.y)).toBeCloseTo(1, 9);
+    }
+    for (const t of tangents([{ x: 1, y: 1 }, { x: 1, y: 1 }])) {
+      expect(Number.isFinite(t.x)).toBe(true);
+      expect(Number.isFinite(t.y)).toBe(true);
+    }
+    expect(tangents([])).toEqual([]);
+  });
+
+  it('turns the tangent a quarter turn to the left, in y-down space', () => {
+    expect(normal({ x: 1, y: 0 })).toEqual({ x: -0, y: 1 });
+    expect(normal({ x: 0, y: 1 })).toEqual({ x: -1, y: 0 });
+  });
+});
+
+describe('curvatures', () => {
+  it('recovers 1/R on a sampled circle', () => {
+    const R = 80;
+    const circle = Array.from({ length: 24 }, (_, i) => {
+      const a = (i / 24) * Math.PI * 2;
+      return { x: Math.cos(a) * R, y: Math.sin(a) * R };
+    });
+    const k = curvatures(circle);
+    for (let i = 1; i < k.length - 1; i++) expect(Math.abs(k[i])).toBeCloseTo(1 / R, 4);
+  });
+
+  it('is zero on a straight line and flips sign with the turn', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+    ];
+    expect(curvatures(line)).toEqual([0, 0, 0]);
+
+    const leftTurn = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 10 }];
+    const rightTurn = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: -10 }];
+    expect(Math.sign(curvatures(leftTurn)[1])).toBe(-Math.sign(curvatures(rightTurn)[1]));
+  });
+
+  it('pins the ends to zero and never divides by a coincident triple', () => {
+    const k = curvatures([{ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 1 }]);
+    expect(k).toEqual([0, 0, 0]);
+    expect(curvatures([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toEqual([0, 0]);
   });
 });

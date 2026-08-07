@@ -103,6 +103,13 @@ export interface AppSettings {
   /** The user's own sound files. Empty means the dinosaurs are silent. */
   audioClips?: string[];
   /**
+   * Stops the sea and the rivers moving. Inverted for the same reason as
+   * `soundMuted`, and separate from the toolbar's Motion toggle: that one is a
+   * per-session switch over the whole map, this is a persisted preference about
+   * the one layer that never stops.
+   */
+  waterStill?: boolean;
+  /**
    * Which airframe the Discovery view sends out, by id. Empty — the default —
    * means the first of the fleet, and so does an id this build doesn't know.
    */

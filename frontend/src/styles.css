@@ -2840,13 +2840,39 @@
       0%   { transform: translateX(-360px); }
       100% { transform: translateX(1960px); }
     }
-    @keyframes land-glint {
-      0%   { stroke-dashoffset: 0; }
-      100% { stroke-dashoffset: -240; }
+    /* Current. Each streak drifts downstream along its own local flow direction
+       and fades out, rather than a dash marching along a centreline — the same
+       distance travelled, but it reads as water moving instead of as a road
+       marking. The per-streak offsets and timing arrive as custom properties. */
+    @keyframes land-flow {
+      0%   { opacity: 0; transform: translate(0, 0); }
+      18%  { opacity: 1; }
+      72%  { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--flow-dx, 0), var(--flow-dy, 0)); }
+    }
+    /* A glint running along a streamline. This is the one animation on the map that
+       is neither transform nor opacity, and it is deliberate: what has to move is a
+       highlight travelling *down* a line that itself stays put, and no transform can
+       express that. Both opt-out lists still cancel it. */
+    @keyframes land-flow-march {
+      to { stroke-dashoffset: var(--flow-travel, 0); }
+    }
+    @keyframes land-shoal-breathe {
+      0%, 100% { opacity: .5; }
+      50%      { opacity: .72; }
     }
     @keyframes land-foam-pulse {
       0%, 100% { opacity: .28; }
       50%      { opacity: .55; }
+    }
+    /* Swell running ashore. The ring is drawn offshore and scales down onto the
+       coast, so the motion is towards the land — a ring scaling *up* would read
+       as a shockwave leaving the island. It fades in from nothing rather than
+       appearing at full strength, or each new ring pops into the open water. */
+    @keyframes land-wave-break {
+      0%   { opacity: 0; transform: scale(1); }
+      22%  { opacity: 1; }
+      100% { opacity: 0; transform: scale(var(--wave-to, .98)); }
     }
     @keyframes land-sway {
       0%, 100% { transform: rotate(-1.1deg); }
@@ -2942,8 +2968,32 @@
     .land-swell.swell-c { animation-duration: 47s; animation-delay: -20s; }
 
     .land-cloud { animation: land-cloud-drift linear infinite; }
-    .land-river-glint { animation: land-glint 9s linear infinite; }
     .land-foam { animation: land-foam-pulse 7s ease-in-out infinite; }
+
+    /* view-box, not fill-box: the rings scale about the *island's* centroid, which
+       is a world coordinate shared by all of them. fill-box would give each ring
+       its own bounding-box centre, and four slightly different centres would make
+       the bands drift apart as they came in instead of nesting. */
+    .land-wave {
+      transform-box: view-box;
+      animation: land-wave-break var(--wave-dur, 7.5s) ease-in infinite;
+      animation-delay: var(--wave-delay, 0s);
+      pointer-events: none;
+    }
+
+    /* fill-box again: the translate is in the streak's own frame, so a streak
+       drifting "downstream" means downstream for that streak and not one shared
+       direction for the whole map. */
+    .land-river-streak {
+      transform-box: fill-box;
+      animation: land-flow var(--flow-dur, 8s) linear infinite;
+      animation-delay: var(--flow-delay, 0s);
+    }
+    .land-river-thread {
+      animation: land-flow-march var(--flow-dur, 8s) linear infinite;
+      animation-delay: var(--flow-delay, 0s);
+    }
+    .land-river-shoal { animation: land-shoal-breathe 11s ease-in-out infinite; }
 
     /* fill-box puts the rotation origin at the tree's own bounding box, so a
        conifer pivots about its trunk rather than about the map's origin. */
@@ -3138,8 +3188,11 @@
     }
 
     .landscape-stage.no-motion .land-swell,
+    .landscape-stage.no-motion .land-wave,
     .landscape-stage.no-motion .land-cloud,
-    .landscape-stage.no-motion .land-river-glint,
+    .landscape-stage.no-motion .land-river-streak,
+    .landscape-stage.no-motion .land-river-thread,
+    .landscape-stage.no-motion .land-river-shoal,
     .landscape-stage.no-motion .land-foam,
     .landscape-stage.no-motion .land-tree,
     .landscape-stage.no-motion .land-dino-bob,
@@ -3152,10 +3205,25 @@
     .landscape-stage.no-motion .land-drone-light-glow,
     .landscape-stage.no-motion .land-drone-chat { animation: none; }
 
+    /* Water animation off, everything else still running. A narrower switch than
+       .no-motion on purpose: the sea and the rivers are the busiest thing on the
+       map and the only part of it that never stops, so wanting them still is not
+       the same wish as wanting a static map. Whichever of the two is set wins —
+       these are the same declarations, so no specificity fight is possible. */
+    .landscape-stage.no-water-motion .land-swell,
+    .landscape-stage.no-water-motion .land-wave,
+    .landscape-stage.no-water-motion .land-foam,
+    .landscape-stage.no-water-motion .land-river-streak,
+    .landscape-stage.no-water-motion .land-river-thread,
+    .landscape-stage.no-water-motion .land-river-shoal { animation: none; }
+
     @media (prefers-reduced-motion: reduce) {
       .land-swell,
+      .land-wave,
       .land-cloud,
-      .land-river-glint,
+      .land-river-streak,
+      .land-river-thread,
+      .land-river-shoal,
       .land-foam,
       .land-tree,
       .land-dino-bob,

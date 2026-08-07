@@ -199,7 +199,16 @@ const [appSettings, setAppSettings] = createSignal<AppSettings>({
   panels: ['stats', 'memory', 'frequency', 'activity'],
   soundMuted: false,
   audioClips: [],
+  waterStill: false,
 });
+
+/**
+ * Whether the sea and the rivers are moving.
+ *
+ * Read straight off settings rather than mirrored into its own signal, so the
+ * map follows a Save immediately and there is no second copy to fall out of step.
+ */
+const waterMotion = createMemo(() => !appSettings().waterStill);
 
 /**
  * The airframe the next drone will be. Declared here rather than beside the other
@@ -427,6 +436,7 @@ export {
   activeView, setActiveView,
   discoverySeed, setDiscoverySeed,
   discoveryMotion, setDiscoveryMotion,
+  waterMotion,
   droneState, setDroneState,
   droneLaunch, launchDrone,
   droneVariant, droneFanClip, droneCrashClip,

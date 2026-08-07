@@ -37,7 +37,19 @@ export interface Biome {
 
 export interface River {
   points: Pt[];
+  /**
+   * The widest point on the course. This is the clearance radius the scatter
+   * passes reserve, so it must stay the maximum of `widths` — over-reserving near
+   * the narrow headwaters only holds a few trees further back, whereas
+   * under-reserving would let one stand in the water.
+   */
   width: number;
+  /**
+   * Channel width at each point: narrow at the source, stepping up below every
+   * confluence and flaring at the mouth. Per-point rather than one scalar because
+   * two exactly parallel banks are the one thing no real river has.
+   */
+  widths: number[];
 }
 
 export interface Lake {
@@ -293,6 +305,33 @@ function buildBiomes(rng: Rng, coast: readonly Pt[]): Biome[] {
 }
 
 /**
+ * Flow the trunk already carries at its source, in units of its own catchment.
+ *
+ * Nonzero so the headwater is a thin stream rather than a point of zero width,
+ * which would draw as a needle and read as an artefact.
+ */
+const HEAD_FLOW = 0.12;
+
+/** Width multipliers at the last two trunk points — the estuary opening out. */
+const MOUTH_FLARE = 1.1;
+const SEA_FLARE = 1.28;
+
+/** A tributary may not exceed this fraction of the trunk width where it joins. */
+const TRIB_CEILING = 0.8;
+
+/** Width fractions along a tributary: source, middle, confluence. */
+const TRIB_PROFILE = [0.35, 0.62, 1];
+
+/**
+ * The fraction of a river's width that the scatter passes keep clear of it.
+ *
+ * Exported because `waterDiscs` here, `openGround`'s test, and the river renderer's
+ * "never draws wider than it reserved" invariant all need the same number, and
+ * three copies of a literal is three chances for one of them to drift.
+ */
+export const WATER_RESERVE = 0.8;
+
+/**
  * One trunk river plus tributaries. The trunk walks from an inland source to a
  * coast vertex and one step beyond it, so the mouth visually merges with the
  * sea instead of stopping short of the shoreline.
@@ -310,40 +349,110 @@ function buildRivers(rng: Rng, coast: readonly Pt[], biomes: readonly Biome[]): 
   };
 
   const segments = rng.int(5, 7);
+  const perp = { x: -(mouth.y - source.y), y: mouth.x - source.x };
+  const perpLen = Math.hypot(perp.x, perp.y) || 1;
+  // One coherent meander for the whole course, not an independent draw per point.
+  // A fresh random offset at every vertex lets consecutive points swing to opposite
+  // extremes, which draws as a zigzag and — where the source happens to sit near the
+  // chosen mouth — turns hard enough that a widened channel would fold through
+  // itself. A single wave has the same amplitude budget and cannot do either.
+  const swing = rng.range(45, 90);
+  const waves = rng.range(1.2, 2.6);
+  const phase = rng.range(0, Math.PI * 2);
   const trunk: Pt[] = [{ x: source.x, y: source.y }];
   for (let i = 1; i < segments; i++) {
     const t = i / segments;
-    const perp = { x: -(mouth.y - source.y), y: mouth.x - source.x };
-    const len = Math.hypot(perp.x, perp.y) || 1;
-    // Meander amplitude peaks mid-course and dies at both ends, so the source
-    // and the mouth stay put while the middle wanders.
-    const amp = Math.sin(t * Math.PI) * rng.range(-90, 90);
+    // The envelope dies at both ends, so the source and the mouth stay put while
+    // the middle wanders.
+    const amp = Math.sin(t * Math.PI) * swing * Math.sin(t * waves * Math.PI + phase);
     trunk.push({
-      x: lerp(source.x, mouth.x, t) + (perp.x / len) * amp,
-      y: lerp(source.y, mouth.y, t) + (perp.y / len) * amp,
+      x: lerp(source.x, mouth.x, t) + (perp.x / perpLen) * amp,
+      y: lerp(source.y, mouth.y, t) + (perp.y / perpLen) * amp,
     });
   }
   trunk.push(mouth, beyond);
 
-  const rivers: River[] = [{ points: trunk, width: rng.range(16, 24) }];
+  // Widest point of the whole system, at the estuary. Every other width is a
+  // fraction of it, so this one number is also the clearance the scatter passes
+  // reserve for the trunk.
+  const trunkWidth = rng.range(22, 32);
 
+  // Pass 1 — tributary courses, with the width each would like to be.
+  const tribs: { points: Pt[]; joinAt: number; want: number }[] = [];
   const tributaries = rng.int(2, 4);
   for (let i = 0; i < tributaries; i++) {
     const joinAt = rng.int(1, trunk.length - 3);
     const join = trunk[joinAt];
-    const start = clampInside(
-      {
-        x: join.x + rng.range(-300, 300),
-        y: join.y + rng.range(-240, 240),
-      },
-      coast,
-      islandCenter,
-    );
+    // Both signs of the offset, keeping whichever survives the clip better. A
+    // junction near the shore has one side of it in the sea, and `clampInside` walks
+    // a source there almost all the way back to the junction — leaving a tributary a
+    // few dozen px long, which is not a river, it is a smudge. The mirrored offset
+    // points inland from the same junction, so one of the two always has room.
+    const dx = rng.range(-300, 300);
+    const dy = rng.range(-240, 240);
+    const candidates = [
+      clampInside({ x: join.x + dx, y: join.y + dy }, coast, islandCenter),
+      clampInside({ x: join.x - dx, y: join.y - dy }, coast, islandCenter),
+    ];
+    const start = candidates[0];
+    if (dist(candidates[1], join) > dist(candidates[0], join)) {
+      start.x = candidates[1].x;
+      start.y = candidates[1].y;
+    }
+    // The middle point bows off the straight line by a share of the *span*, not by
+    // a fixed number of pixels. `clampInside` can pull a source back to within a few
+    // dozen px of the junction, and a flat ±60px jitter on a run that short doubles
+    // the course back on itself — a hairpin whose bend radius is smaller than the
+    // channel is wide, which no amount of care at draw time can render.
+    const away = { x: join.x - start.x, y: join.y - start.y };
+    const span = Math.hypot(away.x, away.y) || 1;
+    const bow = rng.range(-0.22, 0.22) * span;
     const mid = {
-      x: lerp(start.x, join.x, 0.5) + rng.range(-60, 60),
-      y: lerp(start.y, join.y, 0.5) + rng.range(-60, 60),
+      x: lerp(start.x, join.x, 0.5) - (away.y / span) * bow,
+      y: lerp(start.y, join.y, 0.5) + (away.x / span) * bow,
     };
-    rivers.push({ points: [start, mid, join], width: rng.range(7, 12) });
+    tribs.push({ points: [start, mid, join], joinAt, want: rng.range(7, 12) });
+  }
+
+  // Pass 2 — trunk widths. Hydraulic geometry: width goes as the square root of
+  // discharge, so the trunk's own catchment growing downstream and each tributary's
+  // share arriving at its confluence both land on the same scale. The step at a
+  // junction is the only place the eye can see that two rivers became one.
+  const lastInland = Math.max(1, trunk.length - 3);
+  const profile = trunk.map((_, i) => {
+    let flow = HEAD_FLOW + Math.min(1, i / lastInland);
+    for (const trib of tribs) {
+      if (trib.joinAt <= i) flow += (trib.want / trunkWidth) ** 2;
+    }
+    return Math.sqrt(flow);
+  });
+  profile[profile.length - 2] *= MOUTH_FLARE;
+  profile[profile.length - 1] *= SEA_FLARE;
+
+  // Normalised to a peak of exactly `trunkWidth`, and the peak assigned literally
+  // rather than computed. `width` is the radius `waterDiscs` reserves, so every
+  // drawn half-width has to stay strictly under it — if the estuary flare could
+  // push the maximum above `trunkWidth` instead, the reserve would grow with it and
+  // the tree line would retreat along the entire course.
+  let peakAt = 0;
+  for (let i = 1; i < profile.length; i++) if (profile[i] > profile[peakAt]) peakAt = i;
+  const trunkWidths = profile.map((p) => (trunkWidth * p) / profile[peakAt]);
+  trunkWidths[peakAt] = trunkWidth;
+
+  const rivers: River[] = [{ points: trunk, width: trunkWidth, widths: trunkWidths }];
+
+  // Pass 3 — tributaries, capped against the trunk where they join. Uncapped, a
+  // lucky draw gives a tributary that reads as the main stem and the confluence
+  // looks like two rivers crossing.
+  for (const trib of tribs) {
+    const width = Math.min(trib.want, TRIB_CEILING * trunkWidths[trib.joinAt]);
+    rivers.push({
+      points: trib.points,
+      width,
+      // Tapers up to full width at the confluence, so it arrives at the trunk
+      // rather than butting into it at full size.
+      widths: TRIB_PROFILE.map((f) => f * width),
+    });
   }
   return rivers;
 }
@@ -352,7 +461,10 @@ function buildLakes(rng: Rng, coast: readonly Pt[], rivers: readonly River[]): L
   const islandCenter = centroid(coast);
   const lakes: Lake[] = [];
 
-  // Junction pools: where a tributary meets the trunk is a natural basin.
+  // Headwater tarns: the pool a tributary drains out of. Deliberately at
+  // `points[0]`, the tributary's source, not its confluence — a pool sitting on the
+  // junction would have to be smaller than the trunk's local half-width to avoid
+  // swallowing it, whereas a tarn feeding a thin stream needs no such bound.
   for (const river of rivers.slice(1)) {
     if (!rng.chance(0.7)) continue;
     const at = river.points[0];
@@ -597,7 +709,7 @@ function buildClouds(rng: Rng): Cloud[] {
 function waterDiscs(rivers: readonly River[], lakes: readonly Lake[]): WaterDisc[] {
   const discs: WaterDisc[] = [];
   for (const river of rivers) {
-    for (const p of river.points) discs.push({ x: p.x, y: p.y, r: river.width * 0.8 });
+    for (const p of river.points) discs.push({ x: p.x, y: p.y, r: river.width * WATER_RESERVE });
   }
   for (const lake of lakes) discs.push({ x: lake.center.x, y: lake.center.y, r: lake.radius });
   return discs;

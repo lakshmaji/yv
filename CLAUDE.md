@@ -1221,3 +1221,172 @@ test can exercise the timeout branch without waiting two minutes for it.
 | `frontend/src/store.ts` | `shareStage`, `openShareWith`, `pinAccepted`, `incomingConnect` |
 | `frontend/src/App.tsx` | `share:connect-request` / `share:connect-closed`; mounts the inbound connect dialog globally |
 | `frontend/src/styles.css` | `.connect-modal`, code typography, spinner, file list rows, three-column scope grid |
+
+---
+
+## Implemented: Rivers as variable-width channels, and an irregular swell
+
+### Goal
+
+The rivers read as **roads**: four constant-width strokes of one centreline with a
+dashed `foam` line down the middle, which the eye takes for lane markings. And the
+coastal swell read as a **contour map**: every ring was `insetPolygon(coast, -offset)`,
+so all of them were the coastline scaled — perfectly nested curves, each parallel to
+the shore and to each other.
+
+Both defects are the same kind: a shape derived from another shape by one constant
+offset. The fix in both cases is to make the offset vary.
+
+### Width is generator data, geometry is a pure projection
+
+`River` gains `widths: number[]`, one per point, because `buildRivers` is the only
+place that knows where the tributaries join. Hydraulic geometry — width goes as
+√discharge — puts the trunk's own catchment growing downstream and each tributary's
+share arriving at its confluence on one scale, so the trunk is visibly fatter below
+every junction. That step is the only cue that says two rivers became one.
+
+The profile is normalised to a peak of exactly `trunkWidth` and **the peak is assigned
+literally**, so `Math.max(...widths) === width` bit-exactly. `width` is the radius
+`waterDiscs` reserves; had the estuary flare been able to push the maximum above it,
+the reserve would have grown with the flare and the tree line would have retreated
+along the whole course. `WATER_RESERVE` is now exported rather than repeated as `0.8`
+in three places.
+
+`river.ts` derives everything else and writes nothing back: `River.points` is load
+bearing (a tributary's last point is by-value identical to a trunk vertex, and the
+scatter passes reserve clearance around each one), so the resampled centreline lives
+only at draw time.
+
+### Two generator bugs the width profile exposed
+
+Both were invisible while every river was one width, and both are cusps a widened
+channel cannot render:
+
+- The trunk drew `rng.range(-90, 90)` **independently per interior point**, so
+  consecutive points could swing to opposite extremes — a zigzag, not a meander, and
+  where the highland source sat near the chosen mouth it turned tighter than the
+  channel is wide. Replaced by one coherent wave, `sin(t·π) · A · sin(t·ω·π + φ)`:
+  same envelope, same amplitude budget, bounded curvature.
+- A tributary's middle point bowed off the straight line by a flat ±60px. `clampInside`
+  can pull a source back to within a few dozen px of the junction, and ±60px on a run
+  that short doubles it back on itself. The bow is now a share of the **span**.
+- `clampInside` collapsing a source onto its junction also produced tributaries a few
+  dozen px long. Both signs of the offset are now tried and the longer kept: a junction
+  near the shore has one side of it in the sea, and the mirrored offset points inland.
+
+### Banks are not parallel because each side has its own wobble
+
+A width profile is symmetric, so tapering alone leaves the two banks mirror images and
+the channel still looks extruded. Each side gets its own two harmonics in normalised
+arc length — `jitterRing`'s reasoning, applied along a course instead of around a ring.
+Both sides stay above `1 − BANK_AMP` of the half-width, so a wobble can never pinch.
+
+The curvature clamp is the pinch guard, and it is deliberately conservative
+(`MAX_CURVE_FILL = 0.55`, taken from the **sharpest bend within one sample** and applied
+to *both* banks). Curvature is estimated from samples 9px apart, so it understates a
+corner sharper than that; and which side of a bend is the inner one flips with the sign
+of that same estimate, which near an inflection is exactly what is least reliable.
+
+`riverBanks` samples the **Catmull-Rom curve**, not the control polyline — a tributary
+has three points, and offsetting those directly gives a bent stick with a kink at the
+middle one. Hence `catmullRomPoints` in `geometry.ts`, sharing the path emitter's
+neighbour clamp and its 1/6 tangent convention so the samples lie on the drawn curve.
+The step adapts down on a short course (`MIN_SAMPLES`), because three samples cannot
+carry a wobble, a shoal or a streak.
+
+### The shoal slides; it does not sit inside
+
+A narrower band on the same centreline is exactly the third stroke this replaced, and
+concentric bands are what make water read as a pipe. The lit band's centre is offset by
+`dot(normal, LIGHT)`, so it crosses from one bank to the other as the course turns and
+vanishes where the channel runs along the light.
+
+### A stream is described lengthwise
+
+Short marks alone are flecks *on* water. `flowThreads` lays streamlines the length of
+the channel at spread depths, each wandering slowly between depths; `flowRipples` puts
+short marks over them, because a channel of nothing but parallel lines reads as combed
+hair.
+
+The two **cannot share an animation**, which is why `Streak.kind` exists. A rigid
+translate is only downstream for a mark short enough to be locally straight — applied
+to a thread following a bend it would push half the line out through the bank. So a
+thread carries a glint *along* itself via `stroke-dashoffset` and a ripple drifts
+bodily and fades. The dash offset is the one animation on the map that is neither
+transform nor opacity, and it is deliberate: it was wrong for the centreline it
+replaced because that was a single dash down the middle of a uniform pipe, which is a
+road marking; several at different depths inside an organic channel is current.
+
+Anything drawn inside the channel is clamped against the bank **as actually drawn**,
+not against the nominal half-width — the curvature clamp can pull a bank well inside
+`half`, and a shoal or streak following `half` there would spill onto the grass.
+
+### Layered by role, not by river
+
+`Water.tsx` makes four passes over all rivers — every casing, then every channel, then
+the shoals, then the streaks. Drawn river-by-river, a tributary would lay its dark
+casing straight across the trunk that was already finished and every confluence would
+have a seam through it.
+
+### The swell is broken crests, not a line around the island
+
+An unbroken curve returning to its own start is a **boundary**: the eye follows it round
+rather than across, so a closed ring reads as a racetrack marking however irregular its
+shape. Each wave is therefore cut into separate open arcs (`breakIntoCrests`), the way
+real swell shows — a crest rises over some stretch of shore, dies, and another picks up
+further along.
+
+The cut positions are drawn **per ring**, which is the opposite of what the shape
+harmonics do, and deliberately so: the shape has to be shared or the rings cross, and the
+gaps have to differ or they line up radially and punch a visible corridor through the
+swell. Each crest is jittered off its ring's base width and opacity, because arcs at
+equal weight and equal spacing are just a dash pattern — the thing being avoided.
+
+A crest is **dropped entirely** where its shore is sheltered. Drawing the lee closer in
+or fainter is not enough: distance and opacity both still say "wave, over there", whereas
+no arc says there is no wave there, which is what shelter means.
+
+One consequence worth knowing: the wave's own opacity belongs to the animation.
+`land-wave-break` fades the whole group 0 → 1 → 0, so a crest's value multiplies with
+that. While a wave was a single path the keyframe simply overrode its `opacity`
+attribute, which is why the numbers in `coastalSwell` had no effect at all and had to be
+raised when the arcs became children of an animated group.
+
+Underneath that, each ring's offshore distance varies along the shore with harmonics in
+the bearing around the island, and:
+
+- **The rings share their harmonics** and differ only by a small phase march. Drawing
+  each independently made them cross, which reads as scribble; one shape advancing
+  along the shore reads as a swell.
+- **The wobble scales with how far offshore the ring is.** Waves refract as they shoal,
+  so a breaking wave lies along the beach whatever shape it had at sea. That is also
+  why the bands never pile into each other at the point where they are closest.
+- **Swell comes from a direction.** One bearing per island; exposure remaps
+  `dot(outward, swell)` into `[LEE_FLOOR, 1]`, so the bands crowd one flank and thin
+  out around the back. An equal band off every side is a ripple in a pond.
+
+`Wave.reach` (the mean distance a ring actually stands off) is now separate from
+`Wave.offset` (its nominal station), because the wobble and the lee move a ring off its
+station and `to` must scale from where it really is — otherwise the bands cross on the
+way in.
+
+### Lakes
+
+The highlight ellipse was centred on the basin, the one feature on the map ignoring the
+top-left light. It is now offset toward the light, over a new inner shadow on the far
+rim — the shadow is what actually reads as depth; without it the highlight is a sticker.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/landscape/geometry.ts` | `catmullRomPoints`, `resample`/`Sampled`, `sampleScalar`, `tangents`, `normal`, `curvatures` |
+| `frontend/src/lib/landscape/world.ts` | `River.widths`; coherent trunk meander; span-proportional tributary bow; both-signs source pick; three-pass `buildRivers`; exported `WATER_RESERVE`; `buildLakes` comment corrected to "headwater tarns" |
+| `frontend/src/lib/landscape/river.ts` | New — `riverBanks`, `shoalPath`, `flowThreads`/`flowRipples`/`flowStreaks`, `riverRibbon`, `riverSeed`, `bankPad`, `widestDrawn` |
+| `frontend/src/lib/landscape/river.test.ts` | New — no-fold proof, drawn-inside-the-reserve non-regression, containment, degenerate courses |
+| `frontend/src/lib/landscape/sea.ts` | Per-vertex reach with shared harmonics, phase march, refraction taper, directional exposure; `Wave.reach`; `breakIntoCrests` and `Wave.arcs` replacing the single closed `d` |
+| `frontend/src/lib/landscape/sea.test.ts` | Not-a-traced-coastline, broken-crests, varied-weights, sheltered-stretch and staggered-seam invariants; break line measured from `reach`; containment by bearing rather than index pairing |
+| `frontend/src/components/discovery/LandscapeMap.tsx` | A wave is an animated `<g>` of crest paths — the crests must come in together |
+| `frontend/src/lib/landscape/{geometry,world}.test.ts` | Helper tests; width-profile and confluence-step invariants; ribbon paths added to the NaN sweep |
+| `frontend/src/components/discovery/Water.tsx` | Four role passes over filled ribbons; two streak classes; lake shadow + lit highlight |
+| `frontend/src/styles.css` | `land-flow`, `land-flow-march`, `land-shoal-breathe`; `.land-river-thread`/`-streak`/`-shoal` added to all three motion opt-out lists; `land-glint` and `.land-river-glint` removed |

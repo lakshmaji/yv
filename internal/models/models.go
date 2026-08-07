@@ -123,6 +123,18 @@ type Settings struct {
 	// No audio ships with the app, so an empty list means the roars are silent.
 	AudioClips []string `json:"audioClips,omitempty"`
 
+	// WaterStill stops the sea and the rivers moving in the Discovery view.
+	// Stored inverted — still rather than animated — for the same reason as
+	// SoundMuted: the zero value has to mean the default, and the default is
+	// moving water.
+	//
+	// Deliberately separate from the toolbar's Motion toggle rather than folded
+	// into it. Motion is a per-session control over the whole map; this is a
+	// persisted preference about the one layer that never stops, and someone who
+	// finds the current distracting while reading settlement names has not asked
+	// for the dinosaurs to stop breathing.
+	WaterStill bool `json:"waterStill,omitempty"`
+
 	// DroneVariant is the airframe the Discovery view sends out, by id. Empty —
 	// the zero value, and so the default — means the first of the fleet. An id
 	// this build no longer knows falls back the same way, so a renamed variant

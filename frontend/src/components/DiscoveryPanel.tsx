@@ -4,6 +4,7 @@ import {
   discoverySeed,
   setDiscoverySeed,
   discoveryMotion,
+  waterMotion,
   setDiscoveryMotion,
   droneCrashClip,
   droneFanClip,
@@ -600,7 +601,12 @@ export default function DiscoveryPanel() {
 
       <div
         class="landscape-stage"
-        classList={{ 'no-motion': !discoveryMotion() }}
+        classList={{
+          'no-motion': !discoveryMotion(),
+          // Independent of Motion: the settings preference has to hold the water
+          // still even with the rest of the map animating.
+          'no-water-motion': !waterMotion(),
+        }}
         ref={stageRef}
       >
         <LandscapeMap

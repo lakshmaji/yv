@@ -17,6 +17,7 @@ export default function SettingsModal() {
   const [retention, setRetention] = createSignal('365');
   const [panels, setPanels] = createSignal<PanelId[]>([]);
   const [soundOn, setSoundOn] = createSignal(true);
+  const [waterOn, setWaterOn] = createSignal(true);
   const [clips, setClips] = createSignal<string[]>([]);
   // The Discovery drone: which airframe goes out, and the clip its rotors hum.
   const [variantId, setVariantId] = createSignal('');
@@ -46,6 +47,7 @@ export default function SettingsModal() {
     setRetention(String(current.retentionDays));
     setPanels([...(current.panels || [])]);
     setSoundOn(!current.soundMuted);
+    setWaterOn(!current.waterStill);
     setClips([...(current.audioClips || [])]);
     setVariantId(variantById(current.droneVariant).id);
     setFanClip(current.droneFanClip || '');
@@ -159,6 +161,7 @@ export default function SettingsModal() {
       retentionDays: Number(retention()),
       panels: panels(),
       soundMuted: !soundOn(),
+      waterStill: !waterOn(),
       audioClips: clips(),
       droneVariant: variantId(),
       droneFanClip: fanClip().trim(),
@@ -398,6 +401,26 @@ export default function SettingsModal() {
                 </label>
               )}
             </For>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Discovery map</div>
+
+            <label class="settings-row settings-toggle">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Animate sea and rivers</div>
+                <div class="settings-row-hint">
+                  Swell rolling in against the coast, and the current running down each
+                  river. Turning this off leaves the rest of the map moving — use Motion
+                  in the Discovery toolbar to stop everything.
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={waterOn()}
+                onChange={(e) => setWaterOn(e.currentTarget.checked)}
+              />
+            </label>
           </div>
 
           <div class="settings-section">

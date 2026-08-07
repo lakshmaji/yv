@@ -4,6 +4,7 @@ import {
   MAX_CRAG, MAX_TREES, RIDGE_STEPS, WORLD_H, WORLD_W,
 } from './world';
 import { pointInPolygon, type Pt } from './geometry';
+import { riverRibbon } from './river';
 import {
   BIOME_KINDS, BIOME_RAMPS, GREY_ROCK, LAND, RED_ROCK, biomeColor, rockRamp, shade,
 } from './palette';
@@ -140,6 +141,35 @@ describe('generateWorld structure', () => {
         expect(pointInPolygon(trunk.points[trunk.points.length - 1], w.coast)).toBe(false);
       });
 
+      it('widens every river downstream, peaking at exactly its stated width', () => {
+        for (const river of w.rivers) {
+          expect(river.widths).toHaveLength(river.points.length);
+          for (const width of river.widths) expect(width).toBeGreaterThan(0);
+          // Exact, not approximate: `width` is the clearance radius `waterDiscs`
+          // reserves, so the peak is assigned literally rather than computed. If the
+          // maximum could drift above it, the reserve would grow with the estuary
+          // flare and the tree line would retreat along the whole course.
+          expect(Math.max(...river.widths)).toBe(river.width);
+          expect(river.widths[river.widths.length - 1]).toBeGreaterThan(river.widths[0]);
+        }
+      });
+
+      it('steps the trunk up at every confluence', () => {
+        const trunk = w.rivers[0];
+        for (const trib of w.rivers.slice(1)) {
+          const joinAt = trunk.points.findIndex(
+            (p) => p.x === trib.points[2].x && p.y === trib.points[2].y,
+          );
+          expect(joinAt).toBeGreaterThan(0);
+          // Below a junction the trunk carries the tributary's water too, and the
+          // step is the only cue that says the two rivers became one.
+          expect(trunk.widths[joinAt]).toBeGreaterThan(trunk.widths[joinAt - 1]);
+          // And a tributary never out-widths the trunk it joins, or the confluence
+          // reads as two rivers crossing.
+          expect(trib.width).toBeLessThanOrEqual(trunk.widths[joinAt]);
+        }
+      });
+
       it('keeps tributaries attached to the trunk', () => {
         const trunk = w.rivers[0].points;
         for (const trib of w.rivers.slice(1)) {
@@ -226,6 +256,10 @@ describe('path helpers', () => {
       ringPath(w.coast),
       ...w.biomes.flatMap((b) => [ringPath(b.region), ...b.terraces.map(ringPath)]),
       ...w.rivers.map((r) => linePath(r.points)),
+      ...w.rivers.flatMap((r) => {
+        const ribbon = riverRibbon(r);
+        return [ribbon.bank, ribbon.body, ribbon.shoal, ...ribbon.streaks.map((s) => s.d)];
+      }),
       ...w.lakes.map((l) => ringPath(l.ring)),
       ...w.trails.map(linePath),
     ];

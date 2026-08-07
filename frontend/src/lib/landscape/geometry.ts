@@ -60,6 +60,173 @@ export function catmullRomPath(points: readonly Pt[], closed = false): string {
   return d;
 }
 
+/**
+ * The same curve `catmullRomPath` emits, as points.
+ *
+ * Anything that has to *measure* the curve — offset a bank from it, walk along it
+ * at a fixed spacing — needs the curve itself, not the control polyline. Sampling
+ * the polyline instead would put the river's banks on a different curve from the
+ * one the map draws every other feature with, and a 3-point tributary would come
+ * out as a bent stick with a kink at its middle control point.
+ *
+ * Shares the neighbour clamp and the 1/6 tangent convention above, so the samples
+ * lie exactly on the path string. Passes through every control point.
+ */
+export function catmullRomPoints(
+  points: readonly Pt[],
+  perSegment = 8,
+  closed = false,
+): Pt[] {
+  if (points.length === 0) return [];
+  if (points.length === 1) return [{ x: points[0].x, y: points[0].y }];
+
+  const n = points.length;
+  const at = (i: number): Pt => {
+    if (closed) return points[((i % n) + n) % n];
+    return points[Math.min(n - 1, Math.max(0, i))];
+  };
+
+  const out: Pt[] = [{ x: points[0].x, y: points[0].y }];
+  const last = closed ? n - 1 : n - 2;
+  for (let i = 0; i <= last; i++) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    for (let k = 1; k <= perSegment; k++) {
+      const t = k / perSegment;
+      const u = 1 - t;
+      // Cubic Bezier, so the samples land on the very curve the path string draws.
+      const b0 = u * u * u;
+      const b1 = 3 * u * u * t;
+      const b2 = 3 * u * t * t;
+      const b3 = t * t * t;
+      out.push({
+        x: b0 * p1.x + b1 * c1x + b2 * c2x + b3 * p2.x,
+        y: b0 * p1.y + b1 * c1y + b2 * c2y + b3 * p2.y,
+      });
+    }
+  }
+  return out;
+}
+
+/** A resampled point, plus where it came from as a fractional index into the input. */
+export interface Sampled {
+  p: Pt;
+  /** Fractional index into the source array — lets any parallel scalar be read too. */
+  at: number;
+}
+
+/**
+ * Walks a polyline at a fixed arc-length `step`.
+ *
+ * Uniform spacing is what makes a per-point width profile mean the same thing
+ * everywhere along a course: sampling by index instead would crowd the samples
+ * wherever the control points happen to be close together.
+ *
+ * Endpoints are always kept, so the last span may be shorter than `step`.
+ */
+export function resample(points: readonly Pt[], step: number): Sampled[] {
+  if (points.length === 0) return [];
+  if (points.length === 1 || step <= 0) return [{ p: { ...points[0] }, at: 0 }];
+
+  const out: Sampled[] = [{ p: { ...points[0] }, at: 0 }];
+  let carry = 0; // distance already walked into the current segment
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const seg = dist(a, b);
+    if (seg === 0) continue;
+    let d = step - carry;
+    while (d < seg) {
+      const t = d / seg;
+      out.push({ p: { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }, at: i + t });
+      d += step;
+    }
+    carry = seg - (d - step);
+  }
+  const end = points[points.length - 1];
+  const tail = out[out.length - 1].p;
+  // Snap the last sample to the true end rather than adding a stub beside it.
+  if (dist(tail, end) < step * 0.5 && out.length > 1) out.pop();
+  out.push({ p: { ...end }, at: points.length - 1 });
+  return out;
+}
+
+/** Linear read of a per-point scalar at a fractional index, for `Sampled.at`. */
+export function sampleScalar(values: readonly number[], at: number): number {
+  if (values.length === 0) return 0;
+  const clamped = Math.min(values.length - 1, Math.max(0, at));
+  const i = Math.floor(clamped);
+  if (i >= values.length - 1) return values[values.length - 1];
+  return lerp(values[i], values[i + 1], clamped - i);
+}
+
+/**
+ * Unit tangents by central difference.
+ *
+ * Degenerate spans (two identical points, which happens because a tributary ends
+ * exactly on a trunk vertex) fall back to the nearest neighbour that gives a real
+ * direction, so a normal derived from this is never NaN.
+ */
+export function tangents(points: readonly Pt[]): Pt[] {
+  const n = points.length;
+  if (n === 0) return [];
+  if (n === 1) return [{ x: 1, y: 0 }];
+
+  const raw: (Pt | null)[] = points.map((_, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(n - 1, i + 1)];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len === 0) return null;
+    return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+  });
+
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    let t = raw[i];
+    for (let d = 1; !t && d < n; d++) t = raw[i - d] ?? raw[i + d] ?? null;
+    out.push(t ?? { x: 1, y: 0 });
+  }
+  return out;
+}
+
+/** Left-hand normal in SVG's y-down space. Names the convention once. */
+export function normal(t: Pt): Pt {
+  return { x: -t.y, y: t.x };
+}
+
+/**
+ * Signed curvature at each point, from the circumradius of the triple around it.
+ *
+ * The sign follows the turn direction, which is what lets a caller widen only the
+ * outer bank of a bend — and clamp only the inner one, where a wide channel would
+ * fold back through itself.
+ */
+export function curvatures(points: readonly Pt[]): number[] {
+  const n = points.length;
+  if (n < 3) return new Array(n).fill(0);
+  const out: number[] = [0];
+  for (let i = 1; i < n - 1; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const c = points[i + 1];
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const la = dist(a, b);
+    const lb = dist(b, c);
+    const lc = dist(a, c);
+    const denom = la * lb * lc;
+    // Collinear or coincident: no curvature rather than a division blow-up.
+    out.push(denom === 0 ? 0 : (2 * cross) / denom);
+  }
+  out.push(0);
+  return out;
+}
+
 /** Straight-edged polygon, for the faceted rock shapes. */
 export function polygonPath(points: readonly Pt[]): string {
   if (points.length === 0) return '';

@@ -1,5 +1,6 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import { LAND } from '../../lib/landscape/palette';
+import { coastalSwell } from '../../lib/landscape/sea';
 import { ringPath, type World } from '../../lib/landscape/world';
 import type { Dino } from '../../lib/dino';
 import type { Drone as DroneData } from '../../lib/drone';
@@ -44,6 +45,7 @@ export default function LandscapeMap(props: {
   motion?: boolean;
 }) {
   const coastPath = () => ringPath(props.world.coast);
+  const swell = createMemo(() => coastalSwell(props.world.coast, props.world.seed));
 
   return (
     <svg
@@ -105,6 +107,45 @@ export default function LandscapeMap(props: {
         opacity="0.5"
         filter="url(#shelf-blur)"
       />
+
+      {/* Swell rolling in, contracting onto the shore as it fades — so the sea
+          travels towards the land instead of only shimmering in place.
+          transform-origin is the coast's own centroid, the point the rings were
+          offset from, so the contraction retraces the spacing between them.
+
+          The animation sits on the group, not the arcs: a wave is broken into
+          several crests but it is still one wave, and they have to come in
+          together. */}
+      <g class="land-swash">
+        <For each={swell().waves}>
+          {(w) => (
+            <g
+              class="land-wave"
+              style={{
+                'transform-origin': `${swell().origin.x.toFixed(2)}px ${swell().origin.y.toFixed(2)}px`,
+                '--wave-to': w.to.toFixed(4),
+                '--wave-dur': `${w.dur.toFixed(2)}s`,
+                '--wave-delay': `${w.delay.toFixed(2)}s`,
+              }}
+            >
+              <For each={w.arcs}>
+                {(a) => (
+                  <path
+                    d={a.d}
+                    fill="none"
+                    stroke={LAND.foam}
+                    stroke-width={a.strokeWidth}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    opacity={a.opacity}
+                  />
+                )}
+              </For>
+            </g>
+          )}
+        </For>
+      </g>
+
       <path class="land-foam" d={coastPath()} fill="none" stroke={LAND.foam} stroke-width="5" opacity="0.45" />
 
       <Terrain world={props.world} />
