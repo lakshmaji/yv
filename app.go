@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -357,9 +356,10 @@ func (a *App) PickFilesToShare() []string {
 // with "no such directory" on a device that has been sent nothing — an empty
 // folder answers "where do these go?" perfectly well.
 //
-// A file:// URL through the Wails runtime rather than an exec of open/xdg-open:
-// it is already platform-resolved, and shelling out to a path that came from
-// the user's home directory is a habit worth not forming.
+// The opener is platform-specific (see openfolder_*.go) rather than a file://
+// URL through the Wails runtime: that validates the scheme and refuses anything
+// but http(s), so on Linux it answered "invalid schema not allowed" and opened
+// nothing.
 func (a *App) ShowReceivedFiles() string {
 	dir, err := share.ReceiveDir()
 	if err != nil {
@@ -369,10 +369,10 @@ func (a *App) ShowReceivedFiles() string {
 		return "error: " + err.Error()
 	}
 
-	// Built through url.URL rather than concatenated, so a home directory with
-	// a space or a non-ASCII character still produces a URL the OS will open.
-	u := url.URL{Scheme: "file", Path: dir}
-	wailsRuntime.BrowserOpenURL(a.getCtx(), u.String())
+	if err := openFolder(dir); err != nil {
+		log.Printf("[ShowReceivedFiles] %v", err)
+		return "error: " + err.Error()
+	}
 	return "ok"
 }
 

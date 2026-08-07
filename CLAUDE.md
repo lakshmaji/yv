@@ -1663,11 +1663,17 @@ message that vanishes on its own takes it away from anyone who was not watching.
 Both timers are gone. Each dialog now ends on a **Done** button, and the
 receiver's success screen carries a **Show downloaded folder** button —
 `ShowReceivedFiles` creates the folder if it does not exist yet, so it cannot
-fail with "no such directory" on a device that has been sent nothing. It opens a
-`file://` URL through the Wails runtime rather than shelling out to
-`open`/`xdg-open`: already platform-resolved, and built through `url.URL` so a
-home directory with a space still produces something the OS will open. A failure
+fail with "no such directory" on a device that has been sent nothing. A failure
 says so inline, since the path is on screen directly above.
+
+The opener is platform-specific (`openfolder_*.go`). The first attempt used a
+`file://` URL through the Wails runtime, which looked tidier — but that runtime
+validates the scheme and refuses anything but http(s), so on Linux it answered
+`invalid schema not allowed` and opened nothing. macOS gets `open`; Linux tries
+`xdg-open`, then `gio open`, then `nautilus`, because a minimal install can lack
+xdg-utils while still having GLib — which is present regardless, since the app
+itself is GTK. The path goes as an argument rather than through a shell, so
+spaces and quotes in a home directory are not special.
 
 Removing the timers exposed two things they had been covering:
 
