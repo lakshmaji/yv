@@ -51,6 +51,15 @@ const BIOME_LABELS: Record<BiomeKind, string> = {
 };
 
 /**
+ * Animals already greeted with a roar.
+ *
+ * Module scope, not component scope, so leaving Discovery and coming back does
+ * not re-announce a herd that never went anywhere — the peer list outlives the
+ * panel, so the greeting has to as well.
+ */
+const greeted = new Set<string>();
+
+/**
  * Sizes are deliberately modest: a tree is only ~15px tall and a summit 50–130,
  * so anything much past 70 stops reading as an animal in a landscape and starts
  * competing with the mountains.
@@ -295,6 +304,30 @@ export default function DiscoveryPanel() {
     void playClip(clip);
   }
 
+  /**
+   * An arriving animal announces itself.
+   *
+   * Keyed by name rather than peer id because the name is what picks the clip,
+   * so what you hear on arrival is the same voice you get by clicking it later.
+   *
+   * Departures are dropped from the set, which is what makes a device that goes
+   * away and comes back an arrival again — and is also how a rescan re-arms the
+   * greeting, since it empties the herd on its way out.
+   */
+  createEffect(() => {
+    const herd = dinos();
+    const present = new Set(herd.map((d) => d.name));
+    for (const name of [...greeted]) {
+      if (!present.has(name)) greeted.delete(name);
+    }
+
+    const arrived = herd.filter((d) => !greeted.has(d.name));
+    // Marked greeted whether or not it is audible, so unmuting later does not
+    // set off the whole herd at once for animals that arrived while muted.
+    for (const d of arrived) greeted.add(d.name);
+    for (const d of arrived) roar(d);
+  });
+
   // --- discovery lifecycle ---
 
   // Set when the libp2p host cannot start at all — a different message from
@@ -380,6 +413,47 @@ export default function DiscoveryPanel() {
     setDiscoverySeed(Math.floor(Math.random() * 1_000_000_000));
   }
 
+  /** True while a rescan's stop/start round trip is in flight. */
+  const [rescanning, setRescanning] = createSignal(false);
+
+  /**
+   * Forget the herd and go looking again.
+   *
+   * This restarts the Go node rather than merely clearing the peer list, which
+   * would look identical for a second and then never recover: Go announces a
+   * peer once, and App.tsx dedupes `peer:found` by id, so a device already known
+   * to the node would never be re-announced and its dinosaur would be gone for
+   * good. Stop() forgets the peers and closes the libp2p host; Start() builds a
+   * fresh one and browses mDNS again, so the herd is rebuilt from what is
+   * actually out there now rather than from what we happened to have seen.
+   *
+   * The island is deliberately left alone. This is a search, and redrawing the
+   * terrain underneath it would read as a redraw rather than a rescan — the map
+   * has its own button for that.
+   */
+  async function rescan(): Promise<void> {
+    // The round trip is not instant, and a second press mid-flight would race a
+    // Stop against the previous Start and could leave discovery down.
+    if (rescanning()) return;
+    setRescanning(true);
+
+    // Clear first, so the herd visibly goes away and a drone is up covering the
+    // wait — the countdown then measures the new sweep, not the old one.
+    setPeers([]);
+    setDiscoveryError(null);
+    launchDrone();
+
+    try {
+      await go.StopDiscovery();
+      const res = await go.StartDiscovery();
+      if (res.startsWith('error:')) setDiscoveryError(res.slice(6).trim());
+    } catch (e) {
+      setDiscoveryError(String(e));
+    } finally {
+      setRescanning(false);
+    }
+  }
+
   return (
     <main id="main" class="discovery">
       <div id="dashboard-header">
@@ -436,8 +510,28 @@ export default function DiscoveryPanel() {
           </button>
         </Show>
 
-        <button type="button" class="dash-refresh" onClick={reroll}>
-          ↻ Regenerate
+        <button
+          type="button"
+          class="dash-refresh"
+          // Deliberately still enabled when discovery failed to start: a rescan
+          // is a full stop/start, so it is the retry for exactly that case.
+          disabled={rescanning()}
+          title="Forget the devices found so far and search the network again"
+          onClick={() => void rescan()}
+        >
+          {rescanning() ? '↻ Rescanning…' : '↻ Rescan'}
+        </button>
+
+        {/* Kept, but demoted: rerolling the island is a different thing from
+            looking for devices, and conflating them is what made the old
+            "Regenerate" confusing. */}
+        <button
+          type="button"
+          class="dash-refresh"
+          title="Draw a different island. The devices found are unaffected."
+          onClick={reroll}
+        >
+          ⟳ New map
         </button>
 
         <button
