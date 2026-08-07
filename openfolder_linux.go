@@ -4,7 +4,7 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
+	"strings"
 )
 
 // openFolder opens a directory in the desktop's file manager.
@@ -15,11 +15,12 @@ import (
 //
 // xdg-open is the freedesktop standard and is what a correctly configured
 // desktop answers with. gio is the fallback because a minimal install can
-// easily lack xdg-utils while still having GLib — which is guaranteed here
-// anyway, since the app itself is GTK.
+// easily lack xdg-utils while still having GLib — which is present here
+// regardless, since the app itself is GTK. nautilus is the last resort.
 //
-// The path is passed as an argument rather than interpolated into a shell, so
-// spaces and quotes in a home directory are not special.
+// A candidate that exits non-zero is treated as a failure and the next is
+// tried, not just one that is missing: xdg-open is frequently installed but
+// misconfigured, and that returns an error rather than refusing to start.
 func openFolder(dir string) error {
 	candidates := [][]string{
 		{"xdg-open", dir},
@@ -27,23 +28,13 @@ func openFolder(dir string) error {
 		{"nautilus", dir},
 	}
 
-	var first error
+	var failures []string
 	for _, argv := range candidates {
-		cmd := exec.Command(argv[0], argv[1:]...)
-		if err := cmd.Start(); err != nil {
-			if first == nil {
-				first = err
-			}
-			continue
+		if err := runOpener(argv...); err == nil {
+			return nil
+		} else {
+			failures = append(failures, err.Error())
 		}
-		// Reaped in the background: the file manager outlives this call, and
-		// leaving the child unwaited would keep a zombie for the life of the app.
-		go func() { _ = cmd.Wait() }()
-		return nil
 	}
-
-	if first == nil {
-		first = fmt.Errorf("no file manager found")
-	}
-	return fmt.Errorf("could not open a file manager (tried xdg-open, gio, nautilus): %w", first)
+	return fmt.Errorf("could not open a file manager — %s", strings.Join(failures, "; "))
 }

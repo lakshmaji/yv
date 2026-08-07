@@ -1675,6 +1675,21 @@ xdg-utils while still having GLib — which is present regardless, since the app
 itself is GTK. The path goes as an argument rather than through a shell, so
 spaces and quotes in a home directory are not special.
 
+**The exit status is waited for, not just the launch.** The first version checked
+only that the process started, which proves the binary exists and nothing more:
+`open` returns 1 for a path it will not handle (measured at ~6ms), so a genuine
+failure was being reported as success and the button appeared to do nothing with
+no explanation. `runOpener` waits, bounded by `openerTimeout` — an opener still
+running after 5s has handed off and is waiting on something that is not ours to
+wait for, so that counts as success. On Linux a non-zero exit also moves on to
+the next candidate, since xdg-open is often installed but misconfigured, which
+fails rather than refusing to start.
+
+The dialog now shows *why* it failed rather than a fixed sentence. "Could not
+open the folder" reads the same whether the file manager is missing, the path is
+wrong, or the running app predates the binding — and only the last of those is
+fixed by restarting.
+
 Removing the timers exposed two things they had been covering:
 
 - **A failed inbound transfer had nowhere to report.** `share:error` is emitted

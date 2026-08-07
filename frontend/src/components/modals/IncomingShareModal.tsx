@@ -24,9 +24,11 @@ import { formatBytes } from '../../lib/utils';
 export default function IncomingShareModal() {
   const offer = () => incomingShare();
 
-  // Set if opening the folder fails, which is the only way the user would learn
-  // that clicking the button did nothing.
-  const [openFailed, setOpenFailed] = createSignal(false);
+  // Why opening the folder failed, if it did. The reason is carried rather than
+  // a flag: "could not open the folder" is the same message whether the file
+  // manager is missing, the binding is stale, or the path is wrong, and those
+  // need different things done about them.
+  const [openError, setOpenError] = createSignal<string | null>(null);
 
   let declineRef: HTMLButtonElement | undefined;
 
@@ -78,12 +80,14 @@ export default function IncomingShareModal() {
   }
 
   async function showFolder(): Promise<void> {
-    setOpenFailed(false);
+    setOpenError(null);
     try {
       const res = await go.ShowReceivedFiles();
-      if (res.startsWith('error:')) setOpenFailed(true);
-    } catch {
-      setOpenFailed(true);
+      if (res.startsWith('error:')) setOpenError(res.slice(6).trim());
+    } catch (e) {
+      // Includes the case where the binding itself is missing, which is what a
+      // running app built before this button looks like.
+      setOpenError(String(e));
     }
   }
 
@@ -112,9 +116,9 @@ export default function IncomingShareModal() {
           <div class="modal-title">Received from {offer()?.fromName}</div>
           <div class="share-done">✓ {incomingResult()}</div>
 
-          <Show when={openFailed()}>
-            <div class="share-hint">
-              Could not open the folder — the path is above.
+          <Show when={openError()}>
+            <div class="share-error">
+              Could not open the folder: {openError()}. The path is above.
             </div>
           </Show>
 
