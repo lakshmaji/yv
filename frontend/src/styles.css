@@ -2934,6 +2934,18 @@
       50%      { transform: translateY(1.4px); }
     }
 
+    /* Found, and holding station: the drone stops being a thing that flies past
+       and starts being a thing that is watching something. A circling drift with
+       a roll into each turn, wider and slower than the search hover — the light
+       says found, this says why it is loitering. Small angles: past a couple of
+       degrees a drone read from above starts to look like it is falling. */
+    @keyframes land-drone-wobble {
+      0%, 100% { transform: translate(-1.3px, -1.7px) rotate(-1.8deg); }
+      25%      { transform: translate(1.5px, -0.4px) rotate(0deg); }
+      50%      { transform: translate(1.3px, 1.7px) rotate(1.8deg); }
+      75%      { transform: translate(-1.5px, 0.4px) rotate(0deg); }
+    }
+
     @keyframes land-drone-spin {
       to { transform: rotate(360deg); }
     }
@@ -3141,6 +3153,16 @@
 
     .land-drone-hover { animation: land-drone-hover 2.6s ease-in-out infinite; }
 
+    /* Loiter. Replaces the search hover rather than layering on it — one element
+       runs one transform, and this layer already sits inside the tilt and outside
+       the travel, so the roll here reads as the airframe leaning and not as the
+       whole route swinging. The origin comes from the rule above: without
+       fill-box a rotate would pivot on the viewBox corner and throw the drone off
+       the island. */
+    .land-drone.locked .land-drone-hover {
+      animation: land-drone-wobble 3.4s ease-in-out infinite;
+    }
+
     /* Duration comes from the component, so the two rotors never beat together. */
     .land-drone-rotor { animation: land-drone-spin linear infinite; }
 
@@ -3250,6 +3272,7 @@
     .landscape-stage.no-motion .land-dino-eye,
     .landscape-stage.no-motion .land-dino-growl,
     .landscape-stage.no-motion .land-drone-hover,
+    .landscape-stage.no-motion .land-drone.locked .land-drone-hover,
     .landscape-stage.no-motion .land-drone-rotor,
     .landscape-stage.no-motion .land-drone-light,
     .landscape-stage.no-motion .land-drone-light-glow,
@@ -3289,6 +3312,7 @@
       .land-dino-eye,
       .land-dino-growl,
       .land-drone-hover,
+      .land-drone.locked .land-drone-hover,
       .land-drone-rotor,
       .land-drone-light,
       .land-drone-light-glow,
