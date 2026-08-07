@@ -73,6 +73,17 @@ const DINO_MAX_SIZE = 72;
 /** Headroom for the hover name label, which is drawn above the animal. */
 const DINO_LABEL_ROOM = 24;
 
+/**
+ * Whether the drone speaks.
+ *
+ * Off: the toolbar chip already reports the find, and a box travelling across
+ * the island alongside a moving drone was more noise than news. Everything
+ * behind it is left intact and tested — the wording (`droneMessage`), the eight
+ * bubble shapes (`lib/chatBubble.ts`), and the flight bounds that keep one on
+ * screen — so this is the single switch that brings it back.
+ */
+const DRONE_CHAT: boolean = false;
+
 export default function DiscoveryPanel() {
   // One memo is the whole regeneration mechanism: writing the seed rebuilds the
   // world, and Solid diffs the SVG for us.
@@ -149,6 +160,7 @@ export default function DiscoveryPanel() {
    * flight bounds did not account for.
    */
   const droneChat = createMemo(() => {
+    if (!DRONE_CHAT) return null;
     const text = droneMessage(dinos().length);
     if (text === null) return null;
     // Seeded from the launch and the world, so the shape holds still for the

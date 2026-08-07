@@ -2945,6 +2945,20 @@
       50%      { opacity: 1; }
     }
 
+    /* Green, found. Slower and shallower than the amber search blink, so the two
+       states are told apart by rhythm and not only by hue — a colour change alone
+       is easy to miss on a drone the size of a thumbnail, and invisible to anyone
+       who cannot separate the two hues. The glow keeps its own pair of values
+       because it is a halo: pulsing it to full would flare the whole airframe. */
+    @keyframes land-drone-pulse {
+      0%, 100% { opacity: .55; }
+      50%      { opacity: 1; }
+    }
+    @keyframes land-drone-pulse-glow {
+      0%, 100% { opacity: .16; }
+      50%      { opacity: .34; }
+    }
+
     /* The end of a sweep that found nothing. Three parts on one clock: a flash
        that is over almost immediately, a shockwave that keeps expanding as it
        fades, and debris thrown outward under gravity. Nothing settles — the
@@ -3140,15 +3154,21 @@
       animation: land-drone-blink 1.5s ease-in-out infinite;
     }
 
-    /* Found. Steady rather than blinking: the search has stopped, and a light
-       still pulsing would say it hadn't. */
+    /* Found. Still pulsing, but on its own slower beat: the drone is up and
+       working, and a light that went hard steady reads as a machine that has
+       stopped. The opacity outside the animation is what shows with motion off. */
     .land-drone.locked .land-drone-light,
     .land-drone.locked .land-drone-light-glow {
       fill: var(--drone-light-locked, #3fd97f);
-      animation: none;
     }
-    .land-drone.locked .land-drone-light { opacity: 1; }
-    .land-drone.locked .land-drone-light-glow { opacity: .26; }
+    .land-drone.locked .land-drone-light {
+      opacity: 1;
+      animation: land-drone-pulse 2.2s ease-in-out infinite;
+    }
+    .land-drone.locked .land-drone-light-glow {
+      opacity: .26;
+      animation: land-drone-pulse-glow 2.2s ease-in-out infinite;
+    }
 
     /* What the drone found, said next to it. The outline is a path rather than
        a rect because the shape varies — see lib/chatBubble.ts, which sizes all
@@ -3233,6 +3253,10 @@
     .landscape-stage.no-motion .land-drone-rotor,
     .landscape-stage.no-motion .land-drone-light,
     .landscape-stage.no-motion .land-drone-light-glow,
+    /* The found state sets its pulse from a two-class selector, which outranks
+       the one above — so it has to be switched off by name here and below. */
+    .landscape-stage.no-motion .land-drone.locked .land-drone-light,
+    .landscape-stage.no-motion .land-drone.locked .land-drone-light-glow,
     .landscape-stage.no-motion .land-drone-chat { animation: none; }
 
     /* Water animation off, everything else still running. A narrower switch than
@@ -3268,6 +3292,8 @@
       .land-drone-rotor,
       .land-drone-light,
       .land-drone-light-glow,
+      .land-drone.locked .land-drone-light,
+      .land-drone.locked .land-drone-light-glow,
       .land-drone-chat { animation: none; }
       /* Hover feedback stays: it is a direct response to the pointer, not
          ambient motion, and it is the only cue that names the animal. */
