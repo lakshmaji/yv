@@ -96,7 +96,7 @@ export const SPLASH = {
    * wireframe, a pause, then a fill — rather than as one animal appearing.
    */
   facetsAt: 640,
-  facetsDur: 620,
+  facetsDur: 635,
   glitchAt: 1300,
   glitchDur: 340,
   eyeAt: 1500,
@@ -219,6 +219,18 @@ const HOOVES_NEAR: ReadonlyArray<readonly [string, string]> = [
 const HOOVES_FAR: ReadonlyArray<readonly [string, string]> = [
   ['hoofFrontFar', 'M142 292 C151 297, 161 297, 170 292 C171 301, 170 308, 168 313 L156 307 L145 313 C142 307, 141 300, 142 292 Z'],
   ['hoofHindFar', 'M264 296 C273 301, 283 301, 292 296 C293 305, 292 312, 290 317 L278 311 L267 317 C264 311, 263 304, 264 296 Z'],
+];
+
+/**
+ * A short kinked tail off the rump.
+ *
+ * A tapered closed crescent rather than a stroked line: a tail is thick where it
+ * leaves the body and thin at the tip, and one constant width reads as a piece
+ * of wire. It is painted UNDER the body for the same reason the legs are — the
+ * body hides where it joins, so there is no visible root sitting on the rump.
+ */
+const TAIL: ReadonlyArray<readonly [string, string]> = [
+  ['tail', 'M440 200 C456 192, 472 198, 476 211 C480 224, 471 234, 460 231 C451 229, 447 220, 452 213 C455 218, 457 224, 463 224 C469 223, 471 215, 467 208 C462 200, 452 198, 443 206 Z'],
 ];
 
 /**
@@ -393,6 +405,7 @@ export function boarStrokes(): BoarStroke[] {
       .map(h => ({ ...h, fill: shade(hoof, -0.15) }))),
     ...far(seg(LEGS_NEAR, 'silhouette', NEON.ink, 2.2).map(l => ({ ...l, fill: NEON.body }))),
     ...far(seg(HOOVES_NEAR, 'detail', NEON.ink, 1.7).map(h => ({ ...h, fill: hoof }))),
+    ...far(seg(TAIL, 'silhouette', NEON.ink, 2.2).map(t => ({ ...t, fill: shade(NEON.body, -0.1) }))),
 
     ...seg(INTERIOR, 'interior', NEON.cyan, 2),
     ...seg(SNOUT, 'detail', NEON.ink, 2)
