@@ -8,6 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "animejs": "^4.5.0",
     "chart.js": "^4.5.1",
     "solid-js": "^1.9.5"
   },

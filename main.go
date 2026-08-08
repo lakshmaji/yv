@@ -42,6 +42,12 @@ func main() {
 		MinWidth:  900,
 		MinHeight: 600,
 
+		// --bg from styles.css. WebviewIsTransparent is on and the window is not
+		// translucent, so this colour is literally what shows through — including
+		// the frames before the webview has painted anything, which is where the
+		// white launch flash used to be.
+		BackgroundColour: &options.RGBA{R: 0x0d, G: 0x11, B: 0x17, A: 255},
+
 		AssetServer: &assetserver.Options{
 			Assets: distFS,
 		},

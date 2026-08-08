@@ -13,6 +13,7 @@ import {
   updateModalOpen, setUpdateModalOpen, setUpdateState,
   activeView, setActiveView,
   settingsModalOpen, setSettingsModalOpen, loadAppSettings,
+  splashDone,
 } from './store';
 import { go, runtime } from './wails';
 import { stopAllCommands } from './lib/commands';
@@ -22,6 +23,7 @@ import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
 import ResizeHandle from './components/ResizeHandle';
 import Spotlight from './components/Spotlight';
+import Splash from './components/Splash';
 import EnvironmentsModal from './components/modals/EnvironmentsModal';
 import EditCommandModal from './components/modals/EditCommandModal';
 import ShortcutModal from './components/modals/ShortcutModal';
@@ -339,6 +341,11 @@ export default function App() {
       </Show>
       <Show when={spotlightOpen()}>
         <Spotlight />
+      </Show>
+      {/* Last, so it covers everything. It is fixed-position, so it takes no
+          column in the body grid — boot carries on underneath it. */}
+      <Show when={!splashDone()}>
+        <Splash />
       </Show>
     </>
   );

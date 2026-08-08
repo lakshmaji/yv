@@ -66,6 +66,27 @@ function setMaximizedCmd(cmdId: string | null) {
 const [projectEnvs, setProjectEnvs] = createSignal<ProjectEnvs>({ environments: [], activeId: '' });
 const [envModalOpen, setEnvModalOpen] = createSignal(false);
 
+// The launch splash. Lives here rather than in App.tsx so it is one flag the
+// whole tree can read — the boar covers the window while boot runs underneath,
+// and anything that needs to know whether the app is visible yet asks this.
+//
+// Seeded already-done in dev after the first run of a session: `wails dev`
+// hot-reloads on every save, and a 2.5s splash in front of each of them makes
+// the app unusable to work on. A production build has no such flag and always
+// plays it.
+function splashAlreadySeen(): boolean {
+  if (!import.meta.env.DEV) return false;
+  try {
+    if (sessionStorage.getItem('yv-splash-seen')) return true;
+    sessionStorage.setItem('yv-splash-seen', '1');
+  } catch {
+    // Storage disabled — showing the splash again is the harmless outcome.
+  }
+  return false;
+}
+
+const [splashDone, setSplashDone] = createSignal(splashAlreadySeen());
+
 // Keyboard shortcuts help modal (opened from the Help menu / ⌘/)
 const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
 
@@ -469,6 +490,7 @@ export {
   maximizedCmd, setMaximizedCmd,
   projectEnvs, setProjectEnvs, loadProjectEnvs,
   envModalOpen, setEnvModalOpen,
+  splashDone, setSplashDone,
   shortcutsModalOpen, setShortcutsModalOpen,
   aboutModalOpen, setAboutModalOpen,
   updateModalOpen, setUpdateModalOpen,

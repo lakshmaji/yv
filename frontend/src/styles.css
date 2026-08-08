@@ -4010,3 +4010,137 @@
     /* The placeholder is the hostname — a fact about the machine, not a hint at
        what to type — so it is dimmer than an ordinary one. */
     .settings-username-input::placeholder { color: var(--muted); }
+
+/* ============================================================
+   Launch splash — the cyberpunk boar
+   ============================================================
+
+   Fixed rather than a grid child: `body` is a grid with named areas, so a
+   normal-flow child here would open a track and shove the app sideways for the
+   two and a half seconds it is up. It also sits above every dialog, because
+   during boot there is nothing behind it that is ready to be interacted with.
+
+   Geometry is in lib/boar.ts; everything below is the field the drawing sits in.
+   The field is CSS rather than SVG deliberately — a repeating gradient is one
+   declaration where scanlines would be sixty rects, and unlike a script
+   animation it is cancelled by the reduced-motion block at the foot of this
+   file without anything having to remember to check. */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 42%, #0b1c33 0%, #050810 62%, #03060c 100%);
+  /* Swallows clicks: boot is still running behind this, and a click that lands
+     on a half-loaded project list is worse than one that lands nowhere. */
+  cursor: default;
+  overflow: hidden;
+}
+
+/* Perspective floor plus scanlines, in one stacked background. The floor is
+   tilted with a transform rather than drawn in perspective, so the two gradient
+   sets stay plain repeating gradients. */
+.splash-grid {
+  position: absolute;
+  inset: -30% -30% -10%;
+  background-image:
+    repeating-linear-gradient(to right, rgba(34, 232, 255, .14) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(to bottom, rgba(139, 92, 246, .12) 0 1px, transparent 1px 64px);
+  transform: perspective(560px) rotateX(62deg) translateY(12%);
+  transform-origin: 50% 100%;
+  mask-image: radial-gradient(ellipse 60% 60% at 50% 30%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 30%, #000 0%, transparent 78%);
+  animation: splash-grid-run 6s linear infinite, splash-grid-in 700ms ease-out both;
+  pointer-events: none;
+}
+
+/* Scanlines and the power-on sweep, over everything including the boar — a CRT
+   line that stops at the artwork is a texture, not a screen. */
+.splash-vignette {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, .34) 0 1px, transparent 1px 3px);
+  pointer-events: none;
+  z-index: 2;
+}
+.splash-vignette::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24%;
+  background: linear-gradient(to bottom, transparent, rgba(34, 232, 255, .16), transparent);
+  animation: splash-sweep 1.1s ease-in-out 2;
+}
+
+.splash-boar {
+  position: relative;
+  z-index: 1;
+  width: min(62vw, 620px);
+  height: auto;
+  max-height: 60vh;
+  /* One more halo on top of the SVG filter. The filter gives the tube its core
+     glow; this is the light it throws on the room, which no per-element filter
+     can produce because it has to fall outside the drawing's own bounds. */
+  filter: drop-shadow(0 0 26px rgba(34, 232, 255, .3));
+}
+
+.splash-mark {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+}
+.splash-mark-name {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 14px;
+  /* The tracking is symmetric, which on the last glyph pushes the word off
+     centre by one step. */
+  text-indent: 14px;
+  color: #f2fbff;
+  text-shadow: 0 0 18px rgba(34, 232, 255, .75), 0 0 42px rgba(255, 47, 185, .4);
+}
+.splash-mark-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: rgba(34, 232, 255, .62);
+}
+
+@keyframes splash-grid-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Exactly one grid square per cycle, so the loop point is invisible. */
+@keyframes splash-grid-run {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 0, 0 64px; }
+}
+
+@keyframes splash-sweep {
+  from { top: -24%; opacity: .9; }
+  to   { top: 100%; opacity: 0; }
+}
+
+/* Reduced motion. The anime.js timeline is handled in Splash.tsx — a script
+   animation cannot be reached from here, the same trap Drone.tsx documents — so
+   this block covers only the CSS half: the field stops moving and the power-on
+   sweep does not happen at all. The boar still appears, fully drawn. */
+@media (prefers-reduced-motion: reduce) {
+  .splash-grid { animation: none; }
+  .splash-vignette::after { display: none; }
+}

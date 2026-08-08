@@ -1,0 +1,327 @@
+import { For, onCleanup, onMount } from 'solid-js';
+import { createTimeline, stagger, svg, type Target } from 'animejs';
+import {
+  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_ID, SPLASH,
+  boarFacets, boarStrokes, glitchBands, sparks,
+} from '../lib/boar';
+import { hashText } from '../lib/landscape/rng';
+import { setSplashDone } from '../store';
+
+/**
+ * The launch splash: a neon boar drawn on over a CRT field, then glitched, then
+ * gone — 2.5s, fixed, whether boot took 40ms or two seconds.
+ *
+ * Fixed rather than gated on boot, on purpose. Waiting for `LoadProjects` would
+ * make the app's first impression a different length every launch, and on a warm
+ * start it would be a flash rather than anything anyone could look at. Boot runs
+ * underneath the whole time, so the splash costs nothing but its own duration.
+ *
+ * Layering, one animated concern per element as in Dinosaur.tsx / Drone.tsx:
+ *
+ *   .splash              exit fade + scale        (anime.js)
+ *   .splash-grid         CRT field and sweep      (CSS)
+ *   #boar-art            the strokes drawing on   (anime.js, svg.createDrawable)
+ *   use.splash-chroma    channel ghosts           (anime.js, mirrors #boar-art)
+ *   use.splash-band      glitch slices            (anime.js, mirrors #boar-art)
+ *
+ * The ghosts and the glitch slices are `<use>` of the same `#boar-art` group,
+ * not further copies of the geometry. That is what keeps them exactly in step
+ * with the draw-on — a real copy would need its own animation and would drift by
+ * however much the two disagreed. Their colour comes from an feColorMatrix that
+ * keeps two channels and drops the third, which is what chromatic aberration
+ * physically is, rather than from a second palette to maintain.
+ *
+ * The offsets live in SVG `x` attributes rather than in a `transform`, because
+ * anime.js animates transforms through the CSS property — which overrides the
+ * attribute entirely, and would snap both ghosts back onto the original the
+ * moment the glitch beat started.
+ *
+ * anime.js is script-driven, so — exactly as Drone.tsx notes — neither the
+ * reduced-motion media query nor a `.no-motion` class can cancel it. It is
+ * honoured here by hand: with the preference set there is no timeline at all,
+ * just the finished drawing, a short hold and a plain fade.
+ */
+
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
+const STROKES = boarStrokes();
+const FACETS = boarFacets();
+const BANDS = glitchBands(hashText('yv-boar-glitch'), 5);
+const SPARKS = sparks(hashText('yv-boar-sparks'), 18);
+
+/**
+ * Reads a per-element number back out of the markup, for anime.js.
+ *
+ * The geometry writes it into a data attribute and the timeline reads it here,
+ * rather than the timeline closing over the arrays: anime hands the callback the
+ * element, and matching an index back to the right entry of a separate array is
+ * a correspondence nothing enforces.
+ */
+function fromData(key: string, fallback: number) {
+  return (target?: Target): number => {
+    const n = Number((target as HTMLElement | undefined)?.dataset?.[key]);
+    return Number.isFinite(n) ? n : fallback;
+  };
+}
+
+export default function Splash() {
+  let rootRef!: HTMLDivElement;
+  let artRef!: SVGGElement;
+
+  // Read once, at mount. Unlike the discovery map this thing is on screen for
+  // two and a half seconds, so there is no window in which changing the OS
+  // setting mid-splash is worth reacting to.
+  const reduced =
+    typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
+
+  onMount(() => {
+    if (reduced) {
+      // Everything is already at its final state in the markup — there is
+      // nothing left to reveal. Hold it long enough to be seen, then fade.
+      const hold = window.setTimeout(() => {
+        rootRef.style.transition = `opacity ${SPLASH.reducedFade}ms linear`;
+        rootRef.style.opacity = '0';
+      }, SPLASH.reducedHold);
+      const gone = window.setTimeout(
+        () => setSplashDone(true),
+        SPLASH.reducedHold + SPLASH.reducedFade,
+      );
+      onCleanup(() => {
+        window.clearTimeout(hold);
+        window.clearTimeout(gone);
+      });
+      return;
+    }
+
+    const strokePaths = Array.from(artRef.querySelectorAll<SVGPathElement>('.splash-stroke'));
+    const facetPaths = Array.from(artRef.querySelectorAll<SVGPathElement>('.splash-facet'));
+    const bandUses = Array.from(rootRef.querySelectorAll<SVGUseElement>('.splash-band'));
+    const sparkDots = Array.from(rootRef.querySelectorAll<SVGCircleElement>('.splash-spark'));
+    const eyePath = artRef.querySelector<SVGPathElement>(`#stroke-${EYE_ID}`);
+
+    // `0, 0` is the initial draw extent: nothing on screen yet. Without it the
+    // finished boar paints for one frame before the timeline takes over, which
+    // reads as a flicker rather than as a reveal.
+    const drawables = svg.createDrawable(strokePaths, 0, 0);
+
+    const timeline = createTimeline({
+      defaults: { ease: 'outQuad' },
+      onComplete: () => setSplashDone(true),
+    });
+
+    // The strokes draw themselves on in boarStrokes order — head first, tusks
+    // after it, eye last. The stagger is what makes that order legible; without
+    // it the whole wireframe simply appears.
+    timeline.add(
+      drawables,
+      { draw: '0 1', duration: SPLASH.drawDur, ease: 'inOut(2)' },
+      stagger(SPLASH.drawStagger, { start: SPLASH.drawStart }),
+    );
+
+    // Facets wash in behind, so the animal gains mass rather than staying a
+    // diagram. Each keeps its own opacity: flattening them to one value is what
+    // makes flat shading look like a mistake.
+    if (facetPaths.length) {
+      timeline.add(
+        facetPaths,
+        { opacity: fromData('opacity', 0.12), duration: SPLASH.facetsDur },
+        SPLASH.facetsAt,
+      );
+    }
+
+    // Two glitch hits: slices of the finished head jump sideways and flash.
+    if (bandUses.length) {
+      timeline.add(
+        bandUses,
+        {
+          opacity: [
+            { to: 0.9, duration: 40 },
+            { to: 0, duration: 60, delay: 60 },
+            { to: 0.75, duration: 40, delay: 60 },
+            { to: 0, duration: 80 },
+          ],
+          translateX: fromData('dx', 0),
+          ease: 'steps(3)',
+        },
+        SPLASH.glitchAt,
+      );
+    }
+
+    // The ghosts pull apart on the same beat and settle back, so the split reads
+    // as the picture tearing rather than as two drawings that were always there.
+    timeline.add(
+      '.splash-chroma',
+      { opacity: [0.5, 0.8, 0.45], scale: [1, 1.015, 1], duration: SPLASH.glitchDur },
+      SPLASH.glitchAt,
+    );
+
+    // The eye switching on is the moment the head stops being a drawing.
+    if (eyePath) {
+      timeline.add(
+        eyePath,
+        { opacity: [0.35, 1], strokeWidth: [2.2, 4.4, 2.6], duration: 420 },
+        SPLASH.eyeAt,
+      );
+    }
+
+    if (sparkDots.length) {
+      timeline.add(
+        sparkDots,
+        {
+          opacity: [{ to: 1, duration: 60 }, { to: 0, duration: 300 }],
+          translateY: -14,
+          delay: fromData('delay', 0),
+        },
+        SPLASH.sparksAt,
+      );
+    }
+
+    timeline.add(
+      '.splash-mark',
+      { opacity: [0, 1], translateY: [10, 0], duration: SPLASH.markDur },
+      SPLASH.markAt,
+    );
+
+    timeline.add(
+      rootRef,
+      { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
+      SPLASH.exitAt,
+    );
+
+    onCleanup(() => timeline.pause());
+  });
+
+  return (
+    <div class="splash" classList={{ 'splash-static': reduced }} ref={rootRef}>
+      <div class="splash-grid" />
+      <div class="splash-vignette" />
+
+      <svg
+        class="splash-boar"
+        viewBox={`0 0 ${BOAR_VIEWBOX.w} ${BOAR_VIEWBOX.h}`}
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+      >
+        <defs>
+          {/* Neon bloom. Two blurs merged under the source rather than one wide
+              one: a single pass reads as soft focus, doubling it gives the tight
+              core plus halo that a lit tube actually has. */}
+          <filter id="boar-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3.4" result="wide" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="tight" />
+            <feMerge>
+              <feMergeNode in="wide" />
+              <feMergeNode in="tight" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+
+          {/* Keep two channels, drop the third — the ghost is the same drawing
+              seen through one side of a split beam, not a recoloured copy. */}
+          <filter id="boar-chroma-c">
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 0.13  0 0 0 0 0.91  0 0 0 0 1  0 0 0 1 0"
+            />
+          </filter>
+          <filter id="boar-chroma-m">
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 1  0 0 0 0 0.18  0 0 0 0 0.73  0 0 0 1 0"
+            />
+          </filter>
+
+          <For each={BANDS}>
+            {(band, i) => (
+              <clipPath id={`boar-band-${i()}`}>
+                <rect x="0" y={band.y} width={BOAR_VIEWBOX.w} height={band.h} />
+              </clipPath>
+            )}
+          </For>
+        </defs>
+
+        <g filter="url(#boar-glow)">
+          {/* Forward references: both ghosts sit behind the drawing they mirror,
+              which in SVG means being written before it. */}
+          <use
+            class="splash-chroma"
+            href="#boar-art"
+            filter="url(#boar-chroma-c)"
+            x={-CHROMA_OFFSET}
+            opacity={0.5}
+          />
+          <use
+            class="splash-chroma"
+            href="#boar-art"
+            filter="url(#boar-chroma-m)"
+            x={CHROMA_OFFSET}
+            opacity={0.5}
+          />
+
+          <g id="boar-art" ref={artRef}>
+            <For each={FACETS}>
+              {facet => (
+                <path
+                  class="splash-facet"
+                  d={facet.d}
+                  fill={facet.color}
+                  data-opacity={facet.opacity}
+                  opacity={reduced ? facet.opacity : 0}
+                />
+              )}
+            </For>
+            <For each={STROKES}>
+              {stroke => (
+                <path
+                  id={`stroke-${stroke.id}`}
+                  class="splash-stroke"
+                  d={stroke.d}
+                  fill={stroke.fill ?? 'none'}
+                  fill-opacity={stroke.fill ? 0.85 : undefined}
+                  stroke={stroke.color}
+                  stroke-width={stroke.width}
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  opacity={stroke.id === EYE_ID && !reduced ? 0.35 : 1}
+                />
+              )}
+            </For>
+          </g>
+
+          <For each={BANDS}>
+            {(band, i) => (
+              <use
+                class="splash-band"
+                href="#boar-art"
+                clip-path={`url(#boar-band-${i()})`}
+                data-dx={band.dx}
+                opacity={0}
+              />
+            )}
+          </For>
+        </g>
+
+        <g class="splash-sparks">
+          <For each={SPARKS}>
+            {spark => (
+              <circle
+                class="splash-spark"
+                cx={spark.x}
+                cy={spark.y}
+                r={spark.r}
+                fill={spark.color}
+                data-delay={spark.delay}
+                opacity={0}
+              />
+            )}
+          </For>
+        </g>
+      </svg>
+
+      <div class="splash-mark" style={reduced ? { opacity: 1 } : undefined}>
+        <span class="splash-mark-name">yv</span>
+        <span class="splash-mark-sub">local dev command runner</span>
+      </div>
+    </div>
+  );
+}

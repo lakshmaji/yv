@@ -1967,3 +1967,109 @@ been executed** — there is no Windows machine or Wine here. The AppImage recip
 built and run in a container on **arm64**; Docker's amd64 emulation on Apple
 Silicon cannot exec appimagetool's static-pie binary, so the x86_64 tool download
 is unproven. Dispatch the branch before tagging.
+
+---
+
+## Implemented: The launch splash — a cyberpunk boar
+
+### Goal
+
+Launching showed a blank white window. Three separate causes, none of which a
+component could have fixed on its own: `main.go` set no `BackgroundColour`, so
+the native window was the platform default until the webview painted;
+`index.html` had no inline style, so the page was white until `styles.css`
+loaded; and `App.tsx` rendered the full chrome immediately against an empty
+project list, which then popped when `LoadProjects` resolved.
+
+The first two are one line each and are what actually kill the flash. The boar is
+what fills the two and a half seconds that follow.
+
+### Fixed, not gated on boot
+
+`SPLASH.total` is 2500ms whatever the machine does. Waiting for `LoadProjects`
+would make the app's first impression a different length every launch, and on a
+warm start it would be a flash rather than anything anyone could look at. Boot
+runs underneath the whole time, so the splash costs only its own duration.
+
+In dev it plays **once per session** — `wails dev` hot-reloads on every save, and
+2.5s in front of each of them makes the app unusable to work on. The flag is
+seeded into `splashDone`'s initial value rather than checked in the component, so
+there is no frame where the splash exists and then removes itself.
+
+### anime.js, and what it is actually for
+
+`svg.createDrawable` is the reason for the dependency: the wireframe drawing
+itself on, stroke by stroke, in `boarStrokes` order. `createDrawable(paths, 0, 0)`
+— the two zeros matter, or the finished boar paints for one frame before the
+timeline takes over and it reads as a flicker.
+
+The order **is** the reveal: silhouette → creases → mane → tusks → eye, and it is
+pinned in `boar.test.ts` because reordering the arrays in `boar.ts` is a one-line
+change that would silently ruin the only timing the splash has. The strokes
+overlap by `drawStagger`, so the test computes the end of the *last* one —
+asserting `drawStart + drawDur` would pass while most of the animal was still
+arriving after the glitch had already hit it.
+
+### One drawing, three times on screen
+
+The chroma ghosts and the glitch slices are `<use>` of the same `#boar-art`
+group, not copies of the geometry. A copy would need its own animation and would
+drift by however much the two disagreed; a `<use>` cannot. Their colour comes
+from an `feColorMatrix` that keeps two channels and drops the third — which is
+what chromatic aberration physically is — rather than from a second palette to
+keep in step with the first.
+
+Their offsets live in SVG `x` attributes, **not** in a `transform`: anime.js
+animates transforms through the CSS property, which overrides the attribute
+entirely, and the ghosts would snap back onto the original the moment the glitch
+beat started.
+
+### Why the field is CSS and the boar is not
+
+Scanlines, the perspective grid and the power-on sweep are `repeating-linear-
+gradient` plus keyframes — one declaration where the grid would otherwise be
+sixty rects, and, unlike a script animation, cancelled by the reduced-motion
+block without anything having to remember to check.
+
+The timeline is the opposite case and inherits the trap `Drone.tsx` documents:
+neither `prefers-reduced-motion` nor a `.no-motion` class can touch a script
+animation. `Splash.tsx` honours it by hand — with the preference set there is no
+timeline at all, the markup is already at its final state, and it holds and
+fades. `.no-motion` is deliberately untouched: that toggle is scoped to
+`.landscape-stage` and is about the discovery map, not app boot.
+
+### Drawing an animal is a thing you have to look at
+
+The first pass of `boar.ts` passed every test and rendered a **whale**. What
+fixed it, in order: a blunt vertical snout disc instead of a tapered point (the
+single feature that says "pig"); tusks whose tips finish *above* the muzzle line
+rather than politely below it (below, they read as teeth); a shoulder hump behind
+the skull; and a small pointed ear.
+
+Three tusks became two — at this scale the overlapping crescents read as a tangle
+of wire — and they carry a `fill`, the only strokes that do, because a tusk is a
+solid object where everything else is a contour.
+
+Two things that only a render shows: the mane spine had to start *behind* the
+ear, since bristles rooted where the ear is drawn grow straight through it; and
+the cheek and hump washes had to **overlap**, because two dark fills that merely
+meet leave a hairline of backdrop between them that reads as a black seam
+splitting the animal in half.
+
+The viewBox is larger than the drawing's bounds on purpose — the neon filter
+blurs well outside the strokes and the SVG root clips at the viewBox, so a snug
+box shears the glow off flat along one edge.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `main.go` | `BackgroundColour` — the native window is `--bg` before the webview paints |
+| `frontend/index.html` | Inline critical `background`, the only rule that paints before the bundle |
+| `frontend/src/lib/boar.ts` | New — `BOAR_VIEWBOX`, `NEON`, `SPLASH` timings, `boarStrokes`, `boarFacets`, `glitchBands`, `sparks` |
+| `frontend/src/lib/boar.test.ts` | New — 170 cases: absolute-M/C/Z, NaN sweep, viewBox containment, draw order, seeded determinism, timing budget |
+| `frontend/src/components/Splash.tsx` | New — the projection and the anime.js timeline, reduced-motion path by hand |
+| `frontend/src/store.ts` | `splashDone`, seeded from the dev once-per-session flag |
+| `frontend/src/App.tsx` | Mounts `<Splash />` last, behind a `<Show>` |
+| `frontend/src/styles.css` | `.splash-*` — backdrop, grid, scanlines, sweep, wordmark; the CSS half of reduced motion |
+| `frontend/package.json` | `animejs` ^4.5.0 (MIT), the first runtime dependency beyond solid-js and chart.js |

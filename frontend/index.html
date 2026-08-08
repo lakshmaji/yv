@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>yv</title>
+  <!--
+    Inline, and duplicating --bg from styles.css on purpose: this is the only
+    rule that can paint before the stylesheet and the JS bundle load, and the
+    thing it prevents — a white flash on launch — happens entirely in that gap.
+  -->
+  <style>html,body{margin:0;background:#0d1117}</style>
 </head>
 <body>
   <div id="root"></div>
