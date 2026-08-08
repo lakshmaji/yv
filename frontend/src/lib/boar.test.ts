@@ -88,11 +88,23 @@ describe('boar paths', () => {
     }
   });
 
-  it('marks the far side, and only the far side, as behind', () => {
-    // Those are the strokes Splash.tsx renders under the body fills. A near
-    // stroke flagged behind vanishes into the animal entirely.
-    expect(strokes.filter(s => s.behind).map(s => s.id).sort())
-      .toEqual(['hoofFrontFar', 'hoofHindFar', 'legFrontFar', 'legHindFar']);
+  it('draws every leg under the body, and nothing else', () => {
+    // A leg drawn over the body carries its own closed top edge, and that lid is
+    // what made them read as four boxes hung off the belly. The body has to be
+    // the thing that hides where they join. Nothing but legs may be flagged:
+    // anything else behind the body simply is not drawn.
+    expect(strokes.filter(s => s.behind).map(s => s.id).sort()).toEqual([
+      'hoofFrontFar', 'hoofFrontNear', 'hoofHindFar', 'hoofHindNear',
+      'legFrontFar', 'legFrontNear', 'legHindFar', 'legHindNear',
+    ]);
+  });
+
+  it('lands the far feet higher than the near ones', () => {
+    // They are further from the camera. Level with the near pair the animal
+    // reads as standing on a wall rather than on the ground.
+    const foot = (id: string) => Math.max(...pathPoints(strokes.find(s => s.id === id)!.d).map(([, y]) => y));
+    expect(foot('hoofFrontFar')).toBeLessThan(foot('hoofFrontNear'));
+    expect(foot('hoofHindFar')).toBeLessThan(foot('hoofHindNear'));
   });
 
   it('resolves every colour to a real hex', () => {
@@ -125,8 +137,13 @@ describe('draw order', () => {
   // early, then its creases and crest, then the tusks, then the eye. Reordering
   // the arrays in boar.ts is a one-line change that would silently ruin the only
   // timing the splash has, so it is pinned here.
-  it('starts with the silhouette', () => {
-    expect(strokes[0].role).toBe('silhouette');
+  it('starts with the body itself', () => {
+    // Not with the legs. They are painted underneath it, and emitting them in
+    // paint order opened the splash on four disembodied legs with no animal —
+    // reveal order and paint order are different questions.
+    expect(strokes[0].id).toBe('body');
+    expect(strokes.findIndex(s => s.id === 'legFrontNear'))
+      .toBeGreaterThan(strokes.findIndex(s => s.id === 'body'));
   });
 
   it('draws the head before the tusks', () => {

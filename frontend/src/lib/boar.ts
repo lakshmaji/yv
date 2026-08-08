@@ -26,7 +26,7 @@ import { shade } from './landscape/palette';
  * the strokes, and the SVG root clips at the viewBox, so a snug box shears the
  * glow off flat along an edge and the hump looks cut.
  */
-export const BOAR_VIEWBOX = { w: 500, h: 360 } as const;
+export const BOAR_VIEWBOX = { w: 500, h: 370 } as const;
 
 /**
  * The splash's own colours, deliberately not the `--accent` / `--surface` CSS
@@ -115,10 +115,13 @@ export interface BoarStroke {
   width: number;
   role: StrokeRole;
   /**
-   * Drawn *behind* the body rather than on it. Only the far tusk: distance on a
-   * flat drawing is occlusion, and a smaller paler copy sitting on top of the
-   * muzzle reads as a second tusk on the same side of the head, not one on the
-   * other side of it.
+   * Drawn *under* the body fills rather than on top of them.
+   *
+   * Every leg is. A leg drawn over the body carries its own closed top edge, and
+   * that lid is what made the first version read as four boxes hung off the
+   * belly rather than as legs — the body has to be the thing that hides where
+   * they join. It also does the work of putting the far pair behind the near
+   * one, since distance on a flat drawing is occlusion.
    */
   behind?: boolean;
   /** Closed shapes get a faint wash; open contour lines must not. */
@@ -189,13 +192,13 @@ const SILHOUETTE: ReadonlyArray<readonly [string, string]> = [
  * drawing is occlusion, and a paler copy laid on top of the belly is a smudge.
  */
 const LEGS_NEAR: ReadonlyArray<readonly [string, string]> = [
-  ['legFrontNear', 'M84 260 C82 278, 84 294, 88 306 C96 311, 108 311, 116 306 C119 292, 118 276, 116 256 Z'],
-  ['legHindNear', 'M334 264 C332 282, 334 298, 338 310 C346 315, 358 315, 366 310 C369 296, 368 280, 366 260 Z'],
+  ['legFrontNear', 'M85 254 C82 276, 84 298, 88 312 C96 318, 108 318, 116 312 C119 296, 118 274, 116 252 Z'],
+  ['legHindNear', 'M333 266 C330 286, 332 304, 336 318 C344 324, 356 324, 364 318 C367 302, 366 284, 364 262 Z'],
 ];
 
 const LEGS_FAR: ReadonlyArray<readonly [string, string]> = [
-  ['legFrontFar', 'M136 268 C134 284, 136 298, 140 308 C147 312, 157 312, 164 308 C167 296, 166 282, 164 264 Z'],
-  ['legHindFar', 'M268 272 C266 288, 268 302, 272 312 C279 316, 289 316, 296 312 C299 300, 298 286, 296 268 Z'],
+  ['legFrontFar', 'M141 266 C139 284, 141 298, 145 308 C152 313, 162 313, 169 308 C172 296, 171 282, 169 262 Z'],
+  ['legHindFar', 'M263 272 C261 290, 263 302, 267 312 C274 317, 284 317, 291 312 C294 300, 293 286, 291 268 Z'],
 ];
 
 /**
@@ -204,13 +207,13 @@ const LEGS_FAR: ReadonlyArray<readonly [string, string]> = [
  * scratch on a rectangle reads as a scratch.
  */
 const HOOVES_NEAR: ReadonlyArray<readonly [string, string]> = [
-  ['hoofFrontNear', 'M86 290 C96 295, 108 295, 117 290 C118 302, 117 312, 114 318 L102 306 L91 318 C87 310, 85 299, 86 290 Z'],
-  ['hoofHindNear', 'M336 294 C346 299, 358 299, 367 294 C368 306, 367 316, 364 322 L352 310 L341 322 C337 314, 335 303, 336 294 Z'],
+  ['hoofFrontNear', 'M86 296 C96 301, 108 301, 117 296 C118 306, 117 314, 115 320 L102 313 L90 320 C87 313, 85 305, 86 296 Z'],
+  ['hoofHindNear', 'M334 302 C344 307, 356 307, 365 302 C366 312, 365 320, 363 326 L350 319 L338 326 C335 319, 333 311, 334 302 Z'],
 ];
 
 const HOOVES_FAR: ReadonlyArray<readonly [string, string]> = [
-  ['hoofFrontFar', 'M138 294 C146 299, 156 299, 165 294 C166 304, 165 312, 162 318 L152 307 L143 318 C139 311, 137 302, 138 294 Z'],
-  ['hoofHindFar', 'M270 298 C278 303, 288 303, 297 298 C298 308, 297 316, 294 322 L284 311 L275 322 C271 315, 269 306, 270 298 Z'],
+  ['hoofFrontFar', 'M142 292 C151 297, 161 297, 170 292 C171 301, 170 308, 168 313 L156 307 L145 313 C142 307, 141 300, 142 292 Z'],
+  ['hoofHindFar', 'M264 296 C273 301, 283 301, 292 296 C293 305, 292 312, 290 317 L278 311 L267 317 C264 311, 263 304, 264 296 Z'],
 ];
 
 /**
@@ -351,12 +354,17 @@ function seg(
 }
 
 /**
- * Every stroke of the wireframe, in the order it is drawn on.
+ * Every stroke of the wireframe, in the order it is DRAWN ON — which is not the
+ * order it is painted in.
  *
- * The order is the reveal: the far side of the animal first (it is underneath
- * everything), then the body, its legs, its face, and the eyes last of all. It
- * is asserted in the tests because reordering the arrays above is a one-line
- * change that would silently ruin the only timing the splash has.
+ * The reveal is: the body, then the legs it stands on, then its face, then the
+ * tusks, and the eyes last of all. Paint order is a separate question answered
+ * by `behind`, and Splash.tsx regroups on that flag before rendering. Emitting
+ * these in paint order — which an earlier version did, because the legs go
+ * underneath — opened the splash on four disembodied legs with no animal.
+ *
+ * The order is asserted in the tests because reordering the arrays above is a
+ * one-line change that would silently ruin the only timing the splash has.
  */
 export function boarStrokes(): BoarStroke[] {
   const far = (strokes: BoarStroke[]) => strokes.map(t => ({ ...t, behind: true }));
@@ -369,15 +377,17 @@ export function boarStrokes(): BoarStroke[] {
         : { ...e, fill: shade(NEON.body, -0.62) });
 
   return [
-    // The far side, drawn first because it is drawn under the body.
+    // The body first: it is the thing being revealed, and the legs belong to it.
+    ...seg(SILHOUETTE, 'silhouette', NEON.ink, 3.2),
+
+    // Then the legs. Far pair before near, so within the under-body group the
+    // near pair paints over it.
     ...far(seg(LEGS_FAR, 'silhouette', shade(NEON.ink, -0.4), 2.2)
       .map(l => ({ ...l, fill: shade(NEON.body, -0.22) }))),
-    ...far(seg(HOOVES_FAR, 'detail', shade(NEON.ink, -0.5), 1.6)
+    ...far(seg(HOOVES_FAR, 'detail', shade(NEON.ink, -0.5), 1.5)
       .map(h => ({ ...h, fill: shade(hoof, -0.15) }))),
-
-    ...seg(SILHOUETTE, 'silhouette', NEON.ink, 3.2),
-    ...seg(LEGS_NEAR, 'silhouette', NEON.ink, 2.6).map(l => ({ ...l, fill: NEON.body })),
-    ...seg(HOOVES_NEAR, 'detail', NEON.ink, 1.8).map(h => ({ ...h, fill: hoof })),
+    ...far(seg(LEGS_NEAR, 'silhouette', NEON.ink, 2.2).map(l => ({ ...l, fill: NEON.body }))),
+    ...far(seg(HOOVES_NEAR, 'detail', NEON.ink, 1.7).map(h => ({ ...h, fill: hoof }))),
 
     ...seg(INTERIOR, 'interior', NEON.cyan, 2),
     ...seg(SNOUT, 'detail', NEON.ink, 2)

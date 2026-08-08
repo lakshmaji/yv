@@ -139,7 +139,12 @@ export default function Splash() {
       return;
     }
 
-    const strokePaths = Array.from(artRef.querySelectorAll<SVGPathElement>('.splash-stroke'));
+    // Collected in STROKES order, not DOM order. The two differ on purpose: the
+    // legs are painted under the body but revealed after it, so querying the DOM
+    // would hand the stagger the paint order and open the splash on four legs.
+    const strokePaths = STROKES
+      .map(s => artRef.querySelector<SVGPathElement>(`#stroke-${s.id}`))
+      .filter((el): el is SVGPathElement => el !== null);
     const facetPaths = Array.from(artRef.querySelectorAll<SVGPathElement>('.splash-facet'));
     const bandUses = Array.from(rootRef.querySelectorAll<SVGUseElement>('.splash-band'));
     const sparkDots = Array.from(rootRef.querySelectorAll<SVGCircleElement>('.splash-spark'));

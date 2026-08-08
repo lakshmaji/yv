@@ -2063,12 +2063,32 @@ Head-only studies were abandoned before this. A head alone kept collapsing into
 whatever else has a snout, where four legs and a spiked back leave nothing else
 it could be.
 
-### The legs are short on purpose
+### The legs are short, and they are drawn underneath
 
-Short and stubby, rooted inside the body and stopping just below it. Run long
-they stop being a cartoon boar and become a pony; run level with the belly they
-read as feet peeping out rather than as legs holding it up. There is about
-40px of visible leg, and that is the whole range that works.
+Short and stubby. Run long they stop being a cartoon boar and become a pony; run
+level with the belly they read as feet peeping out. About 40px of visible leg is
+the whole range that works.
+
+**All four are painted under the body fills**, near pair included. A leg drawn
+over the body carries its own closed top edge, and that lid is what made the
+first version read as four white boxes hung off the belly — the body has to be
+the thing that hides where they join. The far pair's feet also land higher than
+the near pair's, because they are further from the camera; level, the animal
+stands on a wall rather than on the ground. Both are asserted, the second after
+an off-by-one put a far foot a single pixel *below* its near one.
+
+### Reveal order is not paint order
+
+`boarStrokes()` returns the order the wireframe is **drawn on**: the body, then
+its legs, then the face, then the tusks, eyes last. Paint order is a separate
+question answered by `BoarStroke.behind`, and `Splash.tsx` regroups on that flag
+before rendering.
+
+They have to be separate because the legs go *under* the body but arrive *after*
+it. Emitting them in paint order opened the splash on four disembodied legs with
+no animal attached. The consequence in the component: the drawable array is
+collected by mapping over `STROKES`, **not** by `querySelectorAll` — the DOM is
+in paint order, and handing that to the stagger reintroduces the bug.
 
 ### The far side is a layer, not a lighter colour
 
