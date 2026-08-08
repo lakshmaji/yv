@@ -20,10 +20,10 @@ import { makeRng, hashText } from './landscape/rng';
  * the strokes, and the SVG root clips at the viewBox, so a snug box shears the
  * glow off flat along an edge and the tusks look cut.
  */
-export const BOAR_VIEWBOX = { w: 440, h: 360 } as const;
+export const BOAR_VIEWBOX = { w: 460, h: 400 } as const;
 
 /** The mirror line. Everything symmetric is reflected about it. */
-export const CENTRE_X = 220;
+export const CENTRE_X = 230;
 
 /**
  * The splash's own colours, deliberately not the `--accent` / `--surface` CSS
@@ -33,6 +33,7 @@ export const CENTRE_X = 220;
  */
 export const NEON = {
   ink: '#f2fbff',
+  bone: '#d3e7f4',
   cyan: '#22e8ff',
   magenta: '#ff2fb9',
   violet: '#8b5cf6',
@@ -75,7 +76,7 @@ export const SPLASH = {
   drawStart: 200,
   /** Per stroke, not for the whole wireframe — they overlap by `drawStagger`. */
   drawDur: 520,
-  drawStagger: 11,
+  drawStagger: 10,
   facetsAt: 900,
   facetsDur: 600,
   glitchAt: 1300,
@@ -151,74 +152,88 @@ export function mirrorPath(d: string, cx: number = CENTRE_X): string {
 
 // ---------------------------------------------------------------------------
 // The drawing. Left half only, unless marked on-axis.
+//
+// Head-on, a boar is a SHIELD, not a disc: widest across the brow and the ears,
+// narrowing all the way down to a snout that hangs below the jawline. The first
+// two frontal passes were built on a round skull with small upright ears, and
+// both read unmistakably as a cat — a circle with triangles on top is that
+// animal whatever else you draw inside it.
+//
+// The three things that carry the read, in order of how much they matter:
+//   1. the outline tapering downward rather than closing into a circle,
+//   2. a snout disc big enough to be the animal's main feature, hanging below
+//      the jaw rather than sitting on the face,
+//   3. tusks that come out of a MOUTH — floating beside the head they are horns.
 // ---------------------------------------------------------------------------
 
 /** Skull and ears — the outer edge of the animal. */
 const SILHOUETTE_HALF: ReadonlyArray<readonly [string, string]> = [
-  // A wedge, not a circle: narrow across the crown, widest at the cheekbone,
-  // then tapering down beside the snout. The first pass of this drawing was a
-  // disc and read unmistakably as a mandrill — round skull, wide-set eyes and
-  // whiskers are that animal, and only the outline can undo it.
-  ['skull', 'M220 46 C192 42, 160 50, 136 70 C110 92, 94 124, 92 158 C90 196, 104 228, 128 252 C146 268, 162 286, 170 306'],
-  // Small, high and angled outward. Drawn any larger they stop being ears and
-  // start being horns, which is what the first pass had.
-  ['ear', 'M150 62 C138 54, 128 42, 124 32 C112 44, 114 70, 130 84 Z'],
+  ['skull', 'M230 60 C204 56, 182 58, 166 66 C146 76, 130 88, 124 104 C122 144, 130 212, 148 268 C158 298, 174 316, 194 326'],
+  // Big, leaf-shaped, and swept out and back from the upper corner of the
+  // skull. Small upright triangles on top of the head are cat ears, and they
+  // were the single loudest wrong signal in the version before this one.
+  ['ear', 'M170 78 C150 62, 126 52, 106 52 C108 76, 126 98, 152 102 Z'],
 ];
 
-/** Creases: brow, the muzzle running down the middle of the face, the mouth. */
+/** Creases: brow, the muzzle hanging down the middle, the mouth under it. */
 const INTERIOR_HALF: ReadonlyArray<readonly [string, string]> = [
-  ['brow', 'M112 118 C130 106, 156 104, 176 110'],
-  // Long, and flaring as it comes down. Head-on, snout length is the whole
-  // difference between a boar and everything else with a wedge-shaped skull;
-  // the short square muzzle of the first pass gave that away immediately.
-  ['muzzleEdge', 'M188 150 C178 196, 168 240, 162 284'],
-  ['cheekCrease', 'M114 172 C134 194, 150 226, 156 258'],
-  ['jowl', 'M170 266 C176 286, 180 306, 178 326'],
+  // Heavy and low, so the eye sits under it rather than on an open face.
+  ['brow', 'M126 150 C146 134, 172 130, 194 136'],
+  ['earInner', 'M160 80 C144 68, 128 60, 114 58'],
+  // The muzzle hangs past the jaw. Head-on, snout length is the whole
+  // difference between a boar and anything else with a wedge-shaped skull.
+  ['muzzleEdge', 'M188 176 C176 214, 170 254, 172 300'],
+  ['cheekCrease', 'M128 196 C148 220, 164 252, 170 290'],
+  // The mouth the tusks come out of. Without it they are two horns leaning
+  // against the head, which is exactly how they read before it was added.
+  ['mouth', 'M196 346 C210 354, 221 357, 230 357'],
 ];
 
 /** On-axis: symmetric in itself, so it is written once and never mirrored. */
 const INTERIOR_AXIS: ReadonlyArray<readonly [string, string]> = [
-  ['muzzleRidge', 'M220 150 C220 190, 220 230, 220 268'],
-  // The snout disc, seen flat-on. Head-on this is the feature that says "boar"
-  // — in profile the same job was done by its blunt vertical edge.
-  ['snout', 'M160 300 C160 282, 187 270, 220 270 C253 270, 280 282, 280 300 C280 318, 253 330, 220 330 C187 330, 160 318, 160 300 Z'],
+  ['muzzleRidge', 'M230 178 C230 220, 230 262, 230 300'],
+  // Deliberately huge, and hanging below the jaw. A boar's nose disc is the
+  // animal's main feature; drawn politely small it becomes a nose on a face.
+  ['snout', 'M156 312 C156 288, 189 272, 230 272 C271 272, 304 288, 304 312 C304 336, 271 352, 230 352 C189 352, 156 336, 156 312 Z'],
 ];
 
 const DETAIL_HALF: ReadonlyArray<readonly [string, string]> = [
-  ['nostril', 'M180 288 C186 280, 199 280, 204 288 C199 297, 185 297, 180 288 Z'],
-  ['iris', 'M137 130 C143 127, 151 129, 152 134 C148 139, 139 138, 137 130 Z'],
+  ['nostril', 'M182 300 C182 289, 194 283, 203 289 C210 294, 208 306, 198 310 C188 314, 182 308, 182 300 Z'],
+  ['iris', 'M147 162 C153 159, 160 161, 161 166 C157 171, 149 170, 147 162 Z'],
   // Two bands across each tusk. Placed by eye against the crescent rather than
   // derived from it: the tusk is a hand-drawn bezier, and a band computed from
   // a curve nobody sampled would be no more accurate and much harder to nudge.
-  ['bandRoot', 'M132 318 C133 313, 134 309, 135 304'],
-  ['bandMid', 'M56 228 C63 229, 71 231, 79 233'],
+  ['bandRoot', 'M148 352 C149 346, 150 342, 151 336'],
+  ['bandMid', 'M104 286 C110 288, 116 289, 122 290'],
 ];
 
 const DETAIL_AXIS: ReadonlyArray<readonly [string, string]> = [
   // The chevron on the forehead. It is the reference's tilaka and it also reads
   // as a HUD marker, which is the only reason it survives the change of idiom.
-  ['chevron', 'M206 74 C211 92, 214 102, 220 116 C226 102, 229 92, 234 74'],
+  ['chevron', 'M214 76 C220 98, 224 110, 230 126 C236 110, 240 98, 246 76'],
   // The ring sits in the middle of the snout disc, not hanging below it — a
   // ring under the jaw reads as a collar.
-  ['ringOuter', 'M220 280 C234 280, 245 290, 245 302 C245 314, 234 324, 220 324 C206 324, 195 314, 195 302 C195 290, 206 280, 220 280 Z'],
-  ['ringInner', 'M220 288 C230 288, 238 294, 238 302 C238 310, 230 316, 220 316 C210 316, 202 310, 202 302 C202 294, 210 288, 220 288 Z'],
+  ['ringOuter', 'M230 294 C243 294, 254 305, 254 318 C254 331, 243 342, 230 342 C217 342, 206 331, 206 318 C206 305, 217 294, 230 294 Z'],
+  ['ringInner', 'M230 302 C239 302, 246 309, 246 318 C246 327, 239 334, 230 334 C221 334, 214 327, 214 318 C214 309, 221 302, 230 302 Z'],
 ];
 
 /**
- * The tusk. Head-on this is the whole silhouette — it sweeps out, down and back
- * up so the pair frames the face, which is what the reference is built around
- * and what the old profile drawing could only hint at.
+ * The tusk. It roots at the corner of the mouth, sweeps down and out, and comes
+ * back up across the cheek with the tip hooking inward — so the pair frames the
+ * face and, crucially, is attached to it.
  *
  * A tapered crescent rather than a stroke: a tusk is a solid object, and a
  * constant-width line reads as a whisker.
  */
 const TUSK_HALF: ReadonlyArray<readonly [string, string]> = [
-  ['tusk', 'M186 308 C142 322, 92 310, 68 264 C48 226, 50 176, 70 142 C80 172, 72 212, 86 248 C106 294, 156 308, 190 300 Z'],
+  ['tusk', 'M192 348 C160 358, 124 346, 108 308 C94 274, 98 232, 116 202 C120 228, 114 258, 126 288 C140 320, 168 342, 196 340 Z'],
 ];
 
 /** Each eye, addressable so the pair can be lit on its own beat. */
 const EYE_HALF: ReadonlyArray<readonly [string, string]> = [
-  ['eye', 'M120 136 C128 124, 150 121, 164 128 C156 140, 132 145, 120 136 Z'],
+  // Small and deep-set under the brow. The wide almond of the previous pass was
+  // half of why that face read as a cat.
+  ['eye', 'M132 166 C142 156, 160 154, 172 162 C162 172, 142 175, 132 166 Z'],
 ];
 
 /**
@@ -226,13 +241,12 @@ const EYE_HALF: ReadonlyArray<readonly [string, string]> = [
  * outward normal points away from the animal — see `alongSpine`.
  */
 const CREST_SPINE: ReadonlyArray<readonly [number, number]> = [
-  [166, 54], [186, 46], [204, 43], [220, 42],
+  [178, 64], [200, 58], [216, 55], [230, 54],
 ];
 // Down the jowl rather than out from the cheek. Bristles standing straight out
-// sideways are whiskers, and whiskers were half of why the first pass of this
-// face read as a monkey.
+// sideways are whiskers, and whiskers are a cat.
 const CHEEK_SPINE: ReadonlyArray<readonly [number, number]> = [
-  [128, 252], [106, 214], [94, 176],
+  [148, 268], [130, 224], [124, 180],
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -346,7 +360,7 @@ export function boarStrokes(): BoarStroke[] {
     ...seg(INTERIOR_AXIS, 'interior', NEON.cyan, 2),
     ...paired(seg(DETAIL_HALF, 'detail', NEON.cyan, 1.6)),
     ...seg(DETAIL_AXIS, 'detail', NEON.amber, 2),
-    ...paired(seg(TUSK_HALF, 'tusk', NEON.ink, 2.4).map(t => ({ ...t, fill: NEON.ink }))),
+    ...paired(seg(TUSK_HALF, 'tusk', NEON.ink, 2.4).map(t => ({ ...t, fill: NEON.bone }))),
     ...paired(seg(EYE_HALF, 'detail', NEON.magenta, 2.2)),
   ];
 }
@@ -361,19 +375,19 @@ export function boarStrokes(): BoarStroke[] {
  * is the exact defect the profile drawing had between its cheek and its hump.
  */
 export function boarFacets(): BoarFacet[] {
-  const ear = 'M150 62 C138 54, 128 42, 124 32 C112 44, 114 70, 130 84 Z';
+  const ear = 'M170 78 C150 62, 126 52, 106 52 C108 76, 126 98, 152 102 Z';
   return [
     {
       id: 'faceFacet',
-      d: 'M220 46 C192 42, 160 50, 136 70 C110 92, 94 124, 92 158 C90 196, 104 228, 128 252 C146 268, 162 286, 170 306 C190 314, 250 314, 270 306 C278 286, 294 268, 312 252 C336 228, 350 196, 348 158 C346 124, 330 92, 304 70 C280 50, 248 42, 220 46 Z',
+      d: 'M230 60 C204 56, 182 58, 166 66 C146 76, 130 88, 124 104 C122 144, 130 212, 148 268 C158 298, 174 316, 194 326 C212 332, 248 332, 266 326 C286 316, 302 298, 312 268 C330 212, 338 144, 336 104 C330 88, 314 76, 294 66 C278 58, 256 56, 230 60 Z',
       color: NEON.cyan,
       opacity: 0.11,
     },
     {
       id: 'muzzleFacet',
-      d: 'M188 150 C178 196, 168 240, 162 284 C186 294, 254 294, 278 284 C272 240, 262 196, 252 150 C236 142, 204 142, 188 150 Z',
+      d: 'M188 176 C176 214, 170 254, 172 300 C194 310, 266 310, 288 300 C290 254, 284 214, 272 176 C252 166, 208 166, 188 176 Z',
       color: NEON.violet,
-      opacity: 0.17,
+      opacity: 0.12,
     },
     { id: 'earFacet', d: ear, color: NEON.magenta, opacity: 0.16 },
     { id: 'earFacet-r', d: mirrorPath(ear), color: NEON.magenta, opacity: 0.16 },
@@ -425,7 +439,7 @@ export const SPARK_REACH = 40;
  * hand-copied bounding box that stops meaning anything the moment a tusk moves.
  */
 export const SPARK_ORIGINS: ReadonlyArray<readonly [number, number]> = [
-  [62, 154], [378, 154], [220, 302],
+  [116, 204], [344, 204], [230, 318],
 ];
 
 /**

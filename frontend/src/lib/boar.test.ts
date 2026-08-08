@@ -90,13 +90,25 @@ describe('boar paths', () => {
 });
 
 describe('mirrorPath', () => {
+  // Written against CENTRE_X rather than a literal, so moving the mirror line
+  // does not turn a working mirror into seven red tests.
+  const flip = (x: number) => 2 * CENTRE_X - x;
+
   const cases: Array<[string, string, string]> = [
-    ['reflects x and leaves y alone', 'M100 50', 'M340 50'],
-    ['leaves the centre line fixed', 'M220 10', 'M220 10'],
-    ['handles every pair of a curve', 'M100 20 C110 30, 120 40, 130 50', 'M340 20 C330 30, 320 40, 310 50'],
-    ['carries Z through', 'M100 20 C110 30, 120 40, 130 50 Z', 'M340 20 C330 30, 320 40, 310 50 Z'],
-    ['reflects past the centre', 'M400 8', 'M40 8'],
-    ['keeps one-decimal inputs clean', 'M100.5 20.5', 'M339.5 20.5'],
+    ['reflects x and leaves y alone', 'M100 50', `M${flip(100)} 50`],
+    ['leaves the centre line fixed', `M${CENTRE_X} 10`, `M${CENTRE_X} 10`],
+    [
+      'handles every pair of a curve',
+      'M100 20 C110 30, 120 40, 130 50',
+      `M${flip(100)} 20 C${flip(110)} 30, ${flip(120)} 40, ${flip(130)} 50`,
+    ],
+    [
+      'carries Z through',
+      'M100 20 C110 30, 120 40, 130 50 Z',
+      `M${flip(100)} 20 C${flip(110)} 30, ${flip(120)} 40, ${flip(130)} 50 Z`,
+    ],
+    ['reflects past the centre', 'M400 8', `M${flip(400)} 8`],
+    ['keeps one-decimal inputs clean', 'M100.5 20.5', `M${flip(100.5).toFixed(1)} 20.5`],
   ];
 
   it.each(cases)('%s', (_name, input, expected) => {
@@ -182,7 +194,8 @@ describe('draw order', () => {
     expect(count('silhouette')).toBe(4);
     expect(count('tusk')).toBe(2);
     expect(count('bristle')).toBeGreaterThanOrEqual(16);
-    expect(strokes.filter(s => s.id.startsWith('ear'))).toHaveLength(2);
+    // By exact id, not by prefix — `earInner` starts with "ear" too.
+    expect(strokes.filter(s => s.id === 'ear' || s.id === 'ear-r')).toHaveLength(2);
   });
 });
 

@@ -246,8 +246,8 @@ export default function Splash() {
               one: a single pass reads as soft focus, doubling it gives the tight
               core plus halo that a lit tube actually has. */}
           <filter id="boar-glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="3.4" result="wide" />
-            <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="tight" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="wide" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.7" result="tight" />
             <feMerge>
               <feMergeNode in="wide" />
               <feMergeNode in="tight" />
@@ -316,7 +316,7 @@ export default function Splash() {
                   class="splash-stroke"
                   d={stroke.d}
                   fill={stroke.fill ?? 'none'}
-                  fill-opacity={stroke.fill ? 0.85 : undefined}
+                  fill-opacity={stroke.fill ? 0.35 : undefined}
                   stroke={stroke.color}
                   stroke-width={stroke.width}
                   stroke-linecap="round"

@@ -2070,18 +2070,34 @@ The profile version read as a **whale**, and was fixed by a blunt vertical snout
 disc instead of a tapered point, tusks finishing *above* the muzzle line rather
 than politely below it, a shoulder hump, and a small pointed ear.
 
-The first frontal version read as a **mandrill**: a round skull, wide-set eyes
-and long horizontal whiskers are that animal, whatever else is on the face. What
-undid it was the outline — a wedge, narrow across the crown and widest at the
-cheekbone — plus a muzzle that *tapers*, since head-on, snout length is the whole
-difference between a boar and anything else wedge-shaped. The whiskers became
-short tufts running **down** the jowl.
+The frontal versions then read as a **mandrill**, and after that as a **cat**.
+Both are the same defect: a round skull. Smooth continuous bezier curvature
+closes into an oval however far the control points are dragged, and a circle
+with small upright triangles on top is a cat whatever else is drawn inside it.
 
-Tusks are the composition. They root behind the jowl, sweep out and down, and
-come back up with the tips hooking inward, so the pair frames the face. They
-carry a `fill` — the only strokes that do — because a tusk is a solid object
-where everything else is a contour; at 0.22 opacity they read as ghosts behind
-the head, and it takes 0.85 for them to sit in front of it.
+What finally fixed it, and the order the fixes matter in:
+
+1. **The outline has to taper downward, not close.** A flat crown, a corner at
+   the temple, then a long *near-straight* side running down and inward — a
+   shield. This is most of the read on its own.
+2. **The snout disc has to be huge and hang below the jaw.** It is the animal's
+   main feature; drawn politely small it is just a nose on a face.
+3. **The tusks have to come out of a mouth.** With no mouth line they are two
+   horns leaning against the head — which is exactly how they read.
+4. **Ears lean out, not up.** Anything narrow and pointing at the sky is a horn,
+   and a shield-shaped head with two horns is a bull.
+
+Three separate passes were also lost to things a static render could not show,
+only the running app: the bloom (`drop-shadow` at 26px over two wide blurs) had
+erased every crease, nostril and eye into white haze, and the tusks at
+`fill-opacity: 0.85` were flat grey slabs with no form in them.
+
+Tusks are the composition. They root at the corner of the mouth, sweep out and
+down, and come back up across the cheek with the tips hooking inward, so the
+pair frames the face *and is attached to it*. They carry a `fill` — the only
+strokes that do — because a tusk is a solid object where everything else is a
+contour, but at 0.35 rather than opaque: the bright stroke is what puts them in
+front of the head, and a solid fill just makes them slabs.
 
 The viewBox is larger than the drawing's bounds on purpose — the neon filter
 blurs well outside the strokes and the SVG root clips at the viewBox, so a snug

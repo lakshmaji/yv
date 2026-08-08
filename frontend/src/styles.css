@@ -4088,8 +4088,13 @@
   max-height: 60vh;
   /* One more halo on top of the SVG filter. The filter gives the tube its core
      glow; this is the light it throws on the room, which no per-element filter
-     can produce because it has to fall outside the drawing's own bounds. */
-  filter: drop-shadow(0 0 26px rgba(34, 232, 255, .3));
+     can produce because it has to fall outside the drawing's own bounds.
+
+     Deliberately restrained. The first pass ran this at 26px and stacked two
+     wide blurs behind it, and on screen the whole animal came out as white
+     haze — every crease, the nostrils and the eyes were simply gone. Bloom
+     that erases the drawing it is lighting is not atmosphere. */
+  filter: drop-shadow(0 0 14px rgba(34, 232, 255, .2));
 }
 
 .splash-mark {
