@@ -2089,12 +2089,22 @@ the user loses. A test asserts `total` and `exitAt` are *absent*, because the
 intent is the thing worth guarding and reintroducing either constant is how it
 would quietly come back.
 
-Click anywhere continues, space replays, and the button is the affordance that
-says so — it appears only once the sequence has finished, since offered during
-it, it competes with the thing it is interrupting. Space is `preventDefault`'d,
-as it scrolls by default and the app underneath is already mounted and
-listening. `leave()` is guarded: click-anywhere and the button both land there,
-and a second fade would restart the first from full opacity.
+Click anywhere continues; space replays. The footer line is the whole
+affordance — `about · click to continue · space to replay` — and there is no
+Continue button. One was tried and removed: at button size it was the heaviest
+thing on a screen whose subject is the animal, and it said the word the footer
+already says.
+
+Space is `preventDefault`'d, as it scrolls by default and the app underneath is
+already mounted and listening. `leave()` is guarded against a second call, or a
+repeat click would restart the fade from full opacity.
+
+The **about** link is set exactly like the rest of the line — same face, size,
+tracking and colour. Picked out in cyan it read as the one thing on the footer
+worth clicking, and it is the least important thing there; a hairline underline
+and a pointer cursor are enough to find it, and hover is where the colour
+arrives. Its handler stops propagation, or opening it would dismiss the splash
+out from under the browser it had just launched.
 
 The footer carries an **about** link to the author's GitHub, opened through
 `runtime.BrowserOpenURL` like `AboutModal` does. Its click handler stops

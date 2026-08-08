@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, onCleanup, onMount } from 'solid-js';
 import { animate, createTimeline, stagger, svg, type Target } from 'animejs';
 import {
   BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, SPLASH,
@@ -9,7 +9,7 @@ import { setSplashDone } from '../store';
 import { runtime } from '../wails';
 
 /** Where the "about" line goes. */
-const ABOUT_URL = 'https://github.com/lakshmaji';
+const ABOUT_URL = 'https://github.com/lakshmaji/yv';
 
 /**
  * The launch splash: a neon boar drawn on over a CRT field, then glitched, then
@@ -112,10 +112,7 @@ export default function Splash() {
   const reduced =
     typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
 
-  /** True once the sequence has finished and the splash is waiting on the user. */
-  const [settled, setSettled] = createSignal(false);
   let leaving = false;
-  let settleTimer: number | undefined;
 
   /**
    * Leaves. The ONLY thing that dismisses the splash — there is no timer behind
@@ -138,14 +135,9 @@ export default function Splash() {
   }
 
   function replay(): void {
-    if (leaving) return;
-    setSettled(false);
-    window.clearTimeout(settleTimer);
-    if (reduced) settleTimer = window.setTimeout(() => setSettled(true), 200);
-    else timeline?.restart();
+    if (leaving || reduced) return;
+    timeline?.restart();
   }
-
-  onCleanup(() => window.clearTimeout(settleTimer));
 
   onMount(() => {
     // Click anywhere continues, space replays. Both stay in the shipped app
@@ -168,12 +160,10 @@ export default function Splash() {
       rootRef.removeEventListener('click', onClick);
     });
 
-    if (reduced) {
-      // Everything is already at its final state in the markup — there is
-      // nothing left to reveal, so it is settled as soon as it is on screen.
-      setSettled(true);
-      return;
-    }
+    // Reduced motion: everything is already at its final state in the markup,
+    // so there is nothing to reveal and no timeline to build. It simply sits
+    // there until the user clicks, which is what it does anyway.
+    if (reduced) return;
 
     // Collected in STROKES order, not DOM order. The two differ on purpose: the
     // legs are painted under the body but revealed after it, so querying the DOM
@@ -194,12 +184,9 @@ export default function Splash() {
     // reads as a flicker rather than as a reveal.
     const drawables = svg.createDrawable(strokePaths, 0, 0);
 
-    timeline = createTimeline({
-      defaults: { ease: 'outQuad' },
-      // Settles, and stays. Dismissing here is what made the Continue button a
-      // decoration on a countdown.
-      onComplete: () => setSettled(true),
-    });
+    // No onComplete. The timeline finishing is not an event anything acts on —
+    // the splash settles and waits, and only the user ends it.
+    timeline = createTimeline({ defaults: { ease: 'outQuad' } });
 
     // The strokes draw themselves on in boarStrokes order — skull, face, snout,
     // then the tusks that frame it, eyes last. Each half-stroke arrives beside
@@ -295,8 +282,8 @@ export default function Splash() {
     );
 
     // A beat of nothing, so the timeline's own end is `settleAt` rather than
-    // whenever the last visible thing happened to finish. Without it, adding or
-    // moving a beat silently moves the moment the Continue button appears.
+    // whenever the last visible thing happened to finish — which is what makes
+    // a replay run for the same length every time.
     timeline.add(rootRef, { opacity: 1, duration: 1 }, SPLASH.settleAt - 1);
 
     onCleanup(() => timeline?.pause());
@@ -437,15 +424,6 @@ export default function Splash() {
         <span class="splash-mark-name" data-text="yv">yv</span>
         <span class="splash-mark-sub">local dev command runner</span>
       </div>
-
-      {/* Appears only once the sequence has finished — offered during it, it
-          competes with the thing it is interrupting. Click-anywhere works the
-          whole time regardless; this is the affordance that says so. */}
-      <Show when={settled()}>
-        <button class="splash-continue" type="button" onClick={e => { e.stopPropagation(); leave(); }}>
-          continue
-        </button>
-      </Show>
 
       {/* The controls are worth naming: a splash nobody knows they can skip is
           one they sit through. The link stops the click propagating, or opening

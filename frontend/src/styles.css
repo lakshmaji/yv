@@ -4245,49 +4245,6 @@
      clipped away — so the wordmark is simply clean, not frozen mid-tear. */
   .splash-mark-name::before,
   .splash-mark-name::after { animation: none; }
-  /* `both` fill means removing the animation would leave it at opacity 0 —
-     it has to be given its end state explicitly, not just switched off. */
-  .splash-continue { animation: none; opacity: 1; transform: none; }
-}
-
-/* The way out. Nothing else dismisses the splash, so it has to be findable, and
-   it appears only once the sequence has finished — offered during it, it
-   competes with the thing it is interrupting.
-
-   Deliberately small. At button size it became the heaviest thing on a screen
-   whose subject is the animal, and it says the same word the footer already
-   does; clicking anywhere works either way. It only needs to be the one visible
-   place that says the splash is waiting on you, not the focus of the poster. */
-.splash-continue {
-  position: relative;
-  z-index: 4;
-  margin-top: 20px;
-  padding: 4px 13px;
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: rgba(34, 232, 255, .78);
-  background: transparent;
-  border: 1px solid rgba(34, 232, 255, .28);
-  border-radius: 2px;
-  cursor: pointer;
-  animation: splash-continue-in 320ms ease-out both;
-  transition: background 140ms linear, border-color 140ms linear, color 140ms linear;
-}
-.splash-continue:hover {
-  color: #d8fbff;
-  background: rgba(34, 232, 255, .12);
-  border-color: rgba(34, 232, 255, .7);
-}
-.splash-continue:focus-visible {
-  outline: 1px solid #22e8ff;
-  outline-offset: 3px;
-}
-
-@keyframes splash-continue-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
 }
 
 /* The footer line: what the splash can be told to do, and a way out to the
@@ -4311,15 +4268,25 @@
   padding: 1px 5px;
 }
 .splash-hint-sep { opacity: .45; }
+/* Set exactly like the rest of the line — same face, size, tracking and colour.
+   Picked out in cyan it read as the one thing on the footer worth clicking, and
+   it is the least important thing there.
+
+   It keeps a hairline underline and a pointer cursor, which is enough to find
+   it: the overlay is click-to-continue, so this has to signal that it is a
+   different kind of click without shouting about it. Hover is where the colour
+   arrives. */
 .splash-hint-link {
-  color: rgba(34, 232, 255, .8);
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
   text-decoration: none;
-  border-bottom: 1px solid rgba(34, 232, 255, .3);
-  /* The overlay is click-to-continue, so this needs a cursor that says it is a
-     different kind of click. */
+  border-bottom: 1px solid currentColor;
+  opacity: .85;
   cursor: pointer;
+  transition: color 140ms linear, opacity 140ms linear;
 }
 .splash-hint-link:hover {
   color: #22e8ff;
-  border-bottom-color: rgba(34, 232, 255, .7);
+  opacity: 1;
 }
