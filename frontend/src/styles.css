@@ -4250,21 +4250,26 @@
   .splash-continue { animation: none; opacity: 1; transform: none; }
 }
 
-/* The way out. Nothing else dismisses the splash, so this has to be findable —
-   but it appears only once the sequence has finished, since offered during it
-   it competes with the thing it is interrupting. */
+/* The way out. Nothing else dismisses the splash, so it has to be findable, and
+   it appears only once the sequence has finished — offered during it, it
+   competes with the thing it is interrupting.
+
+   Deliberately small. At button size it became the heaviest thing on a screen
+   whose subject is the animal, and it says the same word the footer already
+   does; clicking anywhere works either way. It only needs to be the one visible
+   place that says the splash is waiting on you, not the focus of the poster. */
 .splash-continue {
   position: relative;
   z-index: 4;
-  margin-top: 34px;
-  padding: 9px 26px;
+  margin-top: 20px;
+  padding: 4px 13px;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 3px;
+  font-size: 9px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  color: #22e8ff;
-  background: rgba(34, 232, 255, .06);
-  border: 1px solid rgba(34, 232, 255, .45);
+  color: rgba(34, 232, 255, .78);
+  background: transparent;
+  border: 1px solid rgba(34, 232, 255, .28);
   border-radius: 2px;
   cursor: pointer;
   animation: splash-continue-in 320ms ease-out both;
@@ -4272,8 +4277,8 @@
 }
 .splash-continue:hover {
   color: #d8fbff;
-  background: rgba(34, 232, 255, .16);
-  border-color: rgba(34, 232, 255, .85);
+  background: rgba(34, 232, 255, .12);
+  border-color: rgba(34, 232, 255, .7);
 }
 .splash-continue:focus-visible {
   outline: 1px solid #22e8ff;
