@@ -208,6 +208,18 @@ describe('SPLASH timings', () => {
     expect(drawEnd).toBeLessThanOrEqual(SPLASH.glitchAt);
   });
 
+  it('finishes the body mass exactly when the last stroke lands', () => {
+    // One animal appearing, not two events. Held back until after the wireframe
+    // was complete, the facets read as a separate fill step — a drawing, a
+    // pause, then a flood — instead of the thing solidifying as it is drawn.
+    expect(SPLASH.facetsAt + SPLASH.facetsDur).toBe(drawEnd);
+  });
+
+  it('starts the body mass while the wireframe is still drawing', () => {
+    expect(SPLASH.facetsAt).toBeGreaterThan(SPLASH.drawStart);
+    expect(SPLASH.facetsAt).toBeLessThan(drawEnd);
+  });
+
   const beats: Array<[string, number]> = [
     ['strokes finish drawing', drawEnd],
     ['facets finish', SPLASH.facetsAt + SPLASH.facetsDur],

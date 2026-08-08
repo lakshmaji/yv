@@ -90,8 +90,13 @@ export const SPLASH = {
   /** Per stroke, not for the whole wireframe — they overlap by `drawStagger`. */
   drawDur: 520,
   drawStagger: 15,
-  facetsAt: 900,
-  facetsDur: 600,
+  /*
+   * The body mass arrives while the last strokes are still drawing, and finishes
+   * exactly when they do. Held back to 900 it read as two separate events — a
+   * wireframe, a pause, then a fill — rather than as one animal appearing.
+   */
+  facetsAt: 640,
+  facetsDur: 620,
   glitchAt: 1300,
   glitchDur: 340,
   eyeAt: 1500,

@@ -60,13 +60,27 @@ const SPARKS = sparks(hashText('yv-boar-sparks'), 18);
  * element, and matching an index back to the right entry of a separate array is
  * a correspondence nothing enforces.
  */
-function path(stroke: BoarStroke) {
+/** Where each stroke sits in the reveal, so its fill can follow its own outline. */
+const REVEAL_INDEX = new Map(STROKES.map((s, i) => [s.id, i]));
+
+function path(stroke: BoarStroke, reduced: boolean) {
   return (
     <path
       id={`stroke-${stroke.id}`}
       class="splash-stroke"
       d={stroke.d}
       fill={stroke.fill ?? 'none'}
+      /*
+       * Filled shapes start with NO fill, and get it back on their own beat.
+       *
+       * svg.createDrawable only animates the STROKE — the fill is untouched and
+       * paints in full from the first frame. So the legs, hooves, snout, tusks
+       * and eyes were all solid silhouettes before a single line had been drawn,
+       * and the splash opened on four legs with the body assembling onto them.
+       * No amount of reordering fixes that; the fills have to be hidden too.
+       */
+      fill-opacity={stroke.fill && !reduced ? 0 : undefined}
+      data-reveal={REVEAL_INDEX.get(stroke.id) ?? 0}
       stroke={stroke.color}
       stroke-width={stroke.width}
       stroke-linecap="round"
@@ -172,6 +186,25 @@ export default function Splash() {
       { draw: '0 1', duration: SPLASH.drawDur, ease: 'inOut(2)' },
       stagger(SPLASH.drawStagger, { start: SPLASH.drawStart }),
     );
+
+    // Each filled shape gains its fill just after its own outline is drawn, so
+    // the animal solidifies in the same order it is drawn rather than all at
+    // once. Delay comes off the element's own reveal index — the filled paths
+    // are a subset, so a stagger over them would restart at zero and drift out
+    // of step with the outlines it is meant to follow.
+    const filled = strokePaths.filter(el => el.getAttribute('fill-opacity') !== null);
+    if (filled.length) {
+      timeline.add(
+        filled,
+        {
+          'fill-opacity': 1,
+          duration: 380,
+          delay: (target?: Target) =>
+            SPLASH.drawStart + fromData('reveal', 0)(target) * SPLASH.drawStagger + 130,
+        },
+        0,
+      );
+    }
 
     // Facets wash in behind, so the animal gains mass rather than staying a
     // diagram. Each keeps its own opacity: flattening them to one value is what
@@ -321,7 +354,7 @@ export default function Splash() {
           <g id="boar-art" ref={artRef}>
             {/* The far side of the animal, under the body — which is the whole
                 of what makes it the far side. */}
-            <For each={BEHIND}>{stroke => path(stroke)}</For>
+            <For each={BEHIND}>{stroke => path(stroke, reduced)}</For>
 
             <For each={FACETS}>
               {facet => (
@@ -340,7 +373,7 @@ export default function Splash() {
                 whole animal coming out mauve: a channel filter tints everything
                 it is handed, and handed a body it tints the body. */}
             <g id="boar-lines">
-              <For each={FRONT}>{stroke => path(stroke)}</For>
+              <For each={FRONT}>{stroke => path(stroke, reduced)}</For>
             </g>
           </g>
 

@@ -2077,6 +2077,30 @@ the near pair's, because they are further from the camera; level, the animal
 stands on a wall rather than on the ground. Both are asserted, the second after
 an off-by-one put a far foot a single pixel *below* its near one.
 
+### `createDrawable` animates the stroke, not the fill
+
+The single most misleading thing in this file. `svg.createDrawable` gives the
+line-drawing effect by animating `stroke-dasharray` / `stroke-dashoffset` — it
+does not touch `fill`, which paints in full from the very first frame.
+
+So every filled shape (the legs, hooves, snout, tusks and eyes) was a solid
+silhouette before a single line had been drawn. The splash opened on four legs
+with the body assembling onto them, which looked like a reveal-order bug and is
+not one — reordering cannot fix it, because the fills were never being revealed
+at all.
+
+Filled paths now start at `fill-opacity="0"` and animate back to 1 just after
+their own outline. The delay comes off each element's own `data-reveal` index
+rather than from a `stagger` over the filled subset: the subset's indices restart
+at zero, so a stagger over it drifts out of step with the outlines it is meant to
+follow.
+
+The body mass follows the same idea at a larger scale — `facetsAt + facetsDur`
+lands exactly on the last stroke. Held back until the wireframe was finished it
+read as two events, a drawing then a flood, instead of one animal appearing.
+Both relationships are pinned in the tests, since they are timings nothing else
+would catch.
+
 ### Reveal order is not paint order
 
 `boarStrokes()` returns the order the wireframe is **drawn on**: the body, then
