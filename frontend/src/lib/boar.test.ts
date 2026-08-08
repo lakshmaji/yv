@@ -83,7 +83,7 @@ describe('boar paths', () => {
     // Tusks, legs, hooves, the snout and the eye are things, not creases. Left
     // unfilled they read as loops of wire laid over the animal.
     for (const s of strokes.filter(s => s.role === 'tusk')) expect(s.fill).toBeTruthy();
-    for (const id of ['legFrontNear', 'hoofFrontNear', 'snout', 'eyeIris']) {
+    for (const id of ['legFrontNear', 'hoofFrontNear', 'snout', 'eyeNearIris', 'eyeFarIris']) {
       expect(strokes.find(s => s.id === id)?.fill, `${id} unfilled`).toBeTruthy();
     }
   });

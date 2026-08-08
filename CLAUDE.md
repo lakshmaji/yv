@@ -2038,18 +2038,37 @@ timeline at all, the markup is already at its final state, and it holds and
 fades. `.no-motion` is deliberately untouched: that toggle is scoped to
 `.landscape-stage` and is about the discovery map, not app boot.
 
-### A whole animal, not a head
+### A whole animal, at a three-quarter angle
 
-The drawing is a full boar in profile, facing left: a chunky body on four short
-legs with a bristled ridge along its back. Head-only studies were abandoned. A
-head alone kept collapsing into whatever else has a snout — it was, in order, a
-whale, a mandrill, a cat and a tapir — where four legs and a spiked back leave
-nothing else it could be.
+The drawing is a full boar seen from **off its front-left corner**, not square to
+its side. The angle is not a detail — it is the thing that made the drawing match
+its reference at all. At three-quarters **both eyes are visible**, and two eyes
+are what make a drawing read as an animal looking out of the picture rather than
+a diagram of one facing away.
 
-The back is a run of straight `L` segments where everything else is curves: a
-spike drawn as a bezier softens into a bump. `L` takes a coordinate pair like `M`
-and `C`, so the "pair the numbers off" parser the tests rely on still holds; `H`
-and `V` would not, and the test says so.
+Everything else follows from the angle: the head is broad instead of a wedge, the
+snout is a pale patch on the face instead of a disc in silhouette, the tusks
+flank it left and right, and the four legs splay instead of stacking into two
+pairs.
+
+The bristled ridge runs over the **rump only**. Nearest the camera a boar's back
+is a smooth heavy shoulder; spiking it end to end — which an earlier pass did —
+makes a hedgehog. Those spikes are straight `L` segments where everything else is
+curves, because a spike drawn as a bezier softens into a bump. `L` takes a
+coordinate pair like `M` and `C`, so the "pair the numbers off" parser the tests
+rely on still holds; `H` and `V` would not, and the test names which commands are
+allowed and why.
+
+Head-only studies were abandoned before this. A head alone kept collapsing into
+whatever else has a snout, where four legs and a spiked back leave nothing else
+it could be.
+
+### The legs are short on purpose
+
+Short and stubby, rooted inside the body and stopping just below it. Run long
+they stop being a cartoon boar and become a pony; run level with the belly they
+read as feet peeping out rather than as legs holding it up. There is about
+40px of visible leg, and that is the whole range that works.
 
 ### The far side is a layer, not a lighter colour
 

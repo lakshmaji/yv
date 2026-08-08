@@ -26,7 +26,7 @@ import { shade } from './landscape/palette';
  * the strokes, and the SVG root clips at the viewBox, so a snug box shears the
  * glow off flat along an edge and the hump looks cut.
  */
-export const BOAR_VIEWBOX = { w: 460, h: 360 } as const;
+export const BOAR_VIEWBOX = { w: 500, h: 360 } as const;
 
 /**
  * The splash's own colours, deliberately not the `--accent` / `--surface` CSS
@@ -143,138 +143,145 @@ export interface BoarFacet {
  * Every part of the eye, by id. They light on one beat: an iris that arrives
  * before its own pupil is a drawing assembling itself, not an eye opening.
  */
-export const EYE_IDS = ['eye', 'eyeIris', 'eyePupil', 'eyeGlint'] as const;
+export const EYE_IDS = [
+  'eyeNear', 'eyeNearIris', 'eyeNearGlint',
+  'eyeFar', 'eyeFarIris', 'eyeFarGlint',
+] as const;
 
 // ---------------------------------------------------------------------------
-// The drawing. Facing left.
+// The drawing. Three-quarter view, camera off the front-left.
 // ---------------------------------------------------------------------------
 
 /**
- * The body, as one closed outline.
+ * The body, as one closed outline — ears included.
  *
- * The back is a run of straight `L` segments rather than curves: the bristled
- * ridge is the animal's most recognisable edge from the side, and a spike drawn
- * as a bezier softens into a bump. Everything below the shoulder is curved,
- * because a boar is round everywhere the bristles are not.
+ * The ears are points on this path rather than separate shapes because at this
+ * angle they are part of the head's edge, and a triangle laid over a smooth
+ * skull reads as a sticker.
+ *
+ * The bristled ridge is straight `L` segments over the rump only, where the rest
+ * is curves. Two reasons: a spike drawn as a bezier softens into a bump, and
+ * spiking the whole back — which an earlier pass did — turns the animal into a
+ * hedgehog. Nearest the camera a boar's back is a smooth heavy shoulder.
  */
 const BODY_D =
-  'M56 148 C66 128, 82 116, 100 108 ' +
-  'L116 92 L128 104 L146 78 L160 96 L184 66 L200 86 L228 60 L244 84 ' +
-  'L274 62 L290 86 L318 70 L332 96 L356 88 L366 112 L388 110 L398 132 ' +
-  'C412 152, 418 182, 414 208 C410 236, 396 254, 376 262 ' +
-  'C340 272, 300 274, 260 272 C220 270, 180 268, 150 262 ' +
-  'C126 256, 108 240, 100 218 C92 200, 84 186, 70 178 ' +
-  'C60 172, 52 160, 56 148 Z';
+  'M48 168 C46 140, 52 112, 66 92 ' +
+  'L62 46 L92 74 ' +                                  // near ear
+  'C104 62, 116 54, 128 48 ' +
+  'L146 20 L172 56 ' +                                // far ear
+  'C196 52, 220 48, 244 46 ' +                        // smooth shoulder
+  'L262 30 L276 58 L298 38 L312 64 L338 44 L352 72 ' +
+  'L378 58 L390 86 L412 78 L420 106 L442 102 L446 130 ' +
+  'L462 148 L444 168 L458 192 L436 210 L446 236 L420 252 ' +
+  'C404 274, 372 288, 336 294 ' +
+  'C286 302, 226 300, 172 292 ' +
+  'C132 286, 100 272, 78 250 ' +
+  'C60 232, 48 200, 48 168 Z';
 
 const SILHOUETTE: ReadonlyArray<readonly [string, string]> = [
   ['body', BODY_D],
 ];
 
 /**
- * Legs, near pair and far pair.
- *
- * The far pair is drawn *behind* the body and set inboard, which is the whole
- * trick: distance on a flat drawing is occlusion. Four legs side by side on the
- * same plane read as a centipede, and a paler copy laid on top of the belly
- * reads as a smudge.
+ * Four legs, splayed rather than stacked in two pairs — at this angle the far
+ * pair is inboard and shorter, and that offset is most of what sells the camera
+ * position. The far pair also renders *under* the body fills: distance on a flat
+ * drawing is occlusion, and a paler copy laid on top of the belly is a smudge.
  */
 const LEGS_NEAR: ReadonlyArray<readonly [string, string]> = [
-  ['legFrontNear', 'M128 252 C126 272, 128 288, 131 300 C140 304, 150 304, 158 300 C160 286, 160 268, 158 250 Z'],
-  ['legHindNear', 'M318 254 C316 274, 318 290, 321 302 C330 306, 340 306, 348 302 C350 288, 350 268, 348 252 Z'],
+  ['legFrontNear', 'M84 260 C82 278, 84 294, 88 306 C96 311, 108 311, 116 306 C119 292, 118 276, 116 256 Z'],
+  ['legHindNear', 'M334 264 C332 282, 334 298, 338 310 C346 315, 358 315, 366 310 C369 296, 368 280, 366 260 Z'],
 ];
 
 const LEGS_FAR: ReadonlyArray<readonly [string, string]> = [
-  ['legFrontFar', 'M166 250 C164 268, 166 284, 169 296 C177 300, 186 300, 193 296 C195 282, 195 264, 193 248 Z'],
-  ['legHindFar', 'M356 250 C354 268, 356 284, 359 296 C367 300, 376 300, 383 296 C385 282, 385 264, 383 248 Z'],
+  ['legFrontFar', 'M136 268 C134 284, 136 298, 140 308 C147 312, 157 312, 164 308 C167 296, 166 282, 164 264 Z'],
+  ['legHindFar', 'M268 272 C266 288, 268 302, 272 312 C279 316, 289 316, 296 312 C299 300, 298 286, 296 268 Z'],
 ];
 
-/** Hooves. Cloven, which is one more thing the animal cannot be mistaken for. */
+/**
+ * Hooves. The notch is cut into the path with two `L` segments rather than drawn
+ * as a line across a solid block — cloven is a property of the silhouette, and a
+ * scratch on a rectangle reads as a scratch.
+ */
 const HOOVES_NEAR: ReadonlyArray<readonly [string, string]> = [
-  ['hoofFrontNear', 'M130 288 C140 292, 150 292, 159 288 C160 296, 159 304, 157 309 C148 312, 140 312, 132 309 C130 302, 129 294, 130 288 Z'],
-  ['hoofHindNear', 'M320 290 C330 294, 340 294, 349 290 C350 298, 349 306, 347 311 C338 314, 330 314, 322 311 C320 304, 319 296, 320 290 Z'],
+  ['hoofFrontNear', 'M86 290 C96 295, 108 295, 117 290 C118 302, 117 312, 114 318 L102 306 L91 318 C87 310, 85 299, 86 290 Z'],
+  ['hoofHindNear', 'M336 294 C346 299, 358 299, 367 294 C368 306, 367 316, 364 322 L352 310 L341 322 C337 314, 335 303, 336 294 Z'],
 ];
 
 const HOOVES_FAR: ReadonlyArray<readonly [string, string]> = [
-  ['hoofFrontFar', 'M168 284 C177 288, 186 288, 194 284 C195 292, 194 299, 192 304 C184 307, 176 307, 169 304 C167 297, 167 290, 168 284 Z'],
-  ['hoofHindFar', 'M358 284 C367 288, 376 288, 384 284 C385 292, 384 299, 382 304 C374 307, 366 307, 359 304 C357 297, 357 290, 358 284 Z'],
-];
-
-/** Creases, the ear, and the streaks of coarser hair along the flank. */
-const EAR: ReadonlyArray<readonly [string, string]> = [
-  ['ear', 'M92 112 C94 92, 101 80, 111 77 C118 86, 118 102, 111 114 Z'],
-];
-
-const INTERIOR: ReadonlyArray<readonly [string, string]> = [
-  ['shoulderCrease', 'M150 118 C166 146, 174 182, 170 218'],
-  ['flank1', 'M206 108 C228 116, 248 126, 262 140'],
-  ['flank2', 'M238 132 C260 140, 282 150, 298 162'],
-  ['flank3', 'M232 172 C256 178, 280 184, 298 192'],
-  ['flank4', 'M228 206 C252 210, 274 214, 292 218'],
+  ['hoofFrontFar', 'M138 294 C146 299, 156 299, 165 294 C166 304, 165 312, 162 318 L152 307 L143 318 C139 311, 137 302, 138 294 Z'],
+  ['hoofHindFar', 'M270 298 C278 303, 288 303, 297 298 C298 308, 297 316, 294 322 L284 311 L275 322 C271 315, 269 306, 270 298 Z'],
 ];
 
 /**
- * The snout disc, seen side-on: a broad oval carried out in front of the face,
- * with two nostrils in it. Along with the legs it is what makes the silhouette
- * unambiguous — every other animal this drawing has accidentally been had a
- * snout that tapered into the head instead of ending in a flat disc.
+ * The snout, seen three-quarters on: a broad pale patch on the face with two
+ * nostrils in it, not the disc-in-silhouette a side view gives. Along with the
+ * second eye it is what places the camera.
  */
 const SNOUT: ReadonlyArray<readonly [string, string]> = [
-  ['snout', 'M42 160 C42 149, 52 142, 64 142 C76 142, 86 149, 86 160 C86 171, 76 178, 64 178 C52 178, 42 171, 42 160 Z'],
-  ['nostrilNear', 'M55 152 C58 152, 61 155, 61 160 C61 165, 58 168, 55 168 C52 168, 49 165, 49 160 C49 155, 52 152, 55 152 Z'],
-  ['nostrilFar', 'M72 152 C75 152, 78 155, 78 160 C78 165, 75 168, 72 168 C69 168, 66 165, 66 160 C66 155, 69 152, 72 152 Z'],
+  ['snout', 'M84 188 C84 169, 102 157, 124 157 C146 157, 164 169, 164 188 C164 207, 146 219, 124 219 C102 219, 84 207, 84 188 Z'],
+  ['nostrilNear', 'M112 176 C116 176, 119 181, 119 188 C119 195, 116 200, 112 200 C108 200, 105 195, 105 188 C105 181, 108 176, 112 176 Z'],
+  ['nostrilFar', 'M137 176 C141 176, 144 181, 144 188 C144 195, 141 200, 137 200 C133 200, 130 195, 130 188 C130 181, 133 176, 137 176 Z'],
+];
+
+/** Coarse hair over the shoulder and flank, and the crease behind the head. */
+const INTERIOR: ReadonlyArray<readonly [string, string]> = [
+  ['flank1', 'M238 88 C258 80, 272 74, 278 62'],
+  ['flank2', 'M262 100 C288 94, 312 92, 332 94'],
+  ['flank3', 'M276 128 C302 122, 328 120, 350 122'],
+  ['flank4', 'M290 162 C314 156, 338 154, 358 156'],
+  ['flank5', 'M300 196 C322 192, 344 190, 362 192'],
 ];
 
 const DETAIL: ReadonlyArray<readonly [string, string]> = [
-  ['mouth', 'M86 176 C96 184, 108 188, 120 189'],
+  ['mouth', 'M100 224 C112 231, 136 231, 150 224'],
 ];
 
 /**
- * The tusks: a big near one and a small far one, set well apart.
- *
- * Near-identical crescents overlapping each other read as one thick tusk badly
- * drawn. In profile the far tusk is foreshortened, rooted further back along the
- * jaw and partly hidden by the head — so it is smaller, dimmer, and rendered
- * BEHIND the body, for the same reason the far legs are.
+ * The tusks flank the snout, one each side, as they do at this angle — and the
+ * near one is markedly the bigger. They used to be near-identical crescents
+ * overlapping each other, which reads as one thick tusk badly drawn rather than
+ * as two at different distances.
  *
  * Tapered crescents rather than strokes: a tusk has a thick root and a point,
- * and a constant-width line reads as a whisker. Their tips finish *above* the
- * muzzle line — kept politely below they read as teeth.
+ * and a constant-width line reads as a whisker.
  */
 const TUSK_NEAR: ReadonlyArray<readonly [string, string]> = [
-  ['tuskNear', 'M66 198 C54 196, 42 188, 32 174 C24 164, 20 154, 20 146 C28 152, 32 162, 40 172 C48 182, 58 190, 70 192 Z'],
+  ['tuskNear', 'M88 204 C74 206, 60 200, 50 188 C42 178, 38 164, 38 150 C46 158, 50 172, 60 184 C70 196, 80 202, 92 200 Z'],
 ];
 
 const TUSK_FAR: ReadonlyArray<readonly [string, string]> = [
-  ['tuskFar', 'M104 196 C98 194, 92 188, 89 178 C86 170, 85 162, 86 154 C91 161, 92 170, 96 178 C100 186, 104 191, 109 192 Z'],
+  ['tuskFar', 'M168 210 C178 212, 188 207, 194 197 C199 189, 201 180, 202 172 C196 178, 193 187, 187 194 C180 202, 174 206, 166 205 Z'],
 ];
 
 /**
- * The eye, last of all, and built from parts rather than as one lozenge: an
- * outline, a filled iris, a pupil and a glint. The single stroked almond it
- * replaces had nothing inside it, so at any size it read as a drawn mark on the
- * head rather than as something looking back.
+ * Both eyes, each built from an outline, an iris and a glint rather than as one
+ * filled oval. They light on ONE beat: an iris arriving before its own pupil, or
+ * one eye before the other, is a drawing assembling itself rather than an animal
+ * opening its eyes.
  *
- * The glint is what does most of the work — it is the only pure-white spot on
- * the animal, and it is what makes the eye wet instead of flat.
+ * The glints do most of the work — they are the only pure-white spots on the
+ * boar, and they are what make the eyes wet instead of flat.
  */
 const EYES: ReadonlyArray<readonly [string, string]> = [
-  ['eye', 'M100 140 C100 132, 105 126, 111 126 C117 126, 122 132, 122 140 C122 148, 117 154, 111 154 C105 154, 100 148, 100 140 Z'],
-  ['eyeIris', 'M111 131 C116 131, 119 135, 119 140 C119 145, 116 149, 111 149 C106 149, 103 145, 103 140 C103 135, 106 131, 111 131 Z'],
-  ['eyePupil', 'M111 135 C114 135, 116 137, 116 140 C116 143, 114 145, 111 145 C108 145, 106 143, 106 140 C106 137, 108 135, 111 135 Z'],
-  ['eyeGlint', 'M107 134 C109 134, 110 135, 110 137 C110 138, 109 139, 107 139 C106 139, 105 138, 105 137 C105 135, 106 134, 107 134 Z'],
+  ['eyeNear', 'M86 132 C93 132, 98 138, 98 146 C98 154, 93 160, 86 160 C79 160, 74 154, 74 146 C74 138, 79 132, 86 132 Z'],
+  ['eyeNearIris', 'M86 137 C91 137, 94 141, 94 146 C94 151, 91 155, 86 155 C81 155, 78 151, 78 146 C78 141, 81 137, 86 137 Z'],
+  ['eyeNearGlint', 'M82 140 C84 140, 85 141, 85 143 C85 144, 84 145, 82 145 C81 145, 80 144, 80 143 C80 141, 81 140, 82 140 Z'],
+  ['eyeFar', 'M186 130 C192 130, 197 136, 197 144 C197 152, 192 158, 186 158 C180 158, 175 152, 175 144 C175 136, 180 130, 186 130 Z'],
+  ['eyeFarIris', 'M186 135 C190 135, 193 139, 193 144 C193 149, 190 153, 186 153 C182 153, 179 149, 179 144 C179 139, 182 135, 186 135 Z'],
+  ['eyeFarGlint', 'M182 138 C184 138, 185 139, 185 141 C185 142, 184 143, 182 143 C181 143, 180 142, 180 141 C180 139, 181 138, 182 138 Z'],
 ];
 
 /**
  * The bristle bed, walked so the outward normal points away from the animal —
- * see `alongSpine`. It follows the tips of the dorsal spikes, so the neon
- * catches on the ridge that already exists in the outline rather than inventing
- * a second one beside it.
+ * see `alongSpine`. It follows the tips of the rump spikes, so the neon catches
+ * on the ridge the outline already has rather than inventing a second one.
  */
 const MANE_SPINE: ReadonlyArray<readonly [number, number]> = [
-  [116, 92], [146, 78], [184, 66], [228, 60], [274, 62], [318, 70], [356, 88],
+  [262, 30], [298, 38], [338, 44], [378, 58], [412, 78], [442, 102],
 ];
 
-const BRISTLE_COUNT = 12;
+const BRISTLE_COUNT = 11;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -347,14 +354,19 @@ function seg(
  * Every stroke of the wireframe, in the order it is drawn on.
  *
  * The order is the reveal: the far side of the animal first (it is underneath
- * everything), then the body, then its legs, then the detail, and the eye last.
- * It is asserted in the tests because reordering the arrays above is a one-line
+ * everything), then the body, its legs, its face, and the eyes last of all. It
+ * is asserted in the tests because reordering the arrays above is a one-line
  * change that would silently ruin the only timing the splash has.
  */
 export function boarStrokes(): BoarStroke[] {
   const far = (strokes: BoarStroke[]) => strokes.map(t => ({ ...t, behind: true }));
   const hoof = shade(NEON.body, -0.55);
-  const [eye, iris, pupil, glint] = seg(EYES, 'detail', NEON.ink, 1.6);
+  const eyes = seg(EYES, 'detail', NEON.ink, 1.6).map(e =>
+    e.id.endsWith('Iris')
+      ? { ...e, color: NEON.amber, width: 1.2, fill: NEON.amber }
+      : e.id.endsWith('Glint')
+        ? { ...e, color: NEON.ink, width: 0.6, fill: NEON.ink }
+        : { ...e, fill: shade(NEON.body, -0.62) });
 
   return [
     // The far side, drawn first because it is drawn under the body.
@@ -366,23 +378,20 @@ export function boarStrokes(): BoarStroke[] {
     ...seg(SILHOUETTE, 'silhouette', NEON.ink, 3.2),
     ...seg(LEGS_NEAR, 'silhouette', NEON.ink, 2.6).map(l => ({ ...l, fill: NEON.body })),
     ...seg(HOOVES_NEAR, 'detail', NEON.ink, 1.8).map(h => ({ ...h, fill: hoof })),
-    ...seg(EAR, 'silhouette', NEON.ink, 2.2).map(e => ({ ...e, fill: shade(NEON.body, -0.3) })),
 
     ...seg(INTERIOR, 'interior', NEON.cyan, 2),
     ...seg(SNOUT, 'detail', NEON.ink, 2)
-      .map(d => ({ ...d, fill: d.id === 'snout' ? shade(NEON.body, 0.18) : shade(NEON.body, -0.55) })),
+      .map(d => ({ ...d, fill: d.id === 'snout' ? shade(NEON.body, 0.2) : shade(NEON.body, -0.6) })),
     ...seg(DETAIL, 'detail', NEON.cyan, 1.8),
     ...maneBristles(),
+
     // The far tusk is drawn on top, small and dim, because the head covers every
     // position it could occupy — here distance is size and tone, not occlusion.
-    ...seg(TUSK_FAR, 'tusk', shade(NEON.bone, -0.3), 1.8)
-      .map(t => ({ ...t, fill: shade(NEON.bone, -0.4) })),
+    ...seg(TUSK_FAR, 'tusk', shade(NEON.bone, -0.12), 1.9)
+      .map(t => ({ ...t, fill: shade(NEON.bone, -0.22) })),
     ...seg(TUSK_NEAR, 'tusk', NEON.ink, 2.4).map(t => ({ ...t, fill: NEON.bone })),
 
-    { ...eye, fill: shade(NEON.body, -0.5) },
-    { ...iris, color: NEON.amber, width: 1.2, fill: NEON.amber },
-    { ...pupil, color: shade(NEON.body, -0.75), width: 0.8, fill: shade(NEON.body, -0.75) },
-    { ...glint, color: NEON.ink, width: 0.6, fill: NEON.ink },
+    ...eyes,
   ];
 }
 
@@ -403,17 +412,16 @@ export function boarFacets(): BoarFacet[] {
     { id: 'bodyFacet', d: BODY_D, color: NEON.body, opacity: 1 },
     {
       id: 'headFacet',
-      d: 'M56 148 C66 128, 82 116, 100 108 L116 92 L128 104 L146 78 L160 96 C170 140, 176 190, 170 242 C142 246, 116 238, 100 218 C92 200, 84 186, 70 178 C60 172, 52 160, 56 148 Z',
-      color: shade(NEON.body, 0.1),
+      d: 'M48 168 C46 140, 52 112, 66 92 L62 46 L92 74 C104 62, 116 54, 128 48 L146 20 L172 56 C190 54, 206 52, 222 50 C234 120, 236 210, 224 280 C186 296, 140 288, 104 272 C74 258, 50 212, 48 168 Z',
+      color: shade(NEON.body, 0.07),
       opacity: 1,
     },
     {
       id: 'rumpFacet',
-      d: 'M318 70 L332 96 L356 88 L366 112 L388 110 L398 132 C412 152, 418 182, 414 208 C410 236, 396 254, 376 262 C352 268, 330 271, 306 272 C296 208, 300 138, 318 70 Z',
-      color: shade(NEON.body, -0.16),
+      d: 'M338 44 L352 72 L378 58 L390 86 L412 78 L420 106 L442 102 L446 130 L462 148 L444 168 L458 192 L436 210 L446 236 L420 252 C404 274, 372 288, 336 294 C328 295, 320 296, 312 296 C322 216, 322 120, 338 44 Z',
+      color: shade(NEON.body, -0.17),
       opacity: 1,
     },
-    { id: 'earFacet', d: 'M92 112 C94 92, 101 80, 111 77 C118 86, 118 102, 111 114 Z', color: shade(NEON.body, -0.28), opacity: 1 },
   ];
 }
 
@@ -462,7 +470,7 @@ export const SPARK_REACH = 40;
  * meaning anything the moment a tusk moves.
  */
 export const SPARK_ORIGINS: ReadonlyArray<readonly [number, number]> = [
-  [22, 148], [88, 156],
+  [40, 152], [202, 174],
 ];
 
 /**
