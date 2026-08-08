@@ -2038,23 +2038,50 @@ timeline at all, the markup is already at its final state, and it holds and
 fades. `.no-motion` is deliberately untouched: that toggle is scoped to
 `.landscape-stage` and is about the discovery map, not app boot.
 
+### Head-on, so only half of it is written down
+
+The drawing faces the viewer — a mask, framed by the two tusks — which is what
+made the reference readable at a glance and what a profile could only hint at.
+
+A frontal face is symmetric, and hand-authoring both halves guarantees they
+drift: a tusk two pixels longer on one side is invisible in the source and
+glaring on screen. So `boar.ts` holds the **left half only** and `mirrorPath`
+produces the right. That is also the real reason for the absolute-M/C/Z rule —
+it is what lets the mirror know which numbers are x. Any other command puts an
+odd count in the stream and silently reflects y values into x, so the rule is a
+test rather than a comment.
+
+`mirrorPath` formats each flipped number to the **same number of decimals as its
+source token**. Rounding instead turned the bristle generator's `171.0` into
+`171`, so mirroring twice did not give back the path it started from — caught by
+the involution test, which is the property that makes the mirror trustworthy at
+all.
+
+Each half-stroke is emitted **next to** its mirror rather than in a second pass,
+so both sides arrive together. Drawn left-half-first the face builds itself
+lopsided for most of a second, which reads as a bug rather than as a reveal.
+
 ### Drawing an animal is a thing you have to look at
 
-The first pass of `boar.ts` passed every test and rendered a **whale**. What
-fixed it, in order: a blunt vertical snout disc instead of a tapered point (the
-single feature that says "pig"); tusks whose tips finish *above* the muzzle line
-rather than politely below it (below, they read as teeth); a shoulder hump behind
-the skull; and a small pointed ear.
+Two full passes were thrown away, and neither was caught by a test — both
+rendered cleanly, stayed inside the viewBox and passed every invariant.
 
-Three tusks became two — at this scale the overlapping crescents read as a tangle
-of wire — and they carry a `fill`, the only strokes that do, because a tusk is a
-solid object where everything else is a contour.
+The profile version read as a **whale**, and was fixed by a blunt vertical snout
+disc instead of a tapered point, tusks finishing *above* the muzzle line rather
+than politely below it, a shoulder hump, and a small pointed ear.
 
-Two things that only a render shows: the mane spine had to start *behind* the
-ear, since bristles rooted where the ear is drawn grow straight through it; and
-the cheek and hump washes had to **overlap**, because two dark fills that merely
-meet leave a hairline of backdrop between them that reads as a black seam
-splitting the animal in half.
+The first frontal version read as a **mandrill**: a round skull, wide-set eyes
+and long horizontal whiskers are that animal, whatever else is on the face. What
+undid it was the outline — a wedge, narrow across the crown and widest at the
+cheekbone — plus a muzzle that *tapers*, since head-on, snout length is the whole
+difference between a boar and anything else wedge-shaped. The whiskers became
+short tufts running **down** the jowl.
+
+Tusks are the composition. They root behind the jowl, sweep out and down, and
+come back up with the tips hooking inward, so the pair frames the face. They
+carry a `fill` — the only strokes that do — because a tusk is a solid object
+where everything else is a contour; at 0.22 opacity they read as ghosts behind
+the head, and it takes 0.85 for them to sit in front of it.
 
 The viewBox is larger than the drawing's bounds on purpose — the neon filter
 blurs well outside the strokes and the SVG root clips at the viewBox, so a snug
@@ -2066,8 +2093,8 @@ box shears the glow off flat along one edge.
 |---|---|
 | `main.go` | `BackgroundColour` — the native window is `--bg` before the webview paints |
 | `frontend/index.html` | Inline critical `background`, the only rule that paints before the bundle |
-| `frontend/src/lib/boar.ts` | New — `BOAR_VIEWBOX`, `NEON`, `SPLASH` timings, `boarStrokes`, `boarFacets`, `glitchBands`, `sparks` |
-| `frontend/src/lib/boar.test.ts` | New — 170 cases: absolute-M/C/Z, NaN sweep, viewBox containment, draw order, seeded determinism, timing budget |
+| `frontend/src/lib/boar.ts` | New — `BOAR_VIEWBOX`, `CENTRE_X`, `mirrorPath`, `NEON`, `SPLASH` timings, `boarStrokes`, `boarFacets`, `glitchBands`, `sparks` |
+| `frontend/src/lib/boar.test.ts` | New — 267 cases: absolute-M/C/Z, NaN sweep, viewBox containment, mirror involution, half-beside-its-mirror ordering, draw order, seeded determinism, timing budget |
 | `frontend/src/components/Splash.tsx` | New — the projection and the anime.js timeline, reduced-motion path by hand |
 | `frontend/src/store.ts` | `splashDone`, seeded from the dev once-per-session flag |
 | `frontend/src/App.tsx` | Mounts `<Splash />` last, behind a `<Show>` |

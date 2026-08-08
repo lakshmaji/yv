@@ -1,7 +1,7 @@
 import { For, onCleanup, onMount } from 'solid-js';
 import { createTimeline, stagger, svg, type Target } from 'animejs';
 import {
-  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_ID, HOLD_FOR_DESIGN, SPLASH,
+  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, HOLD_FOR_DESIGN, SPLASH,
   boarFacets, boarStrokes, glitchBands, sparks,
 } from '../lib/boar';
 import { hashText } from '../lib/landscape/rng';
@@ -43,6 +43,9 @@ import { setSplashDone } from '../store';
  */
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
+const EYE_SET = new Set<string>(EYE_IDS);
+const isEye = (id: string) => EYE_SET.has(id);
 
 const STROKES = boarStrokes();
 const FACETS = boarFacets();
@@ -124,7 +127,10 @@ export default function Splash() {
     const facetPaths = Array.from(artRef.querySelectorAll<SVGPathElement>('.splash-facet'));
     const bandUses = Array.from(rootRef.querySelectorAll<SVGUseElement>('.splash-band'));
     const sparkDots = Array.from(rootRef.querySelectorAll<SVGCircleElement>('.splash-spark'));
-    const eyePath = artRef.querySelector<SVGPathElement>(`#stroke-${EYE_ID}`);
+    // Both eyes, together — a face that lights one first is winking.
+    const eyePaths = EYE_IDS
+      .map(id => artRef.querySelector<SVGPathElement>(`#stroke-${id}`))
+      .filter((el): el is SVGPathElement => el !== null);
 
     // `0, 0` is the initial draw extent: nothing on screen yet. Without it the
     // finished boar paints for one frame before the timeline takes over, which
@@ -136,9 +142,10 @@ export default function Splash() {
       onComplete: dismiss,
     });
 
-    // The strokes draw themselves on in boarStrokes order — head first, tusks
-    // after it, eye last. The stagger is what makes that order legible; without
-    // it the whole wireframe simply appears.
+    // The strokes draw themselves on in boarStrokes order — skull, face, snout,
+    // then the tusks that frame it, eyes last. Each half-stroke arrives beside
+    // its mirror, so the face never builds itself lopsided. The stagger is what
+    // makes that order legible; without it the whole wireframe simply appears.
     timeline.add(
       drawables,
       { draw: '0 1', duration: SPLASH.drawDur, ease: 'inOut(2)' },
@@ -182,10 +189,10 @@ export default function Splash() {
       SPLASH.glitchAt,
     );
 
-    // The eye switching on is the moment the head stops being a drawing.
-    if (eyePath) {
+    // The eyes switching on is the moment the head stops being a drawing.
+    if (eyePaths.length) {
       timeline.add(
-        eyePath,
+        eyePaths,
         { opacity: [0.35, 1], strokeWidth: [2.2, 4.4, 2.6], duration: 420 },
         SPLASH.eyeAt,
       );
@@ -314,7 +321,7 @@ export default function Splash() {
                   stroke-width={stroke.width}
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  opacity={stroke.id === EYE_ID && !reduced ? 0.35 : 1}
+                  opacity={isEye(stroke.id) && !reduced ? 0.35 : 1}
                 />
               )}
             </For>

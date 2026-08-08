@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BOAR_VIEWBOX, NEON, CHROMA_OFFSET, SPLASH, EYE_ID,
-  boarStrokes, boarFacets, glitchBands, sparks,
+  BOAR_VIEWBOX, CENTRE_X, NEON, CHROMA_OFFSET, SPLASH, EYE_IDS,
+  SPARK_ORIGINS, SPARK_REACH,
+  boarStrokes, boarFacets, glitchBands, sparks, mirrorPath,
 } from './boar';
 
 /**
  * Every path in boar.ts is absolute M/C/Z, which is asserted below — that is
- * what makes this parser exact rather than approximate, and it is the only
- * reason the containment test can pair numbers off as coordinates.
+ * what makes this parser exact rather than approximate, and it is the same
+ * property `mirrorPath` depends on to know which numbers are x.
  */
 function pathPoints(d: string): Array<[number, number]> {
   const nums = d.match(/-?\d+(?:\.\d+)?/g) ?? [];
@@ -20,12 +21,16 @@ function pathPoints(d: string): Array<[number, number]> {
 
 const strokes = boarStrokes();
 const facets = boarFacets();
-const allPaths = [...strokes.map(s => ({ id: s.id, d: s.d })), ...facets.map(f => ({ id: f.id, d: f.d }))];
+const allPaths = [
+  ...strokes.map(s => ({ id: s.id, d: s.d })),
+  ...facets.map(f => ({ id: f.id, d: f.d })),
+];
 
 describe('boar paths', () => {
   it.each(allPaths.map(p => [p.id, p.d] as const))('%s uses only absolute M/C/Z', (_id, d) => {
     // Any other command (relative m/c, or H/V/A/S/Q) would put an odd number of
-    // coordinates in the stream and quietly break the pairing above.
+    // coordinates in the stream — which would break the pairing above and,
+    // worse, make mirrorPath reflect y values into x.
     expect(d.replace(/[-\d.,\s]/g, '')).toMatch(/^M[CZ]*$/);
   });
 
@@ -70,7 +75,7 @@ describe('boar paths', () => {
   it('fills the tusks and nothing else', () => {
     // A tusk is a solid object; every other stroke is a contour. Filling a
     // contour would flood the head, and leaving a tusk unfilled turns it back
-    // into the loop of wire this replaced.
+    // into a loop of wire hanging beside the jaw.
     for (const s of strokes) {
       expect(Boolean(s.fill)).toBe(s.role === 'tusk');
       if (s.fill) expect(s.closed).toBe(true);
@@ -84,25 +89,86 @@ describe('boar paths', () => {
   });
 });
 
-describe('draw order', () => {
-  // The order IS the reveal: the head has to be recognisable before the tusks
-  // arrive, and the eye is the last thing to switch on. Reordering the arrays in
-  // boar.ts is a one-line change that would silently ruin the only timing the
-  // splash has, so it is pinned here.
-  const roleOf = (id: string) => strokes.findIndex(s => s.id === id);
+describe('mirrorPath', () => {
+  const cases: Array<[string, string, string]> = [
+    ['reflects x and leaves y alone', 'M100 50', 'M340 50'],
+    ['leaves the centre line fixed', 'M220 10', 'M220 10'],
+    ['handles every pair of a curve', 'M100 20 C110 30, 120 40, 130 50', 'M340 20 C330 30, 320 40, 310 50'],
+    ['carries Z through', 'M100 20 C110 30, 120 40, 130 50 Z', 'M340 20 C330 30, 320 40, 310 50 Z'],
+    ['reflects past the centre', 'M400 8', 'M40 8'],
+    ['keeps one-decimal inputs clean', 'M100.5 20.5', 'M339.5 20.5'],
+  ];
 
+  it.each(cases)('%s', (_name, input, expected) => {
+    expect(mirrorPath(input)).toBe(expected);
+  });
+
+  it('is its own inverse', () => {
+    for (const { d } of allPaths) expect(mirrorPath(mirrorPath(d))).toBe(d);
+  });
+
+  it('honours an explicit centre', () => {
+    expect(mirrorPath('M10 5', 50)).toBe('M90 5');
+  });
+});
+
+describe('symmetry', () => {
+  // A frontal face has to be symmetric, and hand-authoring both halves is how a
+  // tusk ends up two pixels longer on one side — invisible in the source and
+  // glaring on screen. Only the left half is written down; these hold the
+  // machinery that produces the right.
+  const mirrored = strokes.filter(s => s.id.endsWith('-r'));
+
+  it('has a mirrored partner for every half-stroke', () => {
+    expect(mirrored.length).toBeGreaterThan(0);
+    for (const m of mirrored) {
+      const source = strokes.find(s => s.id === m.id.slice(0, -2));
+      expect(source, `no source for ${m.id}`).toBeDefined();
+      expect(m.d).toBe(mirrorPath(source!.d));
+    }
+  });
+
+  it('keeps a mirrored stroke identical to its source in every other way', () => {
+    for (const m of mirrored) {
+      const source = strokes.find(s => s.id === m.id.slice(0, -2))!;
+      expect(m.color).toBe(source.color);
+      expect(m.width).toBe(source.width);
+      expect(m.role).toBe(source.role);
+      expect(m.fill).toBe(source.fill);
+    }
+  });
+
+  it('draws each half-stroke next to its mirror, so the face never builds lopsided', () => {
+    for (const m of mirrored) {
+      const i = strokes.indexOf(m);
+      expect(strokes[i - 1].id).toBe(m.id.slice(0, -2));
+    }
+  });
+
+  it('centres the whole drawing on the mirror line', () => {
+    const xs = allPaths.flatMap(p => pathPoints(p.d).map(([x]) => x));
+    expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(2 * CENTRE_X, 6);
+  });
+});
+
+describe('draw order', () => {
+  // The order IS the reveal: skull and ears, then the face, then the muzzle and
+  // snout, then the tusks that frame the whole thing, eyes last. Reordering the
+  // arrays in boar.ts is a one-line change that would silently ruin the only
+  // timing the splash has, so it is pinned here.
   it('starts with the silhouette', () => {
     expect(strokes[0].role).toBe('silhouette');
   });
 
   it('draws the head before the tusks', () => {
-    const lastHead = Math.max(...strokes.filter(s => s.role === 'silhouette' || s.role === 'interior').map(s => strokes.indexOf(s)));
+    const lastHead = strokes.map(s => s.role).lastIndexOf('silhouette');
     const firstTusk = strokes.findIndex(s => s.role === 'tusk');
     expect(firstTusk).toBeGreaterThan(lastHead);
   });
 
-  it('lights the eye last of all', () => {
-    expect(roleOf(EYE_ID)).toBe(strokes.length - 1);
+  it('lights both eyes last of all', () => {
+    expect(strokes.slice(-EYE_IDS.length).map(s => s.id).sort())
+      .toEqual([...EYE_IDS].sort());
   });
 
   it('is stable across calls', () => {
@@ -110,11 +176,13 @@ describe('draw order', () => {
     expect(boarStrokes().map(s => s.d)).toEqual(strokes.map(s => s.d));
   });
 
-  it('has a mane, three tusks and a full silhouette', () => {
+  it('has two ears, two tusks, two eyes and a mane', () => {
     const count = (role: string) => strokes.filter(s => s.role === role).length;
-    expect(count('bristle')).toBeGreaterThanOrEqual(8);
+    // Skull and ear, each mirrored.
+    expect(count('silhouette')).toBe(4);
     expect(count('tusk')).toBe(2);
-    expect(count('silhouette')).toBe(9);
+    expect(count('bristle')).toBeGreaterThanOrEqual(16);
+    expect(strokes.filter(s => s.id.startsWith('ear'))).toHaveLength(2);
   });
 });
 
@@ -136,7 +204,7 @@ describe('SPLASH timings', () => {
     ['strokes finish drawing', drawEnd],
     ['facets finish', SPLASH.facetsAt + SPLASH.facetsDur],
     ['glitch finishes', SPLASH.glitchAt + SPLASH.glitchDur],
-    ['the eye lights', SPLASH.eyeAt],
+    ['the eyes light', SPLASH.eyeAt],
     ['the sparks fly', SPLASH.sparksAt],
     ['the wordmark lands', SPLASH.markAt + SPLASH.markDur],
   ];
@@ -205,10 +273,26 @@ describe('sparks', () => {
     }
   });
 
-  it('flies upward and outward off the tusks', () => {
-    // Every spark is thrown into the upper half-plane, so none of them drop
-    // through the jaw.
-    for (const s of sparks(4, 40)) expect(s.y).toBeLessThan(160);
+  it('stays within reach of the point it came off', () => {
+    // Measured against the origins rather than a hand-copied bounding box, which
+    // stops meaning anything the moment a tusk moves. Clamping only ever pulls a
+    // spark inward, so the reach is an upper bound.
+    for (const s of sparks(4, 60)) {
+      const nearest = Math.min(
+        ...SPARK_ORIGINS.map(([ox, oy]) => Math.hypot(s.x - ox, s.y - oy)),
+      );
+      expect(nearest).toBeLessThanOrEqual(SPARK_REACH);
+    }
+  });
+
+  it('throws every spark upward, so none drop through the jaw', () => {
+    for (const s of sparks(4, 60)) {
+      const [, oy] = SPARK_ORIGINS.reduce(
+        (best, o) => (Math.hypot(s.x - o[0], s.y - o[1]) < Math.hypot(s.x - best[0], s.y - best[1]) ? o : best),
+        SPARK_ORIGINS[0],
+      );
+      expect(s.y).toBeLessThanOrEqual(oy);
+    }
   });
 
   it('fits its whole shower inside the spark beat', () => {
