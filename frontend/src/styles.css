@@ -1268,6 +1268,13 @@
 
     .about-dot { opacity: .5; }
 
+    /* Monospaced so a version number reads as an identifier to quote in a bug
+       report, not as prose. */
+    .about-version {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--text);
+    }
+
     /* A link that reads as a link but is a <button>, because an anchor would
        navigate the app window instead of handing off to the browser. */
     .about-link {

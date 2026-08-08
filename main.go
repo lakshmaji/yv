@@ -17,8 +17,18 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// version is set at link time: -ldflags "-X main.version=0.1.0". The Makefile
+// reads the number out of wails.json, and CI takes it from the tag, so there is
+// no second place to bump.
+//
+// It stays "dev" otherwise, and that is load bearing rather than cosmetic — a
+// build that does not know its own version cannot meaningfully compare itself
+// against a release feed, so "dev" is what keeps `wails dev` from offering to
+// update itself into a real release.
+var version = "dev"
+
 func main() {
-	app := NewApp()
+	app := NewApp(version)
 
 	distFS, err := fs.Sub(assets, "frontend/dist")
 	if err != nil {

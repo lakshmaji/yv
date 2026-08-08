@@ -26,6 +26,12 @@ interface WailsRuntime {
 }
 
 interface GoApp {
+  /**
+   * The version this binary was linked with. "dev" for any build that skipped
+   * the Makefile, which is a value the About dialog shows verbatim rather than
+   * hiding — knowing you are on a dev build is the point.
+   */
+  GetAppVersion(): Promise<string>;
   LoadProjects(): Promise<Project[]>;
   SaveProjects(projects: Project[]): Promise<string>;
   ExecuteCommand(cmd: CommandConfig, workingDir: string, runID: string, projectID: string): Promise<string>;

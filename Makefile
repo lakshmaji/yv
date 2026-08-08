@@ -1,5 +1,15 @@
 WAILS := $(HOME)/go/bin/wails
 
+# The version the binary reports, taken from wails.json so there is exactly one
+# place to bump — the same field build/linux/package-deb.sh reads. `bun run
+# version` (changesets) writes it; version_test.go fails if package.json and
+# wails.json ever disagree.
+#
+# Only the packaging targets pass this. `make run` deliberately does not, so the
+# dev build keeps the "dev" default and the updater stays off the network.
+VERSION := $(shell sed -n 's/.*"productVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' wails.json)
+LDFLAGS := -X main.version=$(VERSION)
+
 # Host detection. The darwin targets stay explicit about their platform (this is
 # an Apple Silicon app), while the linux ones follow the machine they run on so a
 # clone builds correctly on both amd64 and arm64 Ubuntu.
@@ -46,7 +56,7 @@ test-frontend:
 	cd frontend && bun run test
 
 build: $(WAILS)
-	$(WAILS) build -platform darwin/arm64
+	$(WAILS) build -platform darwin/arm64 -ldflags "$(LDFLAGS)"
 
 dmg: build
 	mkdir -p /tmp/yv-dmg
@@ -109,7 +119,7 @@ doctor-linux:
 	@if command -v dpkg-deb >/dev/null; then echo "dpkg-deb: ok"; else echo "dpkg-deb: MISSING"; fi
 
 build-linux: $(WAILS)
-	$(WAILS) build -platform linux/$(GOARCH) $(if $(LINUX_TAGS),-tags $(LINUX_TAGS),)
+	$(WAILS) build -platform linux/$(GOARCH) $(if $(LINUX_TAGS),-tags $(LINUX_TAGS),) -ldflags "$(LDFLAGS)"
 	@echo
 	@echo "Built build/bin/yv — run it directly, or 'make deb' to package it."
 

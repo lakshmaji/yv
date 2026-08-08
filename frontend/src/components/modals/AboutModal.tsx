@@ -1,12 +1,16 @@
-import { Show } from 'solid-js';
+import { Show, createResource } from 'solid-js';
 import { aboutModalOpen, setAboutModalOpen } from '../../store';
-import { runtime } from '../../wails';
+import { go, runtime } from '../../wails';
 
 const REPO_URL = 'https://github.com/lakshmaji/yv';
 const ISSUES_URL = 'https://github.com/lakshmaji/yv/issues';
 const PROFILE_URL = 'https://github.com/lakshmaji';
 
 export default function AboutModal() {
+  // Fetched once for the life of the app rather than on every open: the version
+  // is fixed at link time and cannot change while the process is running.
+  const [version] = createResource(() => go.GetAppVersion());
+
   function close() {
     setAboutModalOpen(false);
   }
@@ -36,6 +40,8 @@ export default function AboutModal() {
           </p>
 
           <div class="about-meta">
+            <span class="about-version">{version() ?? '…'}</span>
+            <span class="about-dot">·</span>
             <button class="about-link" onClick={() => open(`${REPO_URL}/blob/main/LICENSE`)}>
               MIT licensed
             </button>

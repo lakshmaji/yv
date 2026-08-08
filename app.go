@@ -26,7 +26,11 @@ import (
 // methods here are thin wrappers that keep the frontend-visible API stable.
 // ctx is written once in startup (before any concurrent calls) so no mutex is needed.
 type App struct {
-	ctx     context.Context
+	ctx context.Context
+	// version is injected at link time (-X main.version). It stays "dev" in any
+	// build that did not go through the Makefile or CI, which is the signal the
+	// updater uses to stay off the network entirely.
+	version string
 	runner  *runner.Runner
 	cfg     *config.Store
 	mon     *monitor.Monitor
@@ -36,7 +40,7 @@ type App struct {
 	share   *share.Node
 }
 
-func NewApp() *App {
+func NewApp(version string) *App {
 	r := runner.NewRunner()
 	set := settings.NewStore()
 
@@ -49,6 +53,7 @@ func NewApp() *App {
 	set.OnChange(func(s models.Settings) { mx.SetEnabled(s.MetricsEnabled) })
 
 	a := &App{
+		version: version,
 		runner:  r,
 		cfg:     config.NewStore(),
 		mon:     monitor.NewMonitor(r, mx),
@@ -89,6 +94,14 @@ func (a *App) closeMetrics() {
 
 func (a *App) getCtx() context.Context {
 	return a.ctx
+}
+
+// GetAppVersion reports the version this binary was linked with, or "dev" for a
+// build that skipped the Makefile — `wails dev`, `go build`, or a bare
+// `wails build`. The About dialog shows it verbatim, so "dev" appearing there is
+// the intended answer rather than a missing value.
+func (a *App) GetAppVersion() string {
+	return a.version
 }
 
 // StopAllCommands kills all running command processes. Called from main.go on quit.
