@@ -6,7 +6,20 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # Off by default and unavailable on a push, so the signing steps below are
+      # inert until someone deliberately asks for them. Until the certificates
+      # exist there is nothing to ask for; the steps are here so that adding them
+      # later is a secrets change rather than a redesign.
+      signing:
+        description: "Code-sign the app (needs Apple and Windows certificates)"
+        type: boolean
+        default: false
+      notarize:
+        description: "Notarize the macOS build (requires signing)"
+        type: boolean
+        default: false
 
 # Read-only by default; only the release job widens this.
 permissions:
@@ -189,6 +202,99 @@ jobs:
           else
             wails build -platform ${{ matrix.platform }} -ldflags "$LDFLAGS"
           fi
+
+      # ── OS code signing ───────────────────────────────────────────────
+      #
+      # Independent of update signing, and worth keeping straight: an
+      # Authenticode or Apple signature is what gets past the OS on the *first*
+      # install, while the RSA signature below gates every install after that.
+      # The updater works with or without these; what they change is the warning
+      # a new user sees when they download the app by hand.
+      #
+      # Both are gated on the workflow_dispatch input, so nothing here runs on a
+      # push and today's unsigned path is exactly preserved.
+      - name: Sign the macOS app
+        if: matrix.name == 'macos-arm64' && inputs.signing
+        env:
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CERTIFICATE" || -z "$SIGNING_IDENTITY" ]]; then
+            echo "::error::Signing was requested but APPLE_CERTIFICATE / APPLE_SIGNING_IDENTITY are not set."
+            exit 1
+          fi
+
+          # A keychain of its own, deleted with the runner. Importing into the
+          # login keychain would leave the certificate somewhere a later step
+          # could reach it.
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          PASSWORD="$(openssl rand -hex 20)"
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Without this, codesign blocks on a GUI prompt nobody can answer and
+          # the job hangs until it times out.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+          # --options runtime is the hardened runtime, which notarization
+          # requires; --deep so the embedded frameworks are covered.
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" build/bin/yv.app
+          codesign --verify --strict --verbose=2 build/bin/yv.app
+
+      - name: Notarize the macOS app
+        if: matrix.name == 'macos-arm64' && inputs.signing && inputs.notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent build/bin/yv.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait
+          # Stapled to the .app before the DMG is built, so the ticket travels
+          # with it and Gatekeeper does not need the network on first launch.
+          xcrun stapler staple build/bin/yv.app
+
+      - name: Sign the Windows executable
+        if: matrix.name == 'windows-amd64' && inputs.signing
+        shell: bash
+        env:
+          CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CERTIFICATE" ]]; then
+            echo "::error::Signing was requested but WINDOWS_CERTIFICATE is not set."
+            exit 1
+          fi
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.pfx"
+
+          # signtool lives in a versioned Windows Kits directory, so it is found
+          # rather than assumed — the version changes with the runner image.
+          SIGNTOOL=$(find "/c/Program Files (x86)/Windows Kits/10/bin" \
+            -name signtool.exe -path "*/x64/*" | sort | tail -1)
+          [[ -n "$SIGNTOOL" ]] || { echo "::error::signtool.exe not found"; exit 1; }
+
+          # Timestamped, so the signature stays valid after the certificate
+          # expires. Without /tr every binary signed today stops verifying the
+          # day the certificate lapses.
+          "$SIGNTOOL" sign //fd sha256 //td sha256 \
+            //tr http://timestamp.digicert.com \
+            //f "$RUNNER_TEMP/cert.pfx" //p "$CERTIFICATE_PASSWORD" \
+            build/bin/yv.exe
+          rm -f "$RUNNER_TEMP/cert.pfx"
+          "$SIGNTOOL" verify //pa build/bin/yv.exe
 
       # ── Packaging, one step per platform ──────────────────────────────
       - name: Package DMG
