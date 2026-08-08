@@ -317,12 +317,20 @@ jobs:
       # use: a running .exe cannot be deleted or overwritten, so the updater
       # renames it aside and unpacks over the top — which needs an archive, not a
       # bare executable.
+      #
+      # PowerShell rather than bash: the Windows runner's Git Bash has no `zip`,
+      # so the bash version of this step died with "command not found" (exit
+      # 127). Compress-Archive is built into the image and needs nothing
+      # installed. `-Path <one file>` stores it at the archive root, which is
+      # what `zip -j` was doing, and the archive is a plain deflate zip that
+      # Go's archive/zip — and so internal/updater — reads unchanged.
       - name: Package Windows zip
         if: matrix.name == 'windows-amd64'
-        shell: bash
+        shell: pwsh
         run: |
-          cd build/bin
-          zip -j "$GITHUB_WORKSPACE/dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.zip" yv.exe
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Force -Path build/bin/yv.exe `
+            -DestinationPath "dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.zip"
 
       # The .deb is what makes this installable on Ubuntu; the tarball is for
       # anyone who just wants the binary. Both come from the same build.
