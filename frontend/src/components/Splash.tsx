@@ -1,11 +1,15 @@
 import { For, onCleanup, onMount } from 'solid-js';
 import { createTimeline, stagger, svg, type Target } from 'animejs';
 import {
-  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, HOLD_FOR_DESIGN, SPLASH,
+  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, SPLASH,
   boarFacets, boarStrokes, glitchBands, sparks, type BoarStroke,
 } from '../lib/boar';
 import { hashText } from '../lib/landscape/rng';
 import { setSplashDone } from '../store';
+import { runtime } from '../wails';
+
+/** Where the "about" line goes. */
+const ABOUT_URL = 'https://github.com/lakshmaji';
 
 /**
  * The launch splash: a neon boar drawn on over a CRT field, then glitched, then
@@ -102,54 +106,60 @@ export default function Splash() {
   let artRef!: SVGGElement;
   let timeline: ReturnType<typeof createTimeline> | null = null;
 
-  /**
-   * The one place the splash ends. Under the design hold it ends nowhere — the
-   * sequence runs to its last frame and stays there, so the finished drawing can
-   * be looked at for as long as it takes.
-   */
-  const dismiss = () => {
-    if (!HOLD_FOR_DESIGN) setSplashDone(true);
-  };
-
   // Read once, at mount. Unlike the discovery map this thing is on screen for
   // two and a half seconds, so there is no window in which changing the OS
   // setting mid-splash is worth reacting to.
   const reduced =
     typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
 
+  let reducedTimers: number[] = [];
+
+  /** The reduced-motion "playthrough": a still, a hold, then a plain fade. */
+  function playReduced(): void {
+    reducedTimers.forEach(t => window.clearTimeout(t));
+    rootRef.style.transition = '';
+    rootRef.style.opacity = '1';
+    reducedTimers = [
+      window.setTimeout(() => {
+        rootRef.style.transition = `opacity ${SPLASH.reducedFade}ms linear`;
+        rootRef.style.opacity = '0';
+      }, SPLASH.reducedHold),
+      window.setTimeout(() => setSplashDone(true), SPLASH.reducedHold + SPLASH.reducedFade),
+    ];
+  }
+
+  function replay(): void {
+    if (reduced) playReduced();
+    else timeline?.restart();
+  }
+
+  onCleanup(() => reducedTimers.forEach(t => window.clearTimeout(t)));
+
   onMount(() => {
-    // Escape is the only way out while the hold is on, and clicking replays the
-    // sequence — the beats are the thing being reviewed, and a splash you have
-    // to restart the app to see again is one nobody iterates on.
-    if (HOLD_FOR_DESIGN) {
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') setSplashDone(true);
-      };
-      const onClick = () => timeline?.restart();
-      window.addEventListener('keydown', onKey);
-      rootRef.addEventListener('click', onClick);
-      onCleanup(() => {
-        window.removeEventListener('keydown', onKey);
-        rootRef.removeEventListener('click', onClick);
-      });
-    }
+    // Click anywhere continues, space replays. Both stay in the shipped app
+    // rather than being review scaffolding: 2.5s is short, but it is 2.5s the
+    // user did not ask for, and anyone who wants to watch the thing again
+    // should not have to relaunch to do it.
+    //
+    // Space is preventDefault'd — it scrolls by default, and the app underneath
+    // is already mounted and listening.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      e.preventDefault();
+      replay();
+    };
+    const onClick = () => setSplashDone(true);
+    window.addEventListener('keydown', onKey);
+    rootRef.addEventListener('click', onClick);
+    onCleanup(() => {
+      window.removeEventListener('keydown', onKey);
+      rootRef.removeEventListener('click', onClick);
+    });
 
     if (reduced) {
       // Everything is already at its final state in the markup — there is
       // nothing left to reveal. Hold it long enough to be seen, then fade.
-      if (HOLD_FOR_DESIGN) return;
-      const hold = window.setTimeout(() => {
-        rootRef.style.transition = `opacity ${SPLASH.reducedFade}ms linear`;
-        rootRef.style.opacity = '0';
-      }, SPLASH.reducedHold);
-      const gone = window.setTimeout(
-        () => setSplashDone(true),
-        SPLASH.reducedHold + SPLASH.reducedFade,
-      );
-      onCleanup(() => {
-        window.clearTimeout(hold);
-        window.clearTimeout(gone);
-      });
+      playReduced();
       return;
     }
 
@@ -174,7 +184,7 @@ export default function Splash() {
 
     timeline = createTimeline({
       defaults: { ease: 'outQuad' },
-      onComplete: dismiss,
+      onComplete: () => setSplashDone(true),
     });
 
     // The strokes draw themselves on in boarStrokes order — skull, face, snout,
@@ -270,16 +280,11 @@ export default function Splash() {
       SPLASH.markAt,
     );
 
-    // Under the hold the exit beat is left out entirely rather than played and
-    // undone: fading the stage to nothing and then putting it back is a flicker
-    // on every replay, and the last frame is the one being reviewed.
-    if (!HOLD_FOR_DESIGN) {
-      timeline.add(
-        rootRef,
-        { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
-        SPLASH.exitAt,
-      );
-    }
+    timeline.add(
+      rootRef,
+      { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
+      SPLASH.exitAt,
+    );
 
     onCleanup(() => timeline?.pause());
   });
@@ -407,19 +412,40 @@ export default function Splash() {
         </g>
       </svg>
 
-      <div class="splash-mark" style={reduced ? { opacity: 1 } : undefined}>
-        <span class="splash-mark-name">yv</span>
+      <div
+        class="splash-mark"
+        style={{
+          // Feeds the wordmark's glitch keyframes their start time, so the CSS
+          // and the anime.js beat cannot drift apart.
+          '--mark-at': `${SPLASH.markAt}ms`,
+          ...(reduced ? { opacity: 1 } : {}),
+        }}
+      >
+        <span class="splash-mark-name" data-text="yv">yv</span>
         <span class="splash-mark-sub">local dev command runner</span>
       </div>
 
-      {/* Only while HOLD_FOR_DESIGN is on. It says so out loud: a splash that
-          refuses to go away with no explanation is indistinguishable from one
-          that has hung. */}
-      {HOLD_FOR_DESIGN && (
-        <div class="splash-hold-hint">
-          design hold — click to replay · <kbd>esc</kbd> to continue
-        </div>
-      )}
+      {/* The controls are worth naming: a splash nobody knows they can skip is
+          one they sit through. The link stops the click propagating, or opening
+          it would dismiss the splash out from under the browser it just
+          launched. */}
+      <div class="splash-hint">
+        <a
+          class="splash-hint-link"
+          href={ABOUT_URL}
+          onClick={e => {
+            e.preventDefault();
+            e.stopPropagation();
+            runtime.BrowserOpenURL(ABOUT_URL);
+          }}
+        >
+          about
+        </a>
+        <span class="splash-hint-sep">·</span>
+        click to continue
+        <span class="splash-hint-sep">·</span>
+        <kbd>space</kbd> to replay
+      </div>
     </div>
   );
 }

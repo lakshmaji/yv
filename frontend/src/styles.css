@@ -4108,16 +4108,94 @@
   gap: 4px;
   opacity: 0;
 }
+/* Latin letters set in a JAPANESE typeface — the word stays English, only the
+   hand changes. Japanese gothic faces draw their Latin glyphs wider, flatter and
+   more geometric than a Western sans, and that is the whole cyberpunk-signage
+   look; imitating it with a Western font and heavy tracking never quite lands.
+
+   System fonts rather than a webfont: the app is offline-first and embedded, so
+   a downloaded face would either bloat the bundle or fail to arrive. The stack
+   covers macOS (Hiragino), Windows (Yu Gothic, Meiryo) and Linux (Noto CJK), and
+   falls back to the app's own mono where none is installed — in which case the
+   wordmark is merely ordinary rather than broken. */
 .splash-mark-name {
-  font-family: var(--mono);
+  position: relative;
+  font-family:
+    'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic',
+    'Noto Sans JP', 'Noto Sans CJK JP', 'Meiryo', 'MS PGothic', var(--mono);
   font-size: 64px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 20px;
   /* The tracking is symmetric, which on the last glyph pushes the word off
      centre by one step. */
   text-indent: 20px;
   color: #f2fbff;
-  text-shadow: 0 0 18px rgba(34, 232, 255, .75), 0 0 42px rgba(255, 47, 185, .4);
+  /* The halo, plus a permanent hairline channel split. The split is what makes
+     it a sign rather than a label, and it costs nothing — two extra shadows on
+     text that is already casting two. */
+  text-shadow:
+    0 0 18px rgba(34, 232, 255, .75),
+    0 0 42px rgba(255, 47, 185, .4),
+    -1px 0 0 rgba(255, 47, 185, .38),
+    1px 0 0 rgba(34, 232, 255, .38);
+}
+
+/* The wordmark's glitch: two clipped copies of the same text, torn sideways.
+   `content: attr(data-text)` rather than duplicated markup, so there is one
+   place the word is written and no way for the copies to disagree with it.
+
+   CSS rather than a script animation, for the reason the rest of the field is:
+   the reduced-motion block at the foot of this file can cancel it, where a
+   script animation would sit outside that and have to be handled by hand.
+
+   Both start fully clipped away. The keyframes are what bring a slice in, so
+   between hits the wordmark is clean rather than permanently doubled. */
+.splash-mark-name::before,
+.splash-mark-name::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-shadow: none;
+  pointer-events: none;
+  clip-path: inset(50% 0 50% 0);
+}
+
+/* The delay is the wordmark's own arrival beat, handed down from SPLASH.markAt
+   as a custom property — the glitch has to start when the word does, and in a
+   normal 2.5s run there are only ~400ms in which it can be seen at all. That is
+   also why the hits sit near the top of the cycle rather than being scattered
+   over it: a glitch that lands at 87% of a 3s loop would never once fire. */
+.splash-mark-name::before {
+  color: #22e8ff;
+  animation: splash-mark-tear-a 1.6s steps(1, end) var(--mark-at, 0ms) infinite;
+}
+.splash-mark-name::after {
+  color: #ff2fb9;
+  animation: splash-mark-tear-b 2.3s steps(1, end) var(--mark-at, 0ms) infinite;
+}
+
+/* Two periods that do not divide into each other, so the layers drift in and
+   out of phase and the tearing never settles into a pattern. */
+@keyframes splash-mark-tear-a {
+  0%, 3%    { clip-path: inset(50% 0 50% 0); transform: none; }
+  4%        { clip-path: inset(8% 0 66% 0);  transform: translateX(-6px); }
+  7%        { clip-path: inset(60% 0 14% 0); transform: translateX(5px); }
+  10%       { clip-path: inset(34% 0 40% 0); transform: translateX(-3px); }
+  13%, 58%  { clip-path: inset(50% 0 50% 0); transform: none; }
+  60%       { clip-path: inset(18% 0 58% 0); transform: translateX(4px); }
+  63%, 100% { clip-path: inset(50% 0 50% 0); transform: none; }
+}
+
+@keyframes splash-mark-tear-b {
+  0%, 2%    { clip-path: inset(50% 0 50% 0); transform: none; }
+  3%        { clip-path: inset(52% 0 22% 0); transform: translateX(6px); }
+  6%        { clip-path: inset(14% 0 60% 0); transform: translateX(-5px); }
+  9%        { clip-path: inset(70% 0 8% 0);  transform: translateX(3px); }
+  12%, 40%  { clip-path: inset(50% 0 50% 0); transform: none; }
+  42%       { clip-path: inset(26% 0 52% 0); transform: translateX(-4px); }
+  45%, 100% { clip-path: inset(50% 0 50% 0); transform: none; }
 }
 .splash-mark-sub {
   font-family: var(--mono);
@@ -4150,23 +4228,42 @@
 @media (prefers-reduced-motion: reduce) {
   .splash-grid { animation: none; }
   .splash-vignette::after { display: none; }
+  /* With the animation gone the copies sit at their base clip, which is fully
+     clipped away — so the wordmark is simply clean, not frozen mid-tear. */
+  .splash-mark-name::before,
+  .splash-mark-name::after { animation: none; }
 }
 
-/* The design-hold notice. Only rendered while boar.ts's HOLD_FOR_DESIGN is on,
-   and deliberately plain: it is scaffolding, not part of the picture, and it
-   should look like something that is meant to be removed. */
-.splash-hold-hint {
+/* The footer line: what the splash can be told to do, and a way out to the
+   author. Quiet on purpose — it is an offer, not an instruction. */
+.splash-hint {
   position: absolute;
   bottom: 20px;
   z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 1.5px;
   color: rgba(226, 240, 255, .42);
 }
-.splash-hold-hint kbd {
+.splash-hint kbd {
   font-family: inherit;
   border: 1px solid rgba(226, 240, 255, .28);
   border-radius: 3px;
   padding: 1px 5px;
+}
+.splash-hint-sep { opacity: .45; }
+.splash-hint-link {
+  color: rgba(34, 232, 255, .8);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(34, 232, 255, .3);
+  /* The overlay is click-to-continue, so this needs a cursor that says it is a
+     different kind of click. */
+  cursor: pointer;
+}
+.splash-hint-link:hover {
+  color: #22e8ff;
+  border-bottom-color: rgba(34, 232, 255, .7);
 }

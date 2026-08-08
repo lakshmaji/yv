@@ -20,7 +20,6 @@ import type {
   UpdateState,
 } from './types';
 import { variantById } from './lib/drone';
-import { HOLD_FOR_DESIGN } from './lib/boar';
 
 const DEFAULT_CMD_STATE: CmdState = {
   lines: [], collapsed: true, exitCode: null, stopped: false, running: false, trimmedCount: 0,
@@ -76,9 +75,6 @@ const [envModalOpen, setEnvModalOpen] = createSignal(false);
 // the app unusable to work on. A production build has no such flag and always
 // plays it.
 function splashAlreadySeen(): boolean {
-  // While the drawing is being reviewed, every reload has to replay it —
-  // skipping after the first is exactly the behaviour that gets in the way.
-  if (HOLD_FOR_DESIGN) return false;
   if (!import.meta.env.DEV) return false;
   try {
     if (sessionStorage.getItem('yv-splash-seen')) return true;

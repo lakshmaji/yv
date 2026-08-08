@@ -2077,6 +2077,42 @@ the near pair's, because they are further from the camera; level, the animal
 stands on a wall rather than on the ground. Both are asserted, the second after
 an off-by-one put a far foot a single pixel *below* its near one.
 
+### The splash can be skipped, and replayed
+
+Click anywhere continues; space replays. Both ship — 2.5s is short, but it is
+2.5s the user did not ask for, and anyone who wants to watch it again should not
+have to relaunch. Space is `preventDefault`'d, since it scrolls by default and
+the app underneath is already mounted and listening.
+
+The footer carries an **about** link to the author's GitHub, opened through
+`runtime.BrowserOpenURL` like `AboutModal` does. Its click handler stops
+propagation: without that, opening the link would dismiss the splash out from
+under the browser it had just launched.
+
+The `HOLD_FOR_DESIGN` flag is **gone**. It existed to keep the splash on screen
+while the boar was being drawn, and the drawing is settled.
+
+### The wordmark is Latin letters in a Japanese face
+
+The word stays English; only the hand changes. Japanese gothic faces draw their
+Latin glyphs wider, flatter and more geometric than a Western sans, and that is
+the whole cyberpunk-signage look — imitating it with a Western font and heavy
+tracking never quite lands.
+
+System fonts rather than a webfont, because the app is offline-first and
+embedded: a downloaded face would either bloat the bundle or fail to arrive. The
+stack covers macOS (Hiragino), Windows (Yu Gothic, Meiryo) and Linux (Noto CJK)
+and falls back to the app's own mono, where the wordmark is merely ordinary
+rather than broken.
+
+Its glitch is two clipped copies of the same text, torn sideways, built from
+`content: attr(data-text)` so the word is written in exactly one place. CSS, not
+a script animation, for the reason the rest of the field is: the reduced-motion
+block can cancel it. The animation delay comes from `SPLASH.markAt` handed down
+as a custom property, and the tear hits sit near the **top** of the cycle — in a
+normal run the wordmark is only on screen for ~400ms, so a glitch scheduled at
+87% of a 3s loop would never once fire.
+
 ### `createDrawable` animates the stroke, not the fill
 
 The single most misleading thing in this file. `svg.createDrawable` gives the

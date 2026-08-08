@@ -63,20 +63,6 @@ export const NEON = {
 export const CHROMA_OFFSET = 2.6;
 
 /**
- * Local design hold — TEMPORARY, flip to `false` once the drawing is signed off.
- *
- * While it is on, the splash plays its full sequence and then simply stays: it
- * never dismisses itself, and the dev once-per-session skip is disabled so every
- * hot reload replays it. Click to run it again, Escape to get into the app.
- *
- * A constant rather than a setting or an env var on purpose. It has to be a
- * single visible line that a reviewer will trip over on the way past — a flag
- * hidden in a `.env` is one that ships enabled, and shipping this enabled means
- * an app nobody can get into.
- */
-export const HOLD_FOR_DESIGN = true;
-
-/**
  * Every beat of the 2.5s sequence, in milliseconds from the splash appearing.
  *
  * Kept as data rather than inline in the timeline so the durations are visible
