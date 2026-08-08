@@ -392,6 +392,55 @@ func TestLinuxMatchesOnlyTheAppImage(t *testing.T) {
 	}
 }
 
+// The artifact naming lives in two places that cannot see each other: the
+// packaging steps in .github/workflows/build.yml (plus
+// build/linux/package-appimage.sh) produce these names, and platformToken picks
+// them. Nothing else connects them, so drift on either side means a release that
+// builds and publishes perfectly and offers no update to anyone.
+//
+// These literals are the names CI actually uploads, written out rather than
+// derived — a test that builds the name from platformToken and then matches it
+// with platformToken proves only that the function is self-consistent.
+func TestAssetNamesMatchWhatCIUploads(t *testing.T) {
+	published := []string{
+		"yv-macos-arm64-v0.1.0.dmg",
+		"yv-windows-amd64-v0.1.0.zip",
+		"yv-linux-x86_64-v0.1.0.AppImage",
+		"yv-linux-aarch64-v0.1.0.AppImage",
+		// Also uploaded, and deliberately never matched: neither can replace
+		// itself in place.
+		"yv_0.1.0_amd64.deb",
+		"yv-linux-amd64-v0.1.0.tar.gz",
+		"yv-windows-amd64-v0.1.0.exe",
+	}
+
+	wantFor := map[string]string{
+		"darwin/arm64":  "yv-macos-arm64-v0.1.0.dmg",
+		"windows/amd64": "yv-windows-amd64-v0.1.0.zip",
+		"linux/amd64":   "yv-linux-x86_64-v0.1.0.AppImage",
+		"linux/arm64":   "yv-linux-aarch64-v0.1.0.AppImage",
+	}
+
+	key := runtime.GOOS + "/" + runtime.GOARCH
+	want, covered := wantFor[key]
+	if !covered {
+		t.Skipf("no artifact published for %s", key)
+	}
+
+	var assets []ghAsset
+	for _, name := range published {
+		assets = append(assets, ghAsset{Name: name})
+	}
+
+	got := pickAsset(assets)
+	if got == nil {
+		t.Fatalf("no asset matched for %s — CI publishes %v", key, published)
+	}
+	if got.Name != want {
+		t.Errorf("picked %q for %s, want %q", got.Name, key, want)
+	}
+}
+
 func TestIsRealVersion(t *testing.T) {
 	tests := []struct {
 		in   string

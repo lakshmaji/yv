@@ -30,7 +30,7 @@ endif
 
 .PHONY: run install fmt test test-go test-frontend build dmg \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
-        doctor-linux update-keys
+        doctor-linux update-keys appimage
 
 install:
 	go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1
@@ -156,6 +156,12 @@ run-linux: $(WAILS)
 
 deb: build-linux
 	@bash build/linux/package-deb.sh
+
+# The AppImage is the only Linux artifact yv can update in place — see the
+# comment at the top of the script for why the .deb and the tarball cannot.
+# Needs appimagetool on PATH, or APPIMAGETOOL pointing at it.
+appimage: build-linux
+	@bash build/linux/package-appimage.sh
 
 # Convenience for a local machine: build, package, install. Separate from `deb`
 # because packaging should never require root.

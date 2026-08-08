@@ -100,6 +100,14 @@ jobs:
 
       # Tag builds are named for the tag; everything else for the commit, so a
       # downloaded artifact can always be traced back to what produced it.
+      #
+      # Two outputs, and they are not interchangeable. `version` is the filename
+      # label and keeps the tag's leading "v" — internal/updater matches on these
+      # names, so changing them silently stops every installed copy finding its
+      # download. `semver` is what goes into the binary, where a leading "v" is
+      # not part of a version and a commit SHA is not a version at all: non-tag
+      # builds get "dev", which is the updater's own short-circuit, so a
+      # main-branch build can never offer to update itself into a release.
       - name: Compute version label
         id: vars
         shell: bash
@@ -108,6 +116,12 @@ jobs:
             echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
             echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "semver=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "semver=dev" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-go@v5
@@ -143,14 +157,18 @@ jobs:
         working-directory: frontend
         run: bun install --frozen-lockfile
 
+      # -ldflags is what lets the binary know its own version. Without it
+      # main.version stays "dev" and the updater never checks.
       - name: Build app (unsigned)
         shell: bash
+        env:
+          LDFLAGS: -X main.version=${{ steps.vars.outputs.semver }}
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           if [[ -n "${{ matrix.tags }}" ]]; then
-            wails build -platform ${{ matrix.platform }} -tags ${{ matrix.tags }}
+            wails build -platform ${{ matrix.platform }} -tags ${{ matrix.tags }} -ldflags "$LDFLAGS"
           else
-            wails build -platform ${{ matrix.platform }}
+            wails build -platform ${{ matrix.platform }} -ldflags "$LDFLAGS"
           fi
 
       # ── Packaging, one step per platform ──────────────────────────────
@@ -170,6 +188,17 @@ jobs:
           mkdir -p dist
           cp build/bin/yv.exe "dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.exe"
 
+      # The .exe above stays, for a first-time download. The zip is what updates
+      # use: a running .exe cannot be deleted or overwritten, so the updater
+      # renames it aside and unpacks over the top — which needs an archive, not a
+      # bare executable.
+      - name: Package Windows zip
+        if: matrix.name == 'windows-amd64'
+        shell: bash
+        run: |
+          cd build/bin
+          zip -j "$GITHUB_WORKSPACE/dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.zip" yv.exe
+
       # The .deb is what makes this installable on Ubuntu; the tarball is for
       # anyone who just wants the binary. Both come from the same build.
       - name: Package .deb and tarball
@@ -180,6 +209,33 @@ jobs:
           cp build/bin/yv_*.deb dist/
           tar -C build/bin -czf \
             "dist/yv-linux-amd64-${{ steps.vars.outputs.version }}.tar.gz" yv
+
+      # After the .deb and tarball, so that verified step is unchanged and a
+      # failure here is unambiguous in the log.
+      #
+      # The AppImage is the only Linux artifact yv can update in place: the .deb
+      # lands in root-owned /usr/bin and the tarball could be anywhere, so
+      # neither can replace itself. desktop-file-utils is installed here rather
+      # than added to the verified system-dependencies step above — appimagetool
+      # uses it to validate the .desktop entry and nothing else needs it.
+      - name: Package AppImage
+        if: matrix.name == 'linux-amd64'
+        env:
+          # The same label every other artifact uses, leading "v" and all —
+          # otherwise the AppImage is the one file in the release spelled
+          # differently, and internal/updater would not match it.
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+          # appimagetool ships as an AppImage itself; --appimage-extract-and-run
+          # inside the script means the runner needs no FUSE. Downloaded into the
+          # runner's own temp dir rather than /usr/local/bin, which would need
+          # sudo for the write and again for the chmod.
+          wget -q -O "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          APPIMAGETOOL="$RUNNER_TEMP/appimagetool" OUT_DIR=dist \
+            bash build/linux/package-appimage.sh
 
       - name: Show what was produced
         shell: bash
