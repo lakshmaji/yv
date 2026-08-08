@@ -1,5 +1,5 @@
 import { Show, createResource } from 'solid-js';
-import { aboutModalOpen, setAboutModalOpen } from '../../store';
+import { aboutModalOpen, setAboutModalOpen, setUpdateModalOpen } from '../../store';
 import { go, runtime } from '../../wails';
 
 const REPO_URL = 'https://github.com/lakshmaji/yv';
@@ -25,6 +25,15 @@ export default function AboutModal() {
     runtime.BrowserOpenURL(url);
   }
 
+  // About closes: two stacked dialogs with two Close buttons is a worse answer
+  // than one, and there is nothing left to read here once the update dialog is
+  // up.
+  function checkForUpdates() {
+    close();
+    setUpdateModalOpen(true);
+    go.CheckForUpdates();
+  }
+
   return (
     <Show when={aboutModalOpen()}>
       <div class="modal-overlay" onClick={handleOverlayClick}>
@@ -47,6 +56,13 @@ export default function AboutModal() {
             </button>
             <span class="about-dot">·</span>
             <span>© 2026 Lakshmaji</span>
+            <span class="about-dot">·</span>
+            {/* Hands off to the update dialog rather than reporting inline:
+                the answer can be a download with release notes and a progress
+                bar, none of which belongs in a line of metadata. */}
+            <button class="about-link" onClick={checkForUpdates}>
+              Check for updates
+            </button>
           </div>
 
           <div class="about-note">

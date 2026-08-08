@@ -17,6 +17,7 @@ import type {
   IncomingShare,
   IncomingConnect,
   ShareProgress,
+  UpdateState,
 } from './types';
 import { variantById } from './lib/drone';
 
@@ -70,6 +71,28 @@ const [shortcutsModalOpen, setShortcutsModalOpen] = createSignal(false);
 
 // About dialog (opened from Help → About yv)
 const [aboutModalOpen, setAboutModalOpen] = createSignal(false);
+
+// Update dialog (opened from Help → Check for Updates…, from About, or by the
+// background check finding something).
+const [updateModalOpen, setUpdateModalOpen] = createSignal(false);
+
+// The last state Go published.
+//
+// Held here rather than in the dialog because the check that matters most runs
+// four seconds after launch, with no dialog mounted. A signal scoped to the
+// component would miss it entirely, and the user would learn about an update
+// only if they happened to go looking.
+const [updateState, setUpdateState] = createSignal<UpdateState>({
+  status: 'idle',
+  current: '',
+  canSelfUpdate: false,
+});
+
+/** True while a check or download is running, so buttons can disable. */
+const updateBusy = createMemo(() => {
+  const s = updateState().status;
+  return s === 'checking' || s === 'downloading';
+});
 
 // Which main view is showing. Dashboard and Discovery are app-wide rather than
 // per-project, so they replace both the command list and the (meaningless there)
@@ -448,6 +471,8 @@ export {
   envModalOpen, setEnvModalOpen,
   shortcutsModalOpen, setShortcutsModalOpen,
   aboutModalOpen, setAboutModalOpen,
+  updateModalOpen, setUpdateModalOpen,
+  updateState, setUpdateState, updateBusy,
   activeEnv, activeEnvVarCount,
   activeView, setActiveView,
   discoverySeed, setDiscoverySeed,

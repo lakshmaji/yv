@@ -10,6 +10,7 @@ import {
   maximizedCmd, setMaximizedCmd, filteredCommands,
   shortcutsModalOpen, setShortcutsModalOpen,
   aboutModalOpen, setAboutModalOpen,
+  updateModalOpen, setUpdateModalOpen, setUpdateState,
   activeView, setActiveView,
   settingsModalOpen, setSettingsModalOpen, loadAppSettings,
 } from './store';
@@ -27,6 +28,7 @@ import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import AboutModal from './components/modals/AboutModal';
+import UpdateModal from './components/modals/UpdateModal';
 import SettingsModal from './components/modals/SettingsModal';
 import IncomingShareModal from './components/modals/IncomingShareModal';
 import IncomingConnectModal from './components/modals/IncomingConnectModal';
@@ -42,6 +44,7 @@ import type {
   IncomingShare,
   IncomingConnect,
   ShareProgress,
+  UpdateState,
 } from './types';
 import {
   setPeers,
@@ -150,7 +153,8 @@ export default function App() {
       // once nothing is stacked on top of it.
       const modalOpen =
         editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
-        settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen();
+        settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen() ||
+        updateModalOpen();
       if (maximizedCmd() && !modalOpen) {
         setMaximizedCmd(null);
         return;
@@ -162,6 +166,7 @@ export default function App() {
       setShortcutsModalOpen(false);
       setSettingsModalOpen(false);
       setAboutModalOpen(false);
+      setUpdateModalOpen(false);
     }
   }
 
@@ -169,6 +174,8 @@ export default function App() {
   let unsubResources: (() => void) | undefined;
   let unsubShortcuts: (() => void) | undefined;
   let unsubAbout: (() => void) | undefined;
+  let unsubUpdateMenu: (() => void) | undefined;
+  let unsubUpdateState: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubDashboard: (() => void) | undefined;
   let unsubPeers: Array<() => void> = [];
@@ -190,6 +197,25 @@ export default function App() {
     });
     unsubAbout = runtime.EventsOn('open-about', () => {
       setAboutModalOpen(true);
+    });
+    unsubUpdateMenu = runtime.EventsOn('open-update', () => {
+      setUpdateModalOpen(true);
+      go.CheckForUpdates();
+    });
+    // Registered here, not in UpdateModal, for the same reason the share
+    // listeners are: the check that matters most runs a few seconds after
+    // launch with no dialog mounted. Scoped to the component, it would be
+    // missed entirely and the user would only learn about an update by going
+    // to look for one.
+    unsubUpdateState = runtime.EventsOn('update:state', (s: UpdateState) => {
+      setUpdateState(s);
+      // Opened only for something actionable. A background check that finds
+      // nothing, fails, or reports a dev build stays silent — an app that
+      // interrupts you to say it has nothing to say gets its updates turned
+      // off.
+      if (s.status === 'available' || s.status === 'manual') {
+        setUpdateModalOpen(true);
+      }
     });
     // ⌘, and ⌘D are native menu accelerators — macOS swallows them before they
     // reach the webview, so they arrive only as these events.
@@ -270,6 +296,8 @@ export default function App() {
     unsubResources?.();
     unsubShortcuts?.();
     unsubAbout?.();
+    unsubUpdateMenu?.();
+    unsubUpdateState?.();
     unsubSettings?.();
     unsubDashboard?.();
     unsubPeers.forEach(off => off());
@@ -300,6 +328,7 @@ export default function App() {
       <EnvironmentsModal />
       <KeyboardShortcutsModal />
       <AboutModal />
+      <UpdateModal />
       <SettingsModal />
       {/* Global, not inside DiscoveryPanel: a request can arrive on any view. */}
       <Show when={incomingConnect()}>
