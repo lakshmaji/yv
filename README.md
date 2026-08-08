@@ -19,14 +19,33 @@ Open source, MIT licensed. If it saves you a few `cd`s a day,
 Grab the build for your platform from the
 [latest release](https://github.com/lakshmaji/yv/releases/latest):
 
-| Platform | Asset |
-|---|---|
-| macOS (Apple Silicon) | `yv-macos-arm64-*.dmg` |
-| Linux (x86_64) | `yv_*.deb`, or `yv-linux-amd64-*.tar.gz` for just the binary |
-| Windows (x86_64) | `yv-windows-amd64-*.exe` |
+| Platform | Asset | Updates itself |
+|---|---|---|
+| macOS (Apple Silicon) | `yv-macos-arm64-*.dmg` | yes |
+| Windows (x86_64) | `yv-windows-amd64-*.exe` | yes |
+| Linux (x86_64) | `yv-linux-x86_64-*.AppImage` | yes |
+| Linux (x86_64) | `yv_*.deb`, or `yv-linux-amd64-*.tar.gz` for just the binary | no — use `apt` |
 
 macOS is the primary target and the most exercised; Linux and Windows are built and
 released by CI but see less day-to-day use.
+
+Every asset ships with a `.sha256` and a `.sig` beside it. To check a download:
+
+```bash
+shasum -a 256 -c yv-macos-arm64-*.dmg.sha256
+```
+
+### Updates
+
+yv checks for a new release a few seconds after launch and says nothing unless
+there is one. **Help → Check for Updates…** asks on demand. An update is only
+installed once its signature verifies against the key built into your copy, so a
+tampered or unsigned download is refused rather than run.
+
+On Linux only the **AppImage** can replace itself: a `.deb` installs to root-owned
+`/usr/bin`, where updating would need your password every time and would leave
+`apt` believing the old version is still installed. A `.deb` install is told to use
+`apt` rather than offered a download that would not apply.
 
 ### macOS: the first launch
 
@@ -129,12 +148,19 @@ make fmt             # format Go sources
 make build           # app bundle in build/bin/
 make dmg             # macOS: yv.dmg in the project root
 make deb             # Linux: a .deb in build/bin/
+make appimage        # Linux: the self-updating AppImage (needs appimagetool)
 make install-linux   # Linux: build the .deb and install it
 ```
 
-The version comes from `productVersion` in `wails.json` — one source of truth for the
-bundle, the `.deb` and the release assets. Pushing a `v*` tag makes CI build all three
-platforms and publish a GitHub Release.
+Versions are managed with [changesets](https://github.com/changesets/changesets): each
+PR adds a `.changeset/*.md` saying patch/minor/major and why, and `bun run version`
+turns those into a bump, a `CHANGELOG.md` entry, and the `productVersion` in
+`wails.json` that the bundle, the `.deb` and `-ldflags` all read. A build that skips
+the Makefile reports its version as `dev` and never checks for updates.
+
+Pushing a `v*` tag makes CI build all three platforms, sign the artifacts, and publish
+a GitHub Release. See [RELEASING.md](./RELEASING.md) — particularly the part about the
+signing key, which cannot be regenerated.
 
 ---
 
@@ -163,6 +189,7 @@ Export Projects never include it, so a config you share or commit carries no sec
 ## Documentation
 
 - [Environments — per-project variables & secrets](./docs/environments.md)
+- [Releasing — versioning, signing keys, and the update pipeline](./RELEASING.md)
 - `CLAUDE.md` — architecture notes and the reasoning behind most design decisions
 
 ---

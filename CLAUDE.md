@@ -1793,3 +1793,177 @@ level moves *towards* the empty one. It still clears it comfortably — luminanc
 72 against 42, a 1.7x gap — and `heatmap.test.ts` now asserts both the direction
 (monotonically darkening) and that headroom, because a reversed ramp looks
 plausible at a glance and nothing else would catch it flipping back.
+
+---
+
+## Implemented: Auto-update (macOS · Windows · Linux)
+
+### Goal
+
+An installed copy could not learn that a newer one existed, and worse, **the
+running binary did not know its own version** — `wails.json` carried a
+placeholder `1.0.0`, nothing injected it, and no git tag existed. So a user who
+installed six months ago had no signal at all.
+
+### Versioning is changesets, and the number lives in two files
+
+There is no root `package.json` in this repo's history; one was added purely as
+the changesets anchor (`{"name":"yv","private":true}`), deliberately **not** a
+workspace, so `frontend/package.json` and the verified `bun install
+--frozen-lockfile` step are untouched.
+
+`wails.json` stays the build's source of truth — `package-deb.sh` sed-parses
+`productVersion`, and the Makefile and CI read it — so `bun run version` is
+`changeset version && node scripts/sync-version.mjs`. That script rewrites the one
+value with a regex rather than round-tripping the JSON, which would reformat the
+file and make every release a diff touching every line.
+
+`version_test.go` fails if the two files disagree. Drift ships a `.deb` whose
+package version disagrees with the binary inside it, and the updater then compares
+the wrong number — invisible until an update refuses to install.
+
+**The `v` prefix is the trap.** `${GITHUB_REF#refs/tags/}` yields `v0.1.0` and
+artifact names embed that; a *second* CI output carries the stripped `0.1.0` for
+ldflags, and `CanonicalVersion` strips it at the Go boundary. Non-tag builds are
+linked as `dev`, which is the updater's own short-circuit — a `main` build can
+never offer to update itself into a release.
+
+### The feed is the releases API, and the newest *version* wins
+
+No manifest, no appcast: the API already carries the tag, notes, asset names,
+sizes and URLs, and a hand-maintained manifest is a second thing to publish and a
+second thing to get out of step. The feed is ordered by publish date, so every
+entry is compared rather than trusting position — a patch backported to an old
+branch and published late arrives first.
+
+Assets match on the **whole platform token**, not the extension. A release with
+both an arm64 and an amd64 DMG would otherwise be a coin toss, and the wrong
+architecture produces a bundle that will not launch with no clue why.
+
+Both sidecars are fetched during the *check*, so a `Release` handed onward is
+already complete: there is no path where 40 MB is pulled and only then discovers
+it cannot be verified. The status-code guard on a sidecar is load bearing —
+without it a 404 page's first word becomes the "hash", and the failure surfaces
+later as a checksum mismatch, reading as a corrupted download rather than as a
+release that was never published properly.
+
+### Signing: one scheme, two callers
+
+RSA-4096 PKCS#1 v1.5 over SHA-256, matching the hot-updater bundle scheme so one
+key-generation recipe covers both. `internal/updatesign` is imported by *both* the
+signer (`cmd/sign-artifact`, CI-side) and the verifier (`internal/updater`),
+because two independent implementations of "what gets signed" eventually disagree
+— and the failure mode is every update refused as tampered with nothing looking
+wrong.
+
+`SigningDigest` is the reason that matters: the signature covers the SHA-256 of
+the **32 decoded bytes** of the artifact's hash, not its 64-character hex
+spelling. Sign the string instead and the signatures verify perfectly against
+themselves and against nothing the Node tooling produces.
+
+The public key is compiled in (`updatePublicKeyPEM`), empty until `make
+update-keys` runs, and every verification then fails with `ErrNoTrustedKey` —
+distinct from a bad signature, because one sends you to the build and the other to
+the release. Parsing is deferred rather than done in an `init` so a malformed key
+is an update failure with a message, not a binary that will not start.
+
+**Two things are unrecoverable and are in RELEASING.md:** losing the private key
+means no installed copy can ever be updated again, and rotating it takes two
+releases in order (ship the new public key *before* signing with the new private
+key).
+
+### Verification is not a step a caller can forget
+
+`Download` streams to a `.part` while hashing, and renames into place only once
+checksum, size and signature have all passed. Every rejection removes the file — a
+refused artifact left on disk is one the pending-download path could later pick
+up. A stale `.part` is discarded rather than resumed: resuming trusts a prefix
+that was never verified.
+
+### Applying, per platform
+
+**macOS** (`apply_darwin.go`) is the hard one. `InstallCheck` runs *before* the
+download because all three refusals are permanent for the launch. The mount point
+is **explicit**: the default derives from the volume name, so a "yv" volume already
+mounted — exactly how the user installed it — makes macOS mount at `/Volumes/yv 1`
+and the bundle gets copied from whichever the guess named. The plain-output
+fallback splits on **tabs**, since whitespace truncates `/Volumes/yv 1` to a path
+that probably exists and is a different volume. Staging sits beside the app so the
+final move is a same-filesystem rename; across devices it silently becomes a copy.
+The old bundle is moved aside, not deleted, so a failure at the last step can put
+it back. `Relaunch` waits for this process to exit before `open`, because `open`
+on a running bundle activates the *old* instance and then quits it.
+
+**Windows** (`apply_windows.go`): a running `.exe` cannot be deleted but can be
+renamed. Unpack fully first, rename the exe aside, copy over, each displaced file
+moved into a backup so a partial copy unwinds. Files the update does not carry are
+left alone — an update is not a reinstall.
+
+**Linux** (`apply_linux.go`) is a question of *which install*: `APPIMAGE`'s
+presence is the entire test, because nothing else distinguishes an AppImage from a
+tarball. The `.deb` and tarball are told to use their package manager rather than
+offered a download that cannot apply.
+
+`archive.go` has **no build tag** on purpose: behind `windows` the zip-slip guard
+would be the highest-risk function in the updater and the only one a macOS
+developer could never execute. Its root comparison includes a trailing separator —
+without it, an entry resolving to `…/staged-evil` passes a prefix test against
+`…/staged`.
+
+### UI
+
+One `update:state` struct covers every stage; partial payloads would make the
+dialog keep its own copy of the last one, which is how a progress bar outlives its
+download. `publishUpdate` **records before it emits**, because the startup check
+fires into a window with no dialog mounted. The listener lives in `App.tsx` for the
+same reason the share listeners do.
+
+The startup check is **silent about everything the user did not ask about** — an
+alert saying "you are up to date" four seconds after every launch is the fastest
+way to get the feature turned off. Pressing the button reports everything.
+
+Release notes are markdown (changesets writes markdown), so `formatReleaseNotes`
+strips the handful of markers rather than pulling in a renderer — a dependency and
+an HTML-injection surface for network text, to display two headings and a list.
+
+### CI: strictly additive
+
+`build.yml` was verified working on macOS and Ubuntu, so the change is insertion,
+not rewriting. **Exactly two lines were modified**: the two `wails build`
+invocations, each gaining `-ldflags`. Artifact names are byte-identical.
+Code-signing steps exist but sit behind a `workflow_dispatch` input defaulting to
+false — the certificates are 1–2 months away, and their arrival should be a
+secrets change, not a redesign.
+
+`TestAssetNamesMatchWhatCIUploads` pins the naming with **literal** names. The
+packaging steps and `platformToken` cannot see each other, and drift means a
+release that builds and publishes perfectly and offers an update to nobody. A test
+that derives the name from `platformToken` and matches it with `platformToken`
+proves only that the function agrees with itself.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `package.json`, `.changeset/`, `scripts/sync-version.mjs`, `version_test.go` | changesets anchor, sync into `wails.json`, drift test |
+| `.github/workflows/release.yml` | New — version PR and tag push |
+| `internal/updater/semver.go` | Hand-rolled semver precedence |
+| `internal/updater/updater.go` | Releases feed, asset and sidecar resolution |
+| `internal/updater/signature.go` | Compiled-in public key, `HasTrustedKey` |
+| `internal/updater/download.go` | Streaming download, mandatory verify gate |
+| `internal/updater/apply_{darwin,windows,linux,other}.go` | Per-platform install |
+| `internal/updater/archive.go` | Untagged, so the zip-slip guard is testable here |
+| `internal/updatesign/`, `cmd/sign-artifact/` | The signing scheme and CI tool |
+| `app_update.go`, `models.go`, `menu.go`, `main.go` | Bindings, event, menu item, quit guard |
+| `frontend/src/components/modals/UpdateModal.tsx` | The dialog |
+| `frontend/src/lib/releaseNotes.ts` | Markdown stripping |
+| `build/linux/package-appimage.sh`, `Makefile` | AppImage packaging, `make update-keys` |
+| `RELEASING.md` | The two unrecoverable facts, and the release flow |
+
+### Not yet verified
+
+The Windows apply path compiles and its portable half is tested, but **it has not
+been executed** — there is no Windows machine or Wine here. The AppImage recipe was
+built and run in a container on **arm64**; Docker's amd64 emulation on Apple
+Silicon cannot exec appimagetool's static-pie binary, so the x86_64 tool download
+is unproven. Dispatch the branch before tagging.
