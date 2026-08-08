@@ -2038,66 +2038,54 @@ timeline at all, the markup is already at its final state, and it holds and
 fades. `.no-motion` is deliberately untouched: that toggle is scoped to
 `.landscape-stage` and is about the discovery map, not app boot.
 
-### Head-on, so only half of it is written down
+### Side view, and why the body had to go
 
-The drawing faces the viewer — a mask, framed by the two tusks — which is what
-made the reference readable at a glance and what a profile could only hint at.
+The drawing is a boar's head and neck in **profile**, facing left, built on one
+idea: in profile a boar is a **wedge**. The snout tip is the lowest,
+furthest-forward point and the line runs up and back from there to a shoulder
+hump. Get that slope wrong and no amount of detail rescues it.
 
-A frontal face is symmetric, and hand-authoring both halves guarantees they
-drift: a tusk two pixels longer on one side is invisible in the source and
-glaring on screen. So `boar.ts` holds the **left half only** and `mirrorPath`
-produces the right. That is also the real reason for the absolute-M/C/Z rule —
-it is what lets the mirror know which numbers are x. Any other command puts an
-odd count in the stream and silently reflects y values into x, so the rule is a
-test rather than a comment.
+A head-and-shoulders version was tried and abandoned. Extending past the neck
+gives one long unbroken taper from snout to flank, with no jaw to break it —
+which is a **whale**, the same silhouette this file failed into on its very
+first attempt, reached from the opposite direction. The neck is cut off behind
+the shoulder instead.
 
-`mirrorPath` formats each flipped number to the **same number of decimals as its
-source token**. Rounding instead turned the bristle generator's `171.0` into
-`171`, so mirroring twice did not give back the path it started from — caught by
-the involution test, which is the property that makes the mirror trustworthy at
-all.
-
-Each half-stroke is emitted **next to** its mirror rather than in a second pass,
-so both sides arrive together. Drawn left-half-first the face builds itself
-lopsided for most of a second, which reads as a bug rather than as a reveal.
+`mirrorPath` and `CENTRE_X` were **deleted** with the frontal version. A profile
+has no symmetry to exploit, so they became dead code with dead tests attached;
+they are in git history if a frontal view ever comes back.
 
 ### Drawing an animal is a thing you have to look at
 
-Two full passes were thrown away, and neither was caught by a test — both
-rendered cleanly, stayed inside the viewBox and passed every invariant.
+Four passes were thrown away, and no test caught any of them — all four rendered
+cleanly, stayed inside the viewBox and satisfied every invariant.
 
-The profile version read as a **whale**, and was fixed by a blunt vertical snout
-disc instead of a tapered point, tusks finishing *above* the muzzle line rather
-than politely below it, a shoulder hump, and a small pointed ear.
+- **Whale.** A tapered snout. Fixed by a blunt, near-vertical snout disc: that
+  single feature is what says "pig".
+- **Mandrill**, then **cat** — both frontal, and both the same defect. Smooth
+  continuous bezier curvature closes into an oval however far the control points
+  are dragged, and a circle with small upright triangles on top is a cat
+  whatever else is drawn inside it.
+- **Tapir.** Back in profile, with the muzzle drawn as a slender tube of even
+  width. A boar's muzzle is *deep* where it meets the cheek and only tapers at
+  the very front; the taper is the whole difference.
 
-The frontal versions then read as a **mandrill**, and after that as a **cat**.
-Both are the same defect: a round skull. Smooth continuous bezier curvature
-closes into an oval however far the control points are dragged, and a circle
-with small upright triangles on top is a cat whatever else is drawn inside it.
+Things that hold, whichever view is being drawn:
 
-What finally fixed it, and the order the fixes matter in:
+- **Tusk tips finish above the muzzle line.** Kept politely below, they read as
+  teeth and the animal stops being a boar.
+- **Tusks need a mouth to come out of.** Without one they are hooks leaning
+  against the head — learned twice, once in each view.
+- **The mane spine starts behind the ear.** Bristles rooted where the ear is
+  drawn grow straight through it.
+- **Facet washes must overlap, not meet.** A hairline of backdrop between two
+  dark fills reads as a black seam splitting the animal in half.
 
-1. **The outline has to taper downward, not close.** A flat crown, a corner at
-   the temple, then a long *near-straight* side running down and inward — a
-   shield. This is most of the read on its own.
-2. **The snout disc has to be huge and hang below the jaw.** It is the animal's
-   main feature; drawn politely small it is just a nose on a face.
-3. **The tusks have to come out of a mouth.** With no mouth line they are two
-   horns leaning against the head — which is exactly how they read.
-4. **Ears lean out, not up.** Anything narrow and pointing at the sky is a horn,
-   and a shield-shaped head with two horns is a bull.
-
-Three separate passes were also lost to things a static render could not show,
-only the running app: the bloom (`drop-shadow` at 26px over two wide blurs) had
-erased every crease, nostril and eye into white haze, and the tusks at
-`fill-opacity: 0.85` were flat grey slabs with no form in them.
-
-Tusks are the composition. They root at the corner of the mouth, sweep out and
-down, and come back up across the cheek with the tips hooking inward, so the
-pair frames the face *and is attached to it*. They carry a `fill` — the only
-strokes that do — because a tusk is a solid object where everything else is a
-contour, but at 0.35 rather than opaque: the bright stroke is what puts them in
-front of the head, and a solid fill just makes them slabs.
+Two defects were invisible in a static render and only showed up in the running
+app: the bloom (`drop-shadow` at 26px over two wide blurs) had erased every
+crease, the nostrils and the eye into white haze, and the tusks at full fill
+opacity were flat grey slabs with no form in them. Bloom that deletes the
+drawing it is lighting is not atmosphere.
 
 The viewBox is larger than the drawing's bounds on purpose — the neon filter
 blurs well outside the strokes and the SVG root clips at the viewBox, so a snug
@@ -2109,8 +2097,8 @@ box shears the glow off flat along one edge.
 |---|---|
 | `main.go` | `BackgroundColour` — the native window is `--bg` before the webview paints |
 | `frontend/index.html` | Inline critical `background`, the only rule that paints before the bundle |
-| `frontend/src/lib/boar.ts` | New — `BOAR_VIEWBOX`, `CENTRE_X`, `mirrorPath`, `NEON`, `SPLASH` timings, `boarStrokes`, `boarFacets`, `glitchBands`, `sparks` |
-| `frontend/src/lib/boar.test.ts` | New — 267 cases: absolute-M/C/Z, NaN sweep, viewBox containment, mirror involution, half-beside-its-mirror ordering, draw order, seeded determinism, timing budget |
+| `frontend/src/lib/boar.ts` | New — `BOAR_VIEWBOX`, `NEON`, `SPLASH` timings, `boarStrokes`, `boarFacets`, `glitchBands`, `sparks` |
+| `frontend/src/lib/boar.test.ts` | New — 180 cases: absolute-M/C/Z, NaN sweep, viewBox containment, draw order, load-bearing segments present, seeded determinism, timing budget |
 | `frontend/src/components/Splash.tsx` | New — the projection and the anime.js timeline, reduced-motion path by hand |
 | `frontend/src/store.ts` | `splashDone`, seeded from the dev once-per-session flag |
 | `frontend/src/App.tsx` | Mounts `<Splash />` last, behind a `<Show>` |

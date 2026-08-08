@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BOAR_VIEWBOX, CENTRE_X, NEON, CHROMA_OFFSET, SPLASH, EYE_IDS,
+  BOAR_VIEWBOX, NEON, CHROMA_OFFSET, SPLASH, EYE_IDS,
   SPARK_ORIGINS, SPARK_REACH,
-  boarStrokes, boarFacets, glitchBands, sparks, mirrorPath,
+  boarStrokes, boarFacets, glitchBands, sparks,
 } from './boar';
 
 /**
  * Every path in boar.ts is absolute M/C/Z, which is asserted below — that is
- * what makes this parser exact rather than approximate, and it is the same
- * property `mirrorPath` depends on to know which numbers are x.
+ * what makes this parser exact rather than approximate.
  */
 function pathPoints(d: string): Array<[number, number]> {
   const nums = d.match(/-?\d+(?:\.\d+)?/g) ?? [];
@@ -29,8 +28,7 @@ const allPaths = [
 describe('boar paths', () => {
   it.each(allPaths.map(p => [p.id, p.d] as const))('%s uses only absolute M/C/Z', (_id, d) => {
     // Any other command (relative m/c, or H/V/A/S/Q) would put an odd number of
-    // coordinates in the stream — which would break the pairing above and,
-    // worse, make mirrorPath reflect y values into x.
+    // coordinates in the stream and break the pairing above.
     expect(d.replace(/[-\d.,\s]/g, '')).toMatch(/^M[CZ]*$/);
   });
 
@@ -89,84 +87,10 @@ describe('boar paths', () => {
   });
 });
 
-describe('mirrorPath', () => {
-  // Written against CENTRE_X rather than a literal, so moving the mirror line
-  // does not turn a working mirror into seven red tests.
-  const flip = (x: number) => 2 * CENTRE_X - x;
-
-  const cases: Array<[string, string, string]> = [
-    ['reflects x and leaves y alone', 'M100 50', `M${flip(100)} 50`],
-    ['leaves the centre line fixed', `M${CENTRE_X} 10`, `M${CENTRE_X} 10`],
-    [
-      'handles every pair of a curve',
-      'M100 20 C110 30, 120 40, 130 50',
-      `M${flip(100)} 20 C${flip(110)} 30, ${flip(120)} 40, ${flip(130)} 50`,
-    ],
-    [
-      'carries Z through',
-      'M100 20 C110 30, 120 40, 130 50 Z',
-      `M${flip(100)} 20 C${flip(110)} 30, ${flip(120)} 40, ${flip(130)} 50 Z`,
-    ],
-    ['reflects past the centre', 'M400 8', `M${flip(400)} 8`],
-    ['keeps one-decimal inputs clean', 'M100.5 20.5', `M${flip(100.5).toFixed(1)} 20.5`],
-  ];
-
-  it.each(cases)('%s', (_name, input, expected) => {
-    expect(mirrorPath(input)).toBe(expected);
-  });
-
-  it('is its own inverse', () => {
-    for (const { d } of allPaths) expect(mirrorPath(mirrorPath(d))).toBe(d);
-  });
-
-  it('honours an explicit centre', () => {
-    expect(mirrorPath('M10 5', 50)).toBe('M90 5');
-  });
-});
-
-describe('symmetry', () => {
-  // A frontal face has to be symmetric, and hand-authoring both halves is how a
-  // tusk ends up two pixels longer on one side — invisible in the source and
-  // glaring on screen. Only the left half is written down; these hold the
-  // machinery that produces the right.
-  const mirrored = strokes.filter(s => s.id.endsWith('-r'));
-
-  it('has a mirrored partner for every half-stroke', () => {
-    expect(mirrored.length).toBeGreaterThan(0);
-    for (const m of mirrored) {
-      const source = strokes.find(s => s.id === m.id.slice(0, -2));
-      expect(source, `no source for ${m.id}`).toBeDefined();
-      expect(m.d).toBe(mirrorPath(source!.d));
-    }
-  });
-
-  it('keeps a mirrored stroke identical to its source in every other way', () => {
-    for (const m of mirrored) {
-      const source = strokes.find(s => s.id === m.id.slice(0, -2))!;
-      expect(m.color).toBe(source.color);
-      expect(m.width).toBe(source.width);
-      expect(m.role).toBe(source.role);
-      expect(m.fill).toBe(source.fill);
-    }
-  });
-
-  it('draws each half-stroke next to its mirror, so the face never builds lopsided', () => {
-    for (const m of mirrored) {
-      const i = strokes.indexOf(m);
-      expect(strokes[i - 1].id).toBe(m.id.slice(0, -2));
-    }
-  });
-
-  it('centres the whole drawing on the mirror line', () => {
-    const xs = allPaths.flatMap(p => pathPoints(p.d).map(([x]) => x));
-    expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(2 * CENTRE_X, 6);
-  });
-});
-
 describe('draw order', () => {
-  // The order IS the reveal: skull and ears, then the face, then the muzzle and
-  // snout, then the tusks that frame the whole thing, eyes last. Reordering the
-  // arrays in boar.ts is a one-line change that would silently ruin the only
+  // The order IS the reveal: the outline first, so the animal is recognisable
+  // early, then its creases and crest, then the tusks, then the eye. Reordering
+  // the arrays in boar.ts is a one-line change that would silently ruin the only
   // timing the splash has, so it is pinned here.
   it('starts with the silhouette', () => {
     expect(strokes[0].role).toBe('silhouette');
@@ -178,7 +102,7 @@ describe('draw order', () => {
     expect(firstTusk).toBeGreaterThan(lastHead);
   });
 
-  it('lights both eyes last of all', () => {
+  it('lights the eye last of all', () => {
     expect(strokes.slice(-EYE_IDS.length).map(s => s.id).sort())
       .toEqual([...EYE_IDS].sort());
   });
@@ -188,14 +112,21 @@ describe('draw order', () => {
     expect(boarStrokes().map(s => s.d)).toEqual(strokes.map(s => s.d));
   });
 
-  it('has two ears, two tusks, two eyes and a mane', () => {
+  it('has a closed outline, two tusks, one eye and a mane', () => {
     const count = (role: string) => strokes.filter(s => s.role === role).length;
-    // Skull and ear, each mirrored.
-    expect(count('silhouette')).toBe(4);
+    expect(count('silhouette')).toBe(9);
     expect(count('tusk')).toBe(2);
-    expect(count('bristle')).toBeGreaterThanOrEqual(16);
+    expect(count('bristle')).toBeGreaterThanOrEqual(10);
     // By exact id, not by prefix — `earInner` starts with "ear" too.
-    expect(strokes.filter(s => s.id === 'ear' || s.id === 'ear-r')).toHaveLength(2);
+    expect(strokes.filter(s => s.id === 'ear')).toHaveLength(1);
+  });
+
+  it('names the two segments that carry the animal', () => {
+    // The blunt snout and the shoulder hump. Everything else can move; if
+    // either of these goes missing the profile stops being a boar.
+    for (const id of ['snoutDisc', 'muzzle', 'hump']) {
+      expect(strokes.some(s => s.id === id), `missing ${id}`).toBe(true);
+    }
   });
 });
 
@@ -217,7 +148,7 @@ describe('SPLASH timings', () => {
     ['strokes finish drawing', drawEnd],
     ['facets finish', SPLASH.facetsAt + SPLASH.facetsDur],
     ['glitch finishes', SPLASH.glitchAt + SPLASH.glitchDur],
-    ['the eyes light', SPLASH.eyeAt],
+    ['the eye lights', SPLASH.eyeAt],
     ['the sparks fly', SPLASH.sparksAt],
     ['the wordmark lands', SPLASH.markAt + SPLASH.markDur],
   ];
@@ -299,13 +230,12 @@ describe('sparks', () => {
   });
 
   it('throws every spark upward, so none drop through the jaw', () => {
-    for (const s of sparks(4, 60)) {
-      const [, oy] = SPARK_ORIGINS.reduce(
-        (best, o) => (Math.hypot(s.x - o[0], s.y - o[1]) < Math.hypot(s.x - best[0], s.y - best[1]) ? o : best),
-        SPARK_ORIGINS[0],
-      );
-      expect(s.y).toBeLessThanOrEqual(oy);
-    }
+    // Against the lowest origin, not the nearest one. The tusk tips are closer
+    // together than SPARK_REACH, so "nearest origin" is not the origin a given
+    // spark actually came from — a spark thrown up from the lower tip can land
+    // nearer the upper one and still be travelling in the right direction.
+    const lowest = Math.max(...SPARK_ORIGINS.map(([, y]) => y));
+    for (const s of sparks(4, 60)) expect(s.y).toBeLessThanOrEqual(lowest);
   });
 
   it('fits its whole shower inside the spark beat', () => {

@@ -316,7 +316,7 @@ export default function Splash() {
                   class="splash-stroke"
                   d={stroke.d}
                   fill={stroke.fill ?? 'none'}
-                  fill-opacity={stroke.fill ? 0.35 : undefined}
+                  fill-opacity={stroke.fill ? 0.55 : undefined}
                   stroke={stroke.color}
                   stroke-width={stroke.width}
                   stroke-linecap="round"
