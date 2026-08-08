@@ -16,12 +16,33 @@ import { WORLD_H, WORLD_W, generateWorld } from './world';
 
 const SEEDS = [1, 7, 20260806, 88123, 999999];
 
+/**
+ * Both are memoised per seed. `generateWorld` is the expensive call in this file
+ * and it is deterministic, so a dozen tests over five seeds were regenerating the
+ * same handful of islands sixty times — enough, on a loaded CI runner, to push the
+ * placement sweep past the default timeout.
+ */
+const worlds = new Map<number, ReturnType<typeof generateWorld>>();
+const lives = new Map<number, SeaCreature[]>();
+
 function worldAt(seed: number) {
-  return generateWorld(seed);
+  let w = worlds.get(seed);
+  if (!w) worlds.set(seed, (w = generateWorld(seed)));
+  return w;
 }
 
 function lifeAt(seed: number): SeaCreature[] {
-  const w = worldAt(seed);
+  let life = lives.get(seed);
+  if (!life) {
+    const w = worldAt(seed);
+    lives.set(seed, (life = seaLife(w.coast, w.islets, w.width, w.height, w.seed)));
+  }
+  return life;
+}
+
+/** An unmemoised run, for the tests that are about the generator repeating itself. */
+function freshLife(seed: number): SeaCreature[] {
+  const w = generateWorld(seed);
   return seaLife(w.coast, w.islets, w.width, w.height, w.seed);
 }
 
@@ -76,6 +97,7 @@ describe('seaLife placement', () => {
    * tight spots on a circuit are exactly the corners.
    */
   it('keeps every drawn point at sea for the whole lap — never on land, a river or a lake', () => {
+    const aground: string[] = [];
     for (const seed of SEEDS) {
       const world = worldAt(seed);
       for (const creature of lifeAt(seed)) {
@@ -83,30 +105,32 @@ describe('seaLife placement', () => {
           const at = atStop(creature, i);
           const points = [...seaHull(at), ...(creature.leap > 0 ? airborne(at) : [])];
           for (const p of points) {
-            const where = `${creature.kind} stop ${i} @ ${seed}`;
-            expect(pointInPolygon(p, world.coast), where).toBe(false);
-            for (const islet of world.islets) {
-              expect(pointInPolygon(p, islet), where).toBe(false);
+            const on =
+              pointInPolygon(p, world.coast) ? 'the coast'
+              : world.islets.some((islet) => pointInPolygon(p, islet)) ? 'an islet'
+              : null;
+            if (on) aground.push(`${creature.kind} stop ${i} @ ${seed} is on ${on}`);
+          }
+        }
+      }
+    }
+    expect(aground).toEqual([]);
+  });
+
+  it('keeps every drawn point inside the frame for the whole lap', () => {
+    const outside: string[] = [];
+    for (const seed of SEEDS) {
+      for (const creature of lifeAt(seed)) {
+        for (let i = 0; i < creature.route.length; i++) {
+          for (const p of seaHull(atStop(creature, i))) {
+            if (p.x < 0 || p.x > WORLD_W || p.y < 0 || p.y > WORLD_H) {
+              outside.push(`${creature.kind} stop ${i} @ ${seed} at ${p.x},${p.y}`);
             }
           }
         }
       }
     }
-  });
-
-  it('keeps every drawn point inside the frame for the whole lap', () => {
-    for (const seed of SEEDS) {
-      for (const creature of lifeAt(seed)) {
-        for (let i = 0; i < creature.route.length; i++) {
-          for (const p of seaHull(atStop(creature, i))) {
-            expect(p.x, `${creature.kind} @ ${seed}`).toBeGreaterThanOrEqual(0);
-            expect(p.x, `${creature.kind} @ ${seed}`).toBeLessThanOrEqual(WORLD_W);
-            expect(p.y, `${creature.kind} @ ${seed}`).toBeGreaterThanOrEqual(0);
-            expect(p.y, `${creature.kind} @ ${seed}`).toBeLessThanOrEqual(WORLD_H);
-          }
-        }
-      }
-    }
+    expect(outside).toEqual([]);
   });
 
   it('keeps two animals apart, so neither reads as one broken shape', () => {
@@ -122,8 +146,10 @@ describe('seaLife placement', () => {
   });
 
   it('is stable for a seed and differs between seeds', () => {
-    expect(lifeAt(7)).toEqual(lifeAt(7));
-    expect(lifeAt(7)).not.toEqual(lifeAt(8));
+    // Deliberately not `lifeAt`: that one is memoised, so this would compare a
+    // result with itself and pass however unstable the generator was.
+    expect(freshLife(7)).toEqual(freshLife(7));
+    expect(freshLife(7)).not.toEqual(freshLife(8));
   });
 
   it('is empty for a degenerate coast', () => {
