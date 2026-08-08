@@ -17,6 +17,7 @@
 // because the outline was a circle rather than a shape with a direction.
 
 import { makeRng, hashText } from './landscape/rng';
+import { shade } from './landscape/palette';
 
 /**
  * The coordinate space every path below is expressed in.
@@ -36,6 +37,16 @@ export const BOAR_VIEWBOX = { w: 440, h: 300 } as const;
 export const NEON = {
   ink: '#f2fbff',
   bone: '#d3e7f4',
+  /**
+   * The animal's own colour — an opaque dark slate, not a wash.
+   *
+   * The facets used to be low-opacity cyan and violet over the backdrop, which
+   * is why the boar came out mauve: the chroma ghosts tint whatever they copy,
+   * and copying a translucent body tinted the whole animal. The body is now
+   * solid and the ghosts copy only the linework, which is what a channel split
+   * does to a neon sign in the first place.
+   */
+  body: '#313647',
   cyan: '#22e8ff',
   magenta: '#ff2fb9',
   violet: '#8b5cf6',
@@ -103,6 +114,13 @@ export interface BoarStroke {
   color: string;
   width: number;
   role: StrokeRole;
+  /**
+   * Drawn *behind* the body rather than on it. Only the far tusk: distance on a
+   * flat drawing is occlusion, and a smaller paler copy sitting on top of the
+   * muzzle reads as a second tusk on the same side of the head, not one on the
+   * other side of it.
+   */
+  behind?: boolean;
   /** Closed shapes get a faint wash; open contour lines must not. */
   closed: boolean;
   /**
@@ -178,24 +196,42 @@ const DETAIL: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * Tusks, as tapered crescents rather than single strokes — a tusk has a thick
- * root and a point, and a constant-width line reads as a whisker.
+ * The tusks: a big near one and a small far one, set well apart.
  *
- * They root on the mouth line and their tips finish *above* the muzzle. That
- * overlap is the whole silhouette: tusks kept politely below the snout read as
- * teeth, and the animal stops being a boar.
+ * They used to be near-identical crescents overlapping each other, which reads
+ * as one thick tusk badly drawn. A boar has a pair, and in profile the far one
+ * is foreshortened, further back along the jaw and partly hidden by the muzzle
+ * — so the far tusk is smaller, rooted deeper, drawn dimmer and rendered
+ * BEHIND the body. Distance on a flat drawing is occlusion; a smaller paler
+ * copy sitting on top of the muzzle is just a second tusk on the same side.
  *
- * Two, not a fan of them: at this scale three overlapping crescents stopped
- * reading as tusks and started reading as a tangle of wire.
+ * Tapered crescents rather than strokes: a tusk has a thick root and a point,
+ * and a constant-width line reads as a whisker. Their tips finish *above* the
+ * muzzle line — kept politely below they read as teeth, and the animal stops
+ * being a boar.
  */
-const TUSKS: ReadonlyArray<readonly [string, string]> = [
-  ['tuskFar', 'M150 200 C132 196, 116 180, 108 154 C102 134, 104 114, 111 102 C117 108, 113 130, 119 154 C125 176, 138 190, 154 192 Z'],
-  ['tuskNear', 'M134 194 C116 190, 98 172, 90 144 C84 122, 86 100, 93 86 C101 92, 97 118, 103 146 C109 172, 124 186, 140 188 Z'],
+const TUSK_NEAR: ReadonlyArray<readonly [string, string]> = [
+  ['tuskNear', 'M140 198 C118 194, 96 174, 86 140 C78 114, 82 88, 92 74 C100 82, 96 112, 102 144 C110 174, 124 188, 146 190 Z'],
 ];
 
-/** The eye, last of all — the moment the head stops being a drawing. */
+const TUSK_FAR: ReadonlyArray<readonly [string, string]> = [
+  ['tuskFar', 'M170 208 C156 204, 145 190, 141 170 C138 154, 142 142, 149 138 C149 150, 148 164, 152 178 C157 192, 164 200, 174 202 Z'],
+];
+
+/**
+ * The eye, last of all, and built from parts rather than as one lozenge: an
+ * outline, a filled iris, a pupil and a glint. The single stroked almond it
+ * replaces had nothing inside it, so at any size it read as a drawn mark on the
+ * head rather than as something looking back.
+ *
+ * The glint is what does most of the work — it is the only pure-white spot on
+ * the animal, and it is what makes the eye wet instead of flat.
+ */
 const EYES: ReadonlyArray<readonly [string, string]> = [
-  ['eye', 'M177 110 C183 101, 197 102, 202 112 C195 120, 183 120, 177 110 Z'],
+  ['eye', 'M175 111 C181 100, 198 100, 204 111 C197 121, 182 121, 175 111 Z'],
+  ['eyeIris', 'M189 104 C193 104, 196 107, 196 111 C196 115, 193 118, 189 118 C185 118, 182 115, 182 111 C182 107, 185 104, 189 104 Z'],
+  ['eyePupil', 'M189 107 C191 107, 193 109, 193 111 C193 113, 191 115, 189 115 C187 115, 185 113, 185 111 C185 109, 187 107, 189 107 Z'],
+  ['eyeGlint', 'M186 107 C188 107, 189 108, 189 109 C189 110, 188 111, 186 111 C185 111, 184 110, 184 109 C184 108, 185 107, 186 107 Z'],
 ];
 
 /**
@@ -286,13 +322,20 @@ function seg(
  * that would silently ruin the only timing the splash has.
  */
 export function boarStrokes(): BoarStroke[] {
+  const [eye, iris, pupil, glint] = seg(EYES, 'detail', NEON.ink, 1.8);
   return [
+    // The far tusk first, because it is drawn first: it sits behind the body.
+    ...seg(TUSK_FAR, 'tusk', shade(NEON.bone, -0.34), 1.8)
+      .map(t => ({ ...t, fill: shade(NEON.bone, -0.42), behind: true })),
     ...seg(SILHOUETTE, 'silhouette', NEON.ink, 3.2),
     ...seg(INTERIOR, 'interior', NEON.cyan, 2),
     ...seg(DETAIL, 'detail', NEON.cyan, 1.6),
     ...maneBristles(),
-    ...seg(TUSKS, 'tusk', NEON.ink, 2.4).map(t => ({ ...t, fill: NEON.bone })),
-    ...seg(EYES, 'detail', NEON.magenta, 2.2),
+    ...seg(TUSK_NEAR, 'tusk', NEON.ink, 2.4).map(t => ({ ...t, fill: NEON.bone })),
+    { ...eye, fill: shade(NEON.body, -0.5) },
+    { ...iris, color: NEON.amber, width: 1.2, fill: NEON.amber },
+    { ...pupil, color: shade(NEON.body, -0.7), width: 0.8, fill: shade(NEON.body, -0.7) },
+    { ...glint, color: NEON.ink, width: 0.6, fill: NEON.ink },
   ];
 }
 
@@ -310,26 +353,26 @@ export function boarFacets(): BoarFacet[] {
     {
       id: 'muzzleFacet',
       d: 'M70 122 C98 114, 126 108, 152 102 C164 134, 168 170, 162 208 C130 202, 96 188, 68 172 C62 158, 62 134, 70 122 Z',
-      color: NEON.violet,
-      opacity: 0.17,
+      color: shade(NEON.body, 0.1),
+      opacity: 1,
     },
     {
       id: 'cheekFacet',
       d: 'M152 102 C180 92, 208 78, 244 56 C262 94, 270 150, 262 208 C240 210, 218 222, 202 244 C178 238, 170 228, 162 208 C168 170, 164 134, 152 102 Z',
-      color: NEON.cyan,
-      opacity: 0.11,
+      color: NEON.body,
+      opacity: 1,
     },
     {
       id: 'earFacet',
       d: 'M240 62 C244 36, 250 22, 258 20 C268 32, 270 52, 264 70 Z',
-      color: NEON.magenta,
-      opacity: 0.16,
+      color: shade(NEON.body, -0.22),
+      opacity: 1,
     },
     {
       id: 'humpFacet',
       d: 'M274 66 C290 58, 306 46, 326 46 C354 48, 378 68, 394 98 C402 142, 402 200, 396 244 C360 258, 320 262, 288 258 C254 190, 256 118, 274 66 Z',
-      color: NEON.violet,
-      opacity: 0.1,
+      color: shade(NEON.body, -0.14),
+      opacity: 1,
     },
   ];
 }
@@ -379,7 +422,7 @@ export const SPARK_REACH = 40;
  * meaning anything the moment a tusk moves.
  */
 export const SPARK_ORIGINS: ReadonlyArray<readonly [number, number]> = [
-  [92, 88], [111, 104],
+  [90, 76], [148, 140],
 ];
 
 /**
