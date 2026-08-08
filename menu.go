@@ -18,6 +18,11 @@ const (
 // lay out links and would be the only window here with OS chrome.
 const aboutEvent = "open-about"
 
+// updateMenuEvent opens the update dialog. Deliberately without an accelerator:
+// it is a rare, deliberate action, and every obvious key here is already taken
+// by something reached far more often.
+const updateMenuEvent = "open-update"
+
 // appMenu builds the macOS menu bar. It reconstructs the standard App / Edit /
 // Window menus (which Wails provides automatically when no menu is set) and adds
 // custom "View" and "Help" menus.
@@ -47,6 +52,9 @@ func appMenu(ctx func() context.Context) *menu.Menu {
 	help := menu.NewMenu()
 	help.Append(menu.Text("About yv", nil, func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(ctx(), aboutEvent)
+	}))
+	help.Append(menu.Text("Check for Updates…", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(ctx(), updateMenuEvent)
 	}))
 	help.Append(menu.Separator())
 	help.Append(menu.Text("Keyboard Shortcuts", keys.CmdOrCtrl("/"), func(_ *menu.CallbackData) {

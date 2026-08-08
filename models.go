@@ -32,4 +32,6 @@ type (
 	PeerInfo     = models.PeerInfo
 	SharePayload = models.SharePayload
 	ShareOffer   = models.ShareOffer
+
+	UpdateState = models.UpdateState
 )

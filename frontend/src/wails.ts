@@ -14,6 +14,7 @@ import type {
   MetricsStorageInfo,
   PeerInfo,
   ShareScope,
+  UpdateState,
 } from './types';
 
 interface WailsRuntime {
@@ -32,6 +33,26 @@ interface GoApp {
    * hiding — knowing you are on a dev build is the point.
    */
   GetAppVersion(): Promise<string>;
+
+  // ── Updates ───────────────────────────────────────────────────────────
+  //
+  // Check and Download return "ok" or "error: …" immediately and do their work
+  // in the background; the answer that matters arrives as an "update:state"
+  // event. That listener lives in App.tsx rather than in the dialog, so the
+  // startup check is not lost when the dialog is shut.
+
+  /** The last published state, for a dialog that has just opened. */
+  GetUpdateState(): Promise<UpdateState>;
+  CheckForUpdates(): Promise<string>;
+  DownloadUpdate(): Promise<string>;
+  /**
+   * Installs the pending download and restarts. Only returns on failure, or
+   * "cancelled" if the user backed out of stopping their running commands.
+   */
+  RestartToUpdate(): Promise<string>;
+  /** Opens the releases page — the answer for an install that cannot update itself. */
+  OpenReleasePage(): Promise<string>;
+
   LoadProjects(): Promise<Project[]>;
   SaveProjects(projects: Project[]): Promise<string>;
   ExecuteCommand(cmd: CommandConfig, workingDir: string, runID: string, projectID: string): Promise<string>;

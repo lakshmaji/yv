@@ -279,3 +279,46 @@ export interface MetricsStorageInfo {
   oldestDay?: string;
   dir: string;
 }
+
+/**
+ * Stage of an update check or install. Mirrors models.UpdateStatus in
+ * internal/models/models.go, which is the enforcement point — this is only the
+ * wire shape.
+ */
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'current'
+  | 'manual'
+  | 'dev'
+  | 'failed';
+
+/**
+ * The whole of what the update dialog renders.
+ *
+ * One struct for every stage rather than a payload per event, so the dialog
+ * never has to keep its own copy of what the last one said — two sources for
+ * one piece of state is how a progress bar ends up outliving its download.
+ */
+export interface UpdateState {
+  status: UpdateStatus;
+  /** The running build's version, or "dev". */
+  current: string;
+  /** The available version, when there is one. */
+  version?: string;
+  /** Release notes, as written in the changeset that produced them. */
+  notes?: string;
+  downloaded?: number;
+  /** 0 when the release published no size — draw an indeterminate bar. */
+  total?: number;
+  /** Written for the person reading it; show it verbatim. */
+  message?: string;
+  /**
+   * False when this install shape cannot replace itself — a .deb, a tarball, a
+   * translocated bundle. Offer the release page rather than a download.
+   */
+  canSelfUpdate: boolean;
+}

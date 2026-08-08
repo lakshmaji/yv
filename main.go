@@ -55,6 +55,14 @@ func main() {
 		},
 
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
+			// Quitting between "old version moved aside" and "new one renamed
+			// into place" is how an install ends up with no application at all.
+			// Refused without a dialog: the swap takes about a second, and a
+			// prompt would outlive the thing it is asking about.
+			if app.UpdateInProgress() {
+				return true
+			}
+
 			running := app.GetRunningCommands()
 			if len(running) == 0 {
 				return false

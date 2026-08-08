@@ -354,3 +354,51 @@ type MetricsStorageInfo struct {
 	OldestDay string `json:"oldestDay,omitempty"`
 	Dir       string `json:"dir"`
 }
+
+// UpdateStatus is the stage of an update check or install.
+//
+// One flat set of values rather than a nested state machine: the UI shows one
+// screen per value and the transitions are all driven from Go, so anything more
+// structured would exist only to be flattened again at the boundary.
+type UpdateStatus string
+
+const (
+	UpdateIdle        UpdateStatus = "idle"
+	UpdateChecking    UpdateStatus = "checking"
+	UpdateAvailable   UpdateStatus = "available"
+	UpdateDownloading UpdateStatus = "downloading"
+	UpdateReady       UpdateStatus = "ready"   // downloaded and verified, waiting on a restart
+	UpdateCurrent     UpdateStatus = "current" // nothing newer published
+	UpdateManual      UpdateStatus = "manual"  // newer exists, but this install cannot replace itself
+	UpdateDev         UpdateStatus = "dev"     // a build with no version, so nothing to compare
+	UpdateFailed      UpdateStatus = "failed"
+)
+
+// UpdateState is the whole of what the update UI renders, pushed as an
+// "update:state" event and returned by the check and download calls.
+//
+// One struct for every stage rather than a payload per event. The dialog is a
+// single component showing one of several screens, so a partial payload would
+// mean it holding its own copy of what the last one said — two sources for one
+// piece of state, which is how a progress bar ends up outliving the download.
+type UpdateState struct {
+	Status  UpdateStatus `json:"status"`
+	Current string       `json:"current"`
+	Version string       `json:"version,omitempty"`
+	Notes   string       `json:"notes,omitempty"`
+
+	// Downloaded and Total drive the progress bar. Total is 0 when the release
+	// published no size, which the UI shows as indeterminate rather than
+	// inventing a percentage.
+	Downloaded int64 `json:"downloaded,omitempty"`
+	Total      int64 `json:"total,omitempty"`
+
+	// Message is shown verbatim. Every producer of one writes it for the person
+	// reading it, so the UI never has to map a code to a sentence.
+	Message string `json:"message,omitempty"`
+
+	// CanSelfUpdate is false when this install shape cannot replace itself — a
+	// .deb, a tarball, a translocated bundle. The UI then offers the release
+	// page instead of a download.
+	CanSelfUpdate bool `json:"canSelfUpdate"`
+}

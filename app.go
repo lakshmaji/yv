@@ -38,6 +38,7 @@ type App struct {
 	set     *settings.Store
 	metrics *metrics.Store
 	share   *share.Node
+	upd     *appUpdater
 }
 
 func NewApp(version string) *App {
@@ -60,6 +61,7 @@ func NewApp(version string) *App {
 		envs:    env.NewStore(),
 		set:     set,
 		metrics: mx,
+		upd:     newAppUpdater(version),
 	}
 
 	// The share node is constructed here but opens no socket until
@@ -83,6 +85,8 @@ func (a *App) startup(ctx context.Context) {
 	// Clean up expired metrics on launch, so a long-idle app prunes without
 	// waiting for the first day rollover.
 	go func() { _ = a.metrics.Prune(time.Now()) }()
+	// Clears anything an interrupted update left behind, then checks quietly.
+	a.startUpdateWatch(ctx)
 }
 
 // closeMetrics flushes the partial metrics bucket and releases the day files.
