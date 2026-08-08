@@ -26,10 +26,11 @@ const allPaths = [
 ];
 
 describe('boar paths', () => {
-  it.each(allPaths.map(p => [p.id, p.d] as const))('%s uses only absolute M/C/Z', (_id, d) => {
-    // Any other command (relative m/c, or H/V/A/S/Q) would put an odd number of
-    // coordinates in the stream and break the pairing above.
-    expect(d.replace(/[-\d.,\s]/g, '')).toMatch(/^M[CZ]*$/);
+  it.each(allPaths.map(p => [p.id, p.d] as const))('%s uses only absolute M/C/L/Z', (_id, d) => {
+    // M, C and L all take coordinate pairs. Anything else (relative m/c/l, or
+    // H/V/A/S/Q) would put an odd number of coordinates in the stream and break
+    // the pairing above — H and V in particular take a lone x or y.
+    expect(d.replace(/[-\d.,\s]/g, '')).toMatch(/^M[CLZ]*$/);
   });
 
   it.each(allPaths.map(p => [p.id, p.d] as const))('%s has an even, non-empty coordinate stream', (_id, d) => {
@@ -70,20 +71,52 @@ describe('boar paths', () => {
     for (const s of strokes) expect(s.width).toBeGreaterThan(0);
   });
 
-  it('fills the tusks and nothing else', () => {
-    // A tusk is a solid object; every other stroke is a contour. Filling a
-    // contour would flood the head, and leaving a tusk unfilled turns it back
-    // into a loop of wire hanging beside the jaw.
+  it('only fills closed shapes', () => {
+    // A fill on an open contour is not a shading choice, it is SVG closing the
+    // path for you and flooding whatever that happens to enclose.
     for (const s of strokes) {
-      expect(Boolean(s.fill)).toBe(s.role === 'tusk');
-      if (s.fill) expect(s.closed).toBe(true);
+      if (s.fill) expect(s.closed, `${s.id} is filled but open`).toBe(true);
     }
   });
 
-  it('uses only palette colours', () => {
+  it('fills the solid objects', () => {
+    // Tusks, legs, hooves, the snout and the eye are things, not creases. Left
+    // unfilled they read as loops of wire laid over the animal.
+    for (const s of strokes.filter(s => s.role === 'tusk')) expect(s.fill).toBeTruthy();
+    for (const id of ['legFrontNear', 'hoofFrontNear', 'snout', 'eyeIris']) {
+      expect(strokes.find(s => s.id === id)?.fill, `${id} unfilled`).toBeTruthy();
+    }
+  });
+
+  it('marks the far side, and only the far side, as behind', () => {
+    // Those are the strokes Splash.tsx renders under the body fills. A near
+    // stroke flagged behind vanishes into the animal entirely.
+    expect(strokes.filter(s => s.behind).map(s => s.id).sort())
+      .toEqual(['hoofFrontFar', 'hoofHindFar', 'legFrontFar', 'legHindFar']);
+  });
+
+  it('resolves every colour to a real hex', () => {
+    // Tones are `shade()`d off the palette rather than written out, and shade
+    // returns its input UNCHANGED when handed a non-hex string — so a typo in a
+    // base colour does not throw, it quietly emits the typo into a `fill`
+    // attribute. This is the assertion that catches that.
+    const hex = /^#[0-9a-f]{6}$/i;
+    for (const s of strokes) {
+      expect(s.color, `${s.id} stroke`).toMatch(hex);
+      if (s.fill) expect(s.fill, `${s.id} fill`).toMatch(hex);
+    }
+    for (const f of facets) expect(f.color, `${f.id}`).toMatch(hex);
+  });
+
+  it('builds its tones from the palette', () => {
+    // Not every colour is a palette entry — most are shades of one — but every
+    // base must be, so the splash keeps a single place its colours come from.
     const palette = new Set<string>(Object.values(NEON));
-    for (const s of strokes) expect(palette.has(s.color)).toBe(true);
-    for (const f of facets) expect(palette.has(f.color)).toBe(true);
+    expect(palette.has(NEON.body)).toBe(true);
+    for (const id of ['body', 'tuskNear']) {
+      expect(strokes.find(s => s.id === id)?.color).toBeTruthy();
+    }
+    expect(facets.find(f => f.id === 'bodyFacet')?.color).toBe(NEON.body);
   });
 });
 
@@ -102,7 +135,7 @@ describe('draw order', () => {
     expect(firstTusk).toBeGreaterThan(lastHead);
   });
 
-  it('lights the eye last of all', () => {
+  it('lights every part of the eye last of all', () => {
     expect(strokes.slice(-EYE_IDS.length).map(s => s.id).sort())
       .toEqual([...EYE_IDS].sort());
   });
@@ -112,19 +145,33 @@ describe('draw order', () => {
     expect(boarStrokes().map(s => s.d)).toEqual(strokes.map(s => s.d));
   });
 
-  it('has a closed outline, two tusks, one eye and a mane', () => {
+  it('has four legs, four hooves, two tusks and a mane', () => {
     const count = (role: string) => strokes.filter(s => s.role === role).length;
-    expect(count('silhouette')).toBe(9);
+    expect(strokes.filter(s => s.id.startsWith('leg'))).toHaveLength(4);
+    expect(strokes.filter(s => s.id.startsWith('hoof'))).toHaveLength(4);
     expect(count('tusk')).toBe(2);
     expect(count('bristle')).toBeGreaterThanOrEqual(10);
-    // By exact id, not by prefix — `earInner` starts with "ear" too.
-    expect(strokes.filter(s => s.id === 'ear')).toHaveLength(1);
   });
 
-  it('names the two segments that carry the animal', () => {
-    // The blunt snout and the shoulder hump. Everything else can move; if
-    // either of these goes missing the profile stops being a boar.
-    for (const id of ['snoutDisc', 'muzzle', 'hump']) {
+  it('draws one tusk clearly bigger than the other', () => {
+    // The pair used to be near-identical crescents on top of each other, which
+    // reads as one thick tusk badly drawn rather than as two at different
+    // distances. Measured by bounding-box area, which is crude but is exactly
+    // the thing that was wrong.
+    const area = (id: string) => {
+      const pts = pathPoints(strokes.find(s => s.id === id)!.d);
+      const xs = pts.map(([x]) => x);
+      const ys = pts.map(([, y]) => y);
+      return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+    };
+    expect(area('tuskNear')).toBeGreaterThan(area('tuskFar') * 2);
+  });
+
+  it('names the parts that carry the animal', () => {
+    // Four legs, a spiked back and a snout disc. Everything else can move; if
+    // any of these goes missing the drawing stops being a boar — which it has
+    // done, as a whale, a mandrill, a cat and a tapir.
+    for (const id of ['body', 'snout', 'tuskNear', 'legFrontNear', 'legHindFar']) {
       expect(strokes.some(s => s.id === id), `missing ${id}`).toBe(true);
     }
   });

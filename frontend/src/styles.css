@@ -4083,9 +4083,11 @@
 .splash-boar {
   position: relative;
   z-index: 1;
-  width: min(62vw, 620px);
+  /* Smaller than it was. The boar is the mark, not the poster: at 62vw it
+     filled the window and the wordmark under it read as a caption. */
+  width: min(38vw, 400px);
   height: auto;
-  max-height: 60vh;
+  max-height: 42vh;
   /* One more halo on top of the SVG filter. The filter gives the tube its core
      glow; this is the light it throws on the room, which no per-element filter
      can produce because it has to fall outside the drawing's own bounds.
@@ -4108,19 +4110,19 @@
 }
 .splash-mark-name {
   font-family: var(--mono);
-  font-size: 34px;
+  font-size: 64px;
   font-weight: 600;
-  letter-spacing: 14px;
+  letter-spacing: 20px;
   /* The tracking is symmetric, which on the last glyph pushes the word off
      centre by one step. */
-  text-indent: 14px;
+  text-indent: 20px;
   color: #f2fbff;
   text-shadow: 0 0 18px rgba(34, 232, 255, .75), 0 0 42px rgba(255, 47, 185, .4);
 }
 .splash-mark-sub {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 4px;
+  font-size: 12px;
+  letter-spacing: 5px;
   text-transform: uppercase;
   color: rgba(34, 232, 255, .62);
 }

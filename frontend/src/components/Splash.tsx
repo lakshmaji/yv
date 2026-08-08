@@ -2,7 +2,7 @@ import { For, onCleanup, onMount } from 'solid-js';
 import { createTimeline, stagger, svg, type Target } from 'animejs';
 import {
   BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, HOLD_FOR_DESIGN, SPLASH,
-  boarFacets, boarStrokes, glitchBands, sparks,
+  boarFacets, boarStrokes, glitchBands, sparks, type BoarStroke,
 } from '../lib/boar';
 import { hashText } from '../lib/landscape/rng';
 import { setSplashDone } from '../store';
@@ -44,10 +44,10 @@ import { setSplashDone } from '../store';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
-const EYE_SET = new Set<string>(EYE_IDS);
-const isEye = (id: string) => EYE_SET.has(id);
-
 const STROKES = boarStrokes();
+/** Split once, at module load: the far side is drawn under the body fills. */
+const BEHIND = STROKES.filter(s => s.behind);
+const FRONT = STROKES.filter(s => !s.behind);
 const FACETS = boarFacets();
 const BANDS = glitchBands(hashText('yv-boar-glitch'), 5);
 const SPARKS = sparks(hashText('yv-boar-sparks'), 18);
@@ -60,6 +60,22 @@ const SPARKS = sparks(hashText('yv-boar-sparks'), 18);
  * element, and matching an index back to the right entry of a separate array is
  * a correspondence nothing enforces.
  */
+function path(stroke: BoarStroke) {
+  return (
+    <path
+      id={`stroke-${stroke.id}`}
+      class="splash-stroke"
+      d={stroke.d}
+      fill={stroke.fill ?? 'none'}
+      stroke={stroke.color}
+      stroke-width={stroke.width}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity={stroke.behind ? 0.85 : 1}
+    />
+  );
+}
+
 function fromData(key: string, fallback: number) {
   return (target?: Target): number => {
     const n = Number((target as HTMLElement | undefined)?.dataset?.[key]);
@@ -193,7 +209,7 @@ export default function Splash() {
     if (eyePaths.length) {
       timeline.add(
         eyePaths,
-        { opacity: [0.35, 1], strokeWidth: [2.2, 4.4, 2.6], duration: 420 },
+        { opacity: [0.35, 1], duration: 420 },
         SPLASH.eyeAt,
       );
     }
@@ -284,20 +300,24 @@ export default function Splash() {
               which in SVG means being written before it. */}
           <use
             class="splash-chroma"
-            href="#boar-art"
+            href="#boar-lines"
             filter="url(#boar-chroma-c)"
             x={-CHROMA_OFFSET}
             opacity={0.5}
           />
           <use
             class="splash-chroma"
-            href="#boar-art"
+            href="#boar-lines"
             filter="url(#boar-chroma-m)"
             x={CHROMA_OFFSET}
             opacity={0.5}
           />
 
           <g id="boar-art" ref={artRef}>
+            {/* The far side of the animal, under the body — which is the whole
+                of what makes it the far side. */}
+            <For each={BEHIND}>{stroke => path(stroke)}</For>
+
             <For each={FACETS}>
               {facet => (
                 <path
@@ -309,22 +329,14 @@ export default function Splash() {
                 />
               )}
             </For>
-            <For each={STROKES}>
-              {stroke => (
-                <path
-                  id={`stroke-${stroke.id}`}
-                  class="splash-stroke"
-                  d={stroke.d}
-                  fill={stroke.fill ?? 'none'}
-                  fill-opacity={stroke.fill ? 0.55 : undefined}
-                  stroke={stroke.color}
-                  stroke-width={stroke.width}
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  opacity={isEye(stroke.id) && !reduced ? 0.35 : 1}
-                />
-              )}
-            </For>
+
+            {/* The linework, and only the linework, is what the chroma ghosts
+                copy. Splitting the fills out of their reach is what stopped the
+                whole animal coming out mauve: a channel filter tints everything
+                it is handed, and handed a body it tints the body. */}
+            <g id="boar-lines">
+              <For each={FRONT}>{stroke => path(stroke)}</For>
+            </g>
           </g>
 
           <For each={BANDS}>

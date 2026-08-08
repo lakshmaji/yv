@@ -2038,54 +2038,71 @@ timeline at all, the markup is already at its final state, and it holds and
 fades. `.no-motion` is deliberately untouched: that toggle is scoped to
 `.landscape-stage` and is about the discovery map, not app boot.
 
-### Side view, and why the body had to go
+### A whole animal, not a head
 
-The drawing is a boar's head and neck in **profile**, facing left, built on one
-idea: in profile a boar is a **wedge**. The snout tip is the lowest,
-furthest-forward point and the line runs up and back from there to a shoulder
-hump. Get that slope wrong and no amount of detail rescues it.
+The drawing is a full boar in profile, facing left: a chunky body on four short
+legs with a bristled ridge along its back. Head-only studies were abandoned. A
+head alone kept collapsing into whatever else has a snout — it was, in order, a
+whale, a mandrill, a cat and a tapir — where four legs and a spiked back leave
+nothing else it could be.
 
-A head-and-shoulders version was tried and abandoned. Extending past the neck
-gives one long unbroken taper from snout to flank, with no jaw to break it —
-which is a **whale**, the same silhouette this file failed into on its very
-first attempt, reached from the opposite direction. The neck is cut off behind
-the shoulder instead.
+The back is a run of straight `L` segments where everything else is curves: a
+spike drawn as a bezier softens into a bump. `L` takes a coordinate pair like `M`
+and `C`, so the "pair the numbers off" parser the tests rely on still holds; `H`
+and `V` would not, and the test says so.
 
-`mirrorPath` and `CENTRE_X` were **deleted** with the frontal version. A profile
-has no symmetry to exploit, so they became dead code with dead tests attached;
-they are in git history if a frontal view ever comes back.
+### The far side is a layer, not a lighter colour
+
+The far pair of legs is rendered **under** the body fills. Distance on a flat
+drawing is occlusion: four legs on one plane read as a centipede, and a paler
+copy laid on top of the belly reads as a smudge. `BoarStroke.behind` marks them
+and `Splash.tsx` renders that group before the facets.
+
+The far **tusk** is the exception and is drawn on top, small and dim. It is the
+one place where distance has to be size and tone instead, because the head
+covers every position the far tusk could occupy — flagged `behind`, it simply
+would not be drawn at all.
+
+### Why the boar was mauve
+
+The facets used to be low-opacity cyan and violet washes over the backdrop. The
+chroma ghosts are `<use>` copies run through an `feColorMatrix`, and a channel
+filter tints *everything* it is handed — handed a translucent body, it tinted the
+body. The fills are now opaque shades of one colour (`NEON.body`, `#313647`) and
+the ghosts copy `#boar-lines` only. A channel split belongs on the neon, which is
+what it is imitating.
 
 ### Drawing an animal is a thing you have to look at
 
-Four passes were thrown away, and no test caught any of them — all four rendered
-cleanly, stayed inside the viewBox and satisfied every invariant.
+Five passes were thrown away and **no test caught any of them** — all five
+rendered cleanly, stayed inside the viewBox and satisfied every invariant. The
+suite proves the geometry is well-formed, not that it looks like anything.
 
-- **Whale.** A tapered snout. Fixed by a blunt, near-vertical snout disc: that
-  single feature is what says "pig".
-- **Mandrill**, then **cat** — both frontal, and both the same defect. Smooth
+- **Whale** — a tapered snout. A boar's ends in a blunt disc.
+- **Mandrill**, then **cat** — both frontal, both the same defect: smooth
   continuous bezier curvature closes into an oval however far the control points
-  are dragged, and a circle with small upright triangles on top is a cat
-  whatever else is drawn inside it.
-- **Tapir.** Back in profile, with the muzzle drawn as a slender tube of even
-  width. A boar's muzzle is *deep* where it meets the cheek and only tapers at
-  the very front; the taper is the whole difference.
+  are dragged, and a circle with small upright triangles on top is a cat.
+- **Tapir** — a profile muzzle drawn as a slender tube of even width.
+- **Bull** — a shield-shaped head with narrow ears pointing at the sky.
 
-Things that hold, whichever view is being drawn:
+Things that held every time:
 
-- **Tusk tips finish above the muzzle line.** Kept politely below, they read as
-  teeth and the animal stops being a boar.
-- **Tusks need a mouth to come out of.** Without one they are hooks leaning
-  against the head — learned twice, once in each view.
-- **The mane spine starts behind the ear.** Bristles rooted where the ear is
-  drawn grow straight through it.
-- **Facet washes must overlap, not meet.** A hairline of backdrop between two
-  dark fills reads as a black seam splitting the animal in half.
+- **Tusk tips finish above the muzzle line.** Below it they are teeth.
+- **Tusks need a mouth to come out of**, or they are hooks leaning on the head.
+- **Facet fills must overlap, not meet.** A hairline of backdrop between two
+  fills reads as a seam cut through the animal.
 
-Two defects were invisible in a static render and only showed up in the running
+Two defects were invisible in a static render and only appeared in the running
 app: the bloom (`drop-shadow` at 26px over two wide blurs) had erased every
 crease, the nostrils and the eye into white haze, and the tusks at full fill
-opacity were flat grey slabs with no form in them. Bloom that deletes the
-drawing it is lighting is not atmosphere.
+opacity were flat grey slabs. Bloom that deletes the drawing it is lighting is
+not atmosphere.
+
+The eye is built from four parts — outline, iris, pupil, glint — and they light
+on **one** beat, because an iris arriving before its own pupil is a drawing
+assembling itself rather than an eye opening. The glint does most of the work: it
+is the only pure-white spot on the animal, and it is what makes the eye wet
+instead of flat.
 
 The viewBox is larger than the drawing's bounds on purpose — the neon filter
 blurs well outside the strokes and the SVG root clips at the viewBox, so a snug
