@@ -196,8 +196,12 @@ describe('draw order', () => {
 });
 
 describe('SPLASH timings', () => {
-  it('finishes exiting exactly at the total', () => {
-    expect(SPLASH.exitAt + SPLASH.exitDur).toBe(SPLASH.total);
+  it('settles after every beat has landed', () => {
+    // `settleAt` is when the splash stops moving and starts WAITING. Nothing
+    // dismisses it but the user, so this is not a deadline — it is the moment
+    // the Continue button is offered, and a beat still running past it would be
+    // interrupted by the offer rather than finished before it.
+    expect(SPLASH.settleAt).toBeGreaterThan(SPLASH.markAt + SPLASH.markDur);
   });
 
   // The strokes overlap by drawStagger, so the wireframe is not finished until
@@ -235,12 +239,16 @@ describe('SPLASH timings', () => {
     ['the wordmark lands', SPLASH.markAt + SPLASH.markDur],
   ];
 
-  it.each(beats)('%s before the exit begins', (_name, end) => {
-    expect(end).toBeLessThanOrEqual(SPLASH.exitAt);
+  it.each(beats)('%s before the splash settles', (_name, end) => {
+    expect(end).toBeLessThanOrEqual(SPLASH.settleAt);
   });
 
-  it('leaves the reduced-motion path shorter than the full one', () => {
-    expect(SPLASH.reducedHold + SPLASH.reducedFade).toBeLessThan(SPLASH.total);
+  it('has no total — the splash ends when the user says so', () => {
+    // Guards the intent, not a number. An auto-dismiss makes the Continue
+    // button a decoration on a countdown: either it does nothing the clock was
+    // not already going to do, or it races the clock and the user loses.
+    expect('total' in SPLASH).toBe(false);
+    expect('exitAt' in SPLASH).toBe(false);
   });
 
   it('splits the chroma copies symmetrically and visibly', () => {
@@ -323,7 +331,7 @@ describe('sparks', () => {
   it('fits its whole shower inside the spark beat', () => {
     for (const s of sparks(4, 40)) {
       expect(s.delay).toBeGreaterThanOrEqual(0);
-      expect(SPLASH.sparksAt + s.delay).toBeLessThan(SPLASH.exitAt);
+      expect(SPLASH.sparksAt + s.delay).toBeLessThan(SPLASH.settleAt);
     }
   });
 });

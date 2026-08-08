@@ -1,5 +1,5 @@
-import { For, onCleanup, onMount } from 'solid-js';
-import { createTimeline, stagger, svg, type Target } from 'animejs';
+import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
+import { animate, createTimeline, stagger, svg, type Target } from 'animejs';
 import {
   BOAR_VIEWBOX, CHROMA_OFFSET, EYE_IDS, SPLASH,
   boarFacets, boarStrokes, glitchBands, sparks, type BoarStroke,
@@ -112,28 +112,40 @@ export default function Splash() {
   const reduced =
     typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
 
-  let reducedTimers: number[] = [];
+  /** True once the sequence has finished and the splash is waiting on the user. */
+  const [settled, setSettled] = createSignal(false);
+  let leaving = false;
+  let settleTimer: number | undefined;
 
-  /** The reduced-motion "playthrough": a still, a hold, then a plain fade. */
-  function playReduced(): void {
-    reducedTimers.forEach(t => window.clearTimeout(t));
-    rootRef.style.transition = '';
-    rootRef.style.opacity = '1';
-    reducedTimers = [
-      window.setTimeout(() => {
-        rootRef.style.transition = `opacity ${SPLASH.reducedFade}ms linear`;
-        rootRef.style.opacity = '0';
-      }, SPLASH.reducedHold),
-      window.setTimeout(() => setSplashDone(true), SPLASH.reducedHold + SPLASH.reducedFade),
-    ];
+  /**
+   * Leaves. The ONLY thing that dismisses the splash — there is no timer behind
+   * it, so the fade is a response to the user rather than something they raced.
+   *
+   * Guarded, because click-anywhere and the button both land here and a second
+   * fade would restart the first one from full opacity.
+   */
+  function leave(): void {
+    if (leaving) return;
+    leaving = true;
+    timeline?.pause();
+    animate(rootRef, {
+      opacity: 0,
+      scale: reduced ? 1 : 1.05,
+      duration: reduced ? SPLASH.reducedFade : SPLASH.exitDur,
+      ease: 'inQuad',
+      onComplete: () => setSplashDone(true),
+    });
   }
 
   function replay(): void {
-    if (reduced) playReduced();
+    if (leaving) return;
+    setSettled(false);
+    window.clearTimeout(settleTimer);
+    if (reduced) settleTimer = window.setTimeout(() => setSettled(true), 200);
     else timeline?.restart();
   }
 
-  onCleanup(() => reducedTimers.forEach(t => window.clearTimeout(t)));
+  onCleanup(() => window.clearTimeout(settleTimer));
 
   onMount(() => {
     // Click anywhere continues, space replays. Both stay in the shipped app
@@ -148,7 +160,7 @@ export default function Splash() {
       e.preventDefault();
       replay();
     };
-    const onClick = () => setSplashDone(true);
+    const onClick = () => leave();
     window.addEventListener('keydown', onKey);
     rootRef.addEventListener('click', onClick);
     onCleanup(() => {
@@ -158,8 +170,8 @@ export default function Splash() {
 
     if (reduced) {
       // Everything is already at its final state in the markup — there is
-      // nothing left to reveal. Hold it long enough to be seen, then fade.
-      playReduced();
+      // nothing left to reveal, so it is settled as soon as it is on screen.
+      setSettled(true);
       return;
     }
 
@@ -184,7 +196,9 @@ export default function Splash() {
 
     timeline = createTimeline({
       defaults: { ease: 'outQuad' },
-      onComplete: () => setSplashDone(true),
+      // Settles, and stays. Dismissing here is what made the Continue button a
+      // decoration on a countdown.
+      onComplete: () => setSettled(true),
     });
 
     // The strokes draw themselves on in boarStrokes order — skull, face, snout,
@@ -280,11 +294,10 @@ export default function Splash() {
       SPLASH.markAt,
     );
 
-    timeline.add(
-      rootRef,
-      { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
-      SPLASH.exitAt,
-    );
+    // A beat of nothing, so the timeline's own end is `settleAt` rather than
+    // whenever the last visible thing happened to finish. Without it, adding or
+    // moving a beat silently moves the moment the Continue button appears.
+    timeline.add(rootRef, { opacity: 1, duration: 1 }, SPLASH.settleAt - 1);
 
     onCleanup(() => timeline?.pause());
   });
@@ -424,6 +437,15 @@ export default function Splash() {
         <span class="splash-mark-name" data-text="yv">yv</span>
         <span class="splash-mark-sub">local dev command runner</span>
       </div>
+
+      {/* Appears only once the sequence has finished — offered during it, it
+          competes with the thing it is interrupting. Click-anywhere works the
+          whole time regardless; this is the affordance that says so. */}
+      <Show when={settled()}>
+        <button class="splash-continue" type="button" onClick={e => { e.stopPropagation(); leave(); }}>
+          continue
+        </button>
+      </Show>
 
       {/* The controls are worth naming: a splash nobody knows they can skip is
           one they sit through. The link stops the click propagating, or opening

@@ -89,11 +89,18 @@ export const SPLASH = {
   sparksAt: 1540,
   markAt: 1800,
   markDur: 380,
-  exitAt: 2200,
+  /**
+   * When the sequence is finished and the splash SETTLES — it does not leave.
+   *
+   * Nothing dismisses the splash but the user. An auto-dismiss makes the
+   * continue affordance a lie: either it does nothing the clock was not already
+   * going to do, or it races the clock and the user loses. The last beat lands
+   * here, the Continue button appears, and the splash waits.
+   */
+  settleAt: 2200,
+  /** The fade out, played when they finally leave. */
   exitDur: 300,
-  total: 2500,
-  /** Reduced motion: no timeline at all, just a held still and a plain fade. */
-  reducedHold: 1000,
+  /** Reduced motion: no timeline at all, and the same plain fade on the way out. */
   reducedFade: 400,
 } as const;
 

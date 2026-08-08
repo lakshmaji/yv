@@ -2077,12 +2077,24 @@ the near pair's, because they are further from the camera; level, the animal
 stands on a wall rather than on the ground. Both are asserted, the second after
 an off-by-one put a far foot a single pixel *below* its near one.
 
-### The splash can be skipped, and replayed
+### Nothing dismisses the splash but the user
 
-Click anywhere continues; space replays. Both ship — 2.5s is short, but it is
-2.5s the user did not ask for, and anyone who wants to watch it again should not
-have to relaunch. Space is `preventDefault`'d, since it scrolls by default and
-the app underneath is already mounted and listening.
+`SPLASH.settleAt` is when the sequence stops moving and starts **waiting** — the
+last beat lands, the Continue button appears, and that is all. There is no
+`total` and no `exitAt`; the fade only runs when someone asks for it.
+
+An auto-dismiss makes the Continue button a decoration on a countdown: either it
+does nothing the clock was not already going to do, or it races the clock and
+the user loses. A test asserts `total` and `exitAt` are *absent*, because the
+intent is the thing worth guarding and reintroducing either constant is how it
+would quietly come back.
+
+Click anywhere continues, space replays, and the button is the affordance that
+says so — it appears only once the sequence has finished, since offered during
+it, it competes with the thing it is interrupting. Space is `preventDefault`'d,
+as it scrolls by default and the app underneath is already mounted and
+listening. `leave()` is guarded: click-anywhere and the button both land there,
+and a second fade would restart the first from full opacity.
 
 The footer carries an **about** link to the author's GitHub, opened through
 `runtime.BrowserOpenURL` like `AboutModal` does. Its click handler stops
@@ -2092,18 +2104,31 @@ under the browser it had just launched.
 The `HOLD_FOR_DESIGN` flag is **gone**. It existed to keep the splash on screen
 while the boar was being drawn, and the drawing is settled.
 
-### The wordmark is Latin letters in a Japanese face
+### The wordmark is Latin letters drawn as katakana
 
-The word stays English; only the hand changes. Japanese gothic faces draw their
-Latin glyphs wider, flatter and more geometric than a Western sans, and that is
-the whole cyberpunk-signage look — imitating it with a Western font and heavy
-tracking never quite lands.
+**Electroharmonix**, bundled at `frontend/src/assets/fonts/`. The word stays
+English; only the hand changes. A Japanese *system* face can only gesture at
+this — Hiragino and Yu Gothic merely draw their Latin glyphs a bit wider and
+flatter — where Electroharmonix draws each Latin letter as the katakana it most
+resembles.
 
-System fonts rather than a webfont, because the app is offline-first and
-embedded: a downloaded face would either bloat the bundle or fail to arrive. The
-stack covers macOS (Hiragino), Windows (Yu Gothic, Meiryo) and Linux (Noto CJK)
-and falls back to the app's own mono, where the wordmark is merely ordinary
-rather than broken.
+The trade is legibility: `yv` no longer reads as "yv" at a glance. That is the
+point of the effect, and the subtitle underneath carries the meaning, but it is
+a real cost and not an accident.
+
+Bundled rather than linked, because the app is offline-first and embedded, so a
+downloaded face would simply fail to arrive. Subset to printable ASCII it is
+under 10 KB — full ASCII rather than the two glyphs actually used, so changing
+the wordmark cannot silently produce tofu. Public domain; provenance and the
+regeneration command are in `assets/fonts/README.md`.
+
+It is `font-weight: 400` and `font-display: block`. There is no bold cut, and a
+synthesised one smears forms that are already dense; and the wordmark is a logo
+arriving 1.8s in, so blocking on the font is free where swapping mid-animation
+would be visible.
+
+The system-Japanese stack stays behind it, and the app's mono behind that, so a
+font that fails to load leaves the wordmark ordinary rather than broken.
 
 Its glitch is two clipped copies of the same text, torn sideways, built from
 `content: attr(data-text)` so the word is written in exactly one place. CSS, not

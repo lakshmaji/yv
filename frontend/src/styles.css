@@ -4108,23 +4108,36 @@
   gap: 4px;
   opacity: 0;
 }
-/* Latin letters set in a JAPANESE typeface — the word stays English, only the
-   hand changes. Japanese gothic faces draw their Latin glyphs wider, flatter and
-   more geometric than a Western sans, and that is the whole cyberpunk-signage
-   look; imitating it with a Western font and heavy tracking never quite lands.
+/* Electroharmonix: Latin letters drawn as katakana. The word stays English —
+   only the hand changes, which is the effect a Japanese *system* face can only
+   gesture at, since those merely draw Latin glyphs a bit wider and flatter.
 
-   System fonts rather than a webfont: the app is offline-first and embedded, so
-   a downloaded face would either bloat the bundle or fail to arrive. The stack
-   covers macOS (Hiragino), Windows (Yu Gothic, Meiryo) and Linux (Noto CJK), and
-   falls back to the app's own mono where none is installed — in which case the
-   wordmark is merely ordinary rather than broken. */
+   Bundled rather than linked. The app is offline-first and embedded, so a
+   downloaded face would fail to arrive; subset to printable ASCII it is under
+   10 KB. Public domain — see assets/fonts/README.md for provenance and how to
+   regenerate the subset.
+
+   The system-Japanese stack stays behind it as a fallback, and the app's own
+   mono behind that, so a font that fails to load leaves the wordmark ordinary
+   rather than broken. */
+@font-face {
+  font-family: 'Electroharmonix';
+  src: url('./assets/fonts/electroharmonix.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  /* The wordmark is not content — it is a logo, and it arrives 1.8s in. Blocking
+     on the font would be pointless; swapping mid-animation is worse. */
+  font-display: block;
+}
+
 .splash-mark-name {
   position: relative;
   font-family:
+    'Electroharmonix',
     'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'YuGothic',
     'Noto Sans JP', 'Noto Sans CJK JP', 'Meiryo', 'MS PGothic', var(--mono);
   font-size: 64px;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 20px;
   /* The tracking is symmetric, which on the last glyph pushes the word off
      centre by one step. */
@@ -4232,6 +4245,44 @@
      clipped away — so the wordmark is simply clean, not frozen mid-tear. */
   .splash-mark-name::before,
   .splash-mark-name::after { animation: none; }
+  /* `both` fill means removing the animation would leave it at opacity 0 —
+     it has to be given its end state explicitly, not just switched off. */
+  .splash-continue { animation: none; opacity: 1; transform: none; }
+}
+
+/* The way out. Nothing else dismisses the splash, so this has to be findable —
+   but it appears only once the sequence has finished, since offered during it
+   it competes with the thing it is interrupting. */
+.splash-continue {
+  position: relative;
+  z-index: 4;
+  margin-top: 34px;
+  padding: 9px 26px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #22e8ff;
+  background: rgba(34, 232, 255, .06);
+  border: 1px solid rgba(34, 232, 255, .45);
+  border-radius: 2px;
+  cursor: pointer;
+  animation: splash-continue-in 320ms ease-out both;
+  transition: background 140ms linear, border-color 140ms linear, color 140ms linear;
+}
+.splash-continue:hover {
+  color: #d8fbff;
+  background: rgba(34, 232, 255, .16);
+  border-color: rgba(34, 232, 255, .85);
+}
+.splash-continue:focus-visible {
+  outline: 1px solid #22e8ff;
+  outline-offset: 3px;
+}
+
+@keyframes splash-continue-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* The footer line: what the splash can be told to do, and a way out to the
