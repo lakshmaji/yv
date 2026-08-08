@@ -47,3 +47,10 @@ frontend/package.json.md5
 yv
 yv.exe
 yv.dmg
+
+# Update signing keys, from `make update-keys`. The private half signs every
+# release and is unrecoverable if lost; the public half belongs pasted into
+# internal/updater/signature.go, not sitting loose in the tree. This is a
+# backstop against an accident, not the reason the key is not committed.
+*-private.pem
+*-public.pem

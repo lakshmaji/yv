@@ -30,7 +30,7 @@ endif
 
 .PHONY: run install fmt test test-go test-frontend build dmg \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
-        doctor-linux
+        doctor-linux update-keys
 
 install:
 	go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1
@@ -57,6 +57,33 @@ test-frontend:
 
 build: $(WAILS)
 	$(WAILS) build -platform darwin/arm64 -ldflags "$(LDFLAGS)"
+
+# ── Update signing keys ─────────────────────────────────────────────────
+#
+# Generates the pair that signs releases. Run once, ever — see RELEASING.md for
+# why rotating this is a two-release dance and why losing the private half is
+# unrecoverable.
+#
+# The refusal to overwrite is the important line here. An accidental second run
+# would replace the key every installed copy trusts, and there is no way to
+# notice that until updates start being refused in the field.
+update-keys:
+	@if [ -f yv-update-private.pem ]; then \
+	  echo "yv-update-private.pem already exists — refusing to overwrite it."; \
+	  echo "Every installed copy trusts the matching public key; replacing it strands them."; \
+	  exit 1; \
+	fi
+	openssl genrsa -out yv-update-private.pem 4096
+	@chmod 600 yv-update-private.pem
+	openssl rsa -in yv-update-private.pem -pubout -out yv-update-public.pem
+	@echo
+	@echo "  Two files written. Neither is committed (.gitignore covers both)."
+	@echo
+	@echo "  1. Paste yv-update-public.pem into updatePublicKeyPEM in"
+	@echo "     internal/updater/signature.go, and commit that."
+	@echo "  2. Put yv-update-private.pem in the YV_UPDATE_PRIVATE_KEY repository"
+	@echo "     secret, and keep an offline copy. It cannot be regenerated."
+	@echo
 
 dmg: build
 	mkdir -p /tmp/yv-dmg
