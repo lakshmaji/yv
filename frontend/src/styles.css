@@ -4144,3 +4144,22 @@
   .splash-grid { animation: none; }
   .splash-vignette::after { display: none; }
 }
+
+/* The design-hold notice. Only rendered while boar.ts's HOLD_FOR_DESIGN is on,
+   and deliberately plain: it is scaffolding, not part of the picture, and it
+   should look like something that is meant to be removed. */
+.splash-hold-hint {
+  position: absolute;
+  bottom: 20px;
+  z-index: 4;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: rgba(226, 240, 255, .42);
+}
+.splash-hold-hint kbd {
+  font-family: inherit;
+  border: 1px solid rgba(226, 240, 255, .28);
+  border-radius: 3px;
+  padding: 1px 5px;
+}

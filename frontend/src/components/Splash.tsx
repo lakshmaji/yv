@@ -1,7 +1,7 @@
 import { For, onCleanup, onMount } from 'solid-js';
 import { createTimeline, stagger, svg, type Target } from 'animejs';
 import {
-  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_ID, SPLASH,
+  BOAR_VIEWBOX, CHROMA_OFFSET, EYE_ID, HOLD_FOR_DESIGN, SPLASH,
   boarFacets, boarStrokes, glitchBands, sparks,
 } from '../lib/boar';
 import { hashText } from '../lib/landscape/rng';
@@ -67,6 +67,16 @@ function fromData(key: string, fallback: number) {
 export default function Splash() {
   let rootRef!: HTMLDivElement;
   let artRef!: SVGGElement;
+  let timeline: ReturnType<typeof createTimeline> | null = null;
+
+  /**
+   * The one place the splash ends. Under the design hold it ends nowhere — the
+   * sequence runs to its last frame and stays there, so the finished drawing can
+   * be looked at for as long as it takes.
+   */
+  const dismiss = () => {
+    if (!HOLD_FOR_DESIGN) setSplashDone(true);
+  };
 
   // Read once, at mount. Unlike the discovery map this thing is on screen for
   // two and a half seconds, so there is no window in which changing the OS
@@ -75,9 +85,26 @@ export default function Splash() {
     typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
 
   onMount(() => {
+    // Escape is the only way out while the hold is on, and clicking replays the
+    // sequence — the beats are the thing being reviewed, and a splash you have
+    // to restart the app to see again is one nobody iterates on.
+    if (HOLD_FOR_DESIGN) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setSplashDone(true);
+      };
+      const onClick = () => timeline?.restart();
+      window.addEventListener('keydown', onKey);
+      rootRef.addEventListener('click', onClick);
+      onCleanup(() => {
+        window.removeEventListener('keydown', onKey);
+        rootRef.removeEventListener('click', onClick);
+      });
+    }
+
     if (reduced) {
       // Everything is already at its final state in the markup — there is
       // nothing left to reveal. Hold it long enough to be seen, then fade.
+      if (HOLD_FOR_DESIGN) return;
       const hold = window.setTimeout(() => {
         rootRef.style.transition = `opacity ${SPLASH.reducedFade}ms linear`;
         rootRef.style.opacity = '0';
@@ -104,9 +131,9 @@ export default function Splash() {
     // reads as a flicker rather than as a reveal.
     const drawables = svg.createDrawable(strokePaths, 0, 0);
 
-    const timeline = createTimeline({
+    timeline = createTimeline({
       defaults: { ease: 'outQuad' },
-      onComplete: () => setSplashDone(true),
+      onComplete: dismiss,
     });
 
     // The strokes draw themselves on in boarStrokes order — head first, tusks
@@ -182,13 +209,18 @@ export default function Splash() {
       SPLASH.markAt,
     );
 
-    timeline.add(
-      rootRef,
-      { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
-      SPLASH.exitAt,
-    );
+    // Under the hold the exit beat is left out entirely rather than played and
+    // undone: fading the stage to nothing and then putting it back is a flicker
+    // on every replay, and the last frame is the one being reviewed.
+    if (!HOLD_FOR_DESIGN) {
+      timeline.add(
+        rootRef,
+        { opacity: 0, scale: 1.05, duration: SPLASH.exitDur, ease: 'inQuad' },
+        SPLASH.exitAt,
+      );
+    }
 
-    onCleanup(() => timeline.pause());
+    onCleanup(() => timeline?.pause());
   });
 
   return (
@@ -322,6 +354,15 @@ export default function Splash() {
         <span class="splash-mark-name">yv</span>
         <span class="splash-mark-sub">local dev command runner</span>
       </div>
+
+      {/* Only while HOLD_FOR_DESIGN is on. It says so out loud: a splash that
+          refuses to go away with no explanation is indistinguishable from one
+          that has hung. */}
+      {HOLD_FOR_DESIGN && (
+        <div class="splash-hold-hint">
+          design hold — click to replay · <kbd>esc</kbd> to continue
+        </div>
+      )}
     </div>
   );
 }
