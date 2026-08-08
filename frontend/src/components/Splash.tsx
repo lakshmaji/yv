@@ -290,7 +290,20 @@ export default function Splash() {
   });
 
   return (
-    <div class="splash" classList={{ 'splash-static': reduced }} ref={rootRef}>
+    <div
+      class="splash"
+      classList={{ 'splash-static': reduced }}
+      ref={rootRef}
+      /*
+       * No context menu. The webview's default one offers Reload and Inspect
+       * Element over what is meant to read as an application launching, and the
+       * splash is the one screen with nothing on it worth right-clicking — no
+       * text to copy, no image to save. Scoped to the splash rather than the
+       * document: the rest of the app has terminals full of output people
+       * legitimately want to copy out of.
+       */
+      onContextMenu={e => e.preventDefault()}
+    >
       <div class="splash-grid" />
       <div class="splash-vignette" />
 
