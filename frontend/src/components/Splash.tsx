@@ -435,7 +435,6 @@ export default function Splash() {
         }}
       >
         <span class="splash-mark-name" data-text="yv">yv</span>
-        <span class="splash-mark-sub">local dev command runner</span>
       </div>
 
       {/* The controls are worth naming: a splash nobody knows they can skip is

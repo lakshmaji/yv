@@ -2123,8 +2123,10 @@ flatter — where Electroharmonix draws each Latin letter as the katakana it mos
 resembles.
 
 The trade is legibility: `yv` no longer reads as "yv" at a glance. That is the
-point of the effect, and the subtitle underneath carries the meaning, but it is
-a real cost and not an accident.
+point of the effect, and it is a real cost, not an accident — more so since the
+`local dev command runner` subtitle that used to sit under it was removed. The
+splash is a title card now, not a description; the About dialog is where the app
+says what it does.
 
 Bundled rather than linked, because the app is offline-first and embedded, so a
 downloaded face would simply fail to arrive. Subset to printable ASCII it is

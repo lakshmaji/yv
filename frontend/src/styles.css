@@ -4105,7 +4105,6 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
   opacity: 0;
 }
 /* Electroharmonix: Latin letters drawn as katakana. The word stays English —
@@ -4210,14 +4209,6 @@
   42%       { clip-path: inset(26% 0 52% 0); transform: translateX(-4px); }
   45%, 100% { clip-path: inset(50% 0 50% 0); transform: none; }
 }
-.splash-mark-sub {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 5px;
-  text-transform: uppercase;
-  color: rgba(34, 232, 255, .62);
-}
-
 @keyframes splash-grid-in {
   from { opacity: 0; }
   to   { opacity: 1; }
