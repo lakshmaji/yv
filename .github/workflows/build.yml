@@ -115,13 +115,19 @@ jobs:
             os: macos-latest
             platform: darwin/arm64
             tags: ""
+            extra: ""
           - name: windows-amd64
             os: windows-latest
             platform: windows/amd64
             tags: ""
+            # Builds the NSIS installer in the same pass, from the committed
+            # build/windows/installer/project.nsi. A matrix field rather than a
+            # second build step, so there stays exactly one `wails build` line.
+            extra: "-nsis"
           - name: linux-amd64
             os: ubuntu-latest
             platform: linux/amd64
+            extra: ""
             # ubuntu-latest is 24.04, which ships webkit2gtk 4.1 and has dropped
             # 4.0. Wails still targets 4.0 unless told otherwise, so without this
             # tag the cgo build fails with "Package webkit2gtk-4.0 was not found".
@@ -189,8 +195,34 @@ jobs:
         working-directory: frontend
         run: bun install --frozen-lockfile
 
+      # NSIS ships in the Windows runner image but is not on PATH, and `wails
+      # build -nsis` only *warns* when makensis is missing — it exits 0 having
+      # quietly produced no installer. So this resolves it up front and fails
+      # here, where the reason is legible, rather than later at a missing file.
+      - name: Ensure makensis is available
+        if: matrix.name == 'windows-amd64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NSIS_DIR="/c/Program Files (x86)/NSIS"
+          if ! command -v makensis >/dev/null 2>&1; then
+            if [[ ! -x "$NSIS_DIR/makensis.exe" ]]; then
+              choco install nsis -y --no-progress
+            fi
+            echo "C:\\Program Files (x86)\\NSIS" >> "$GITHUB_PATH"
+            export PATH="$PATH:$NSIS_DIR"
+          fi
+          command -v makensis >/dev/null 2>&1 || {
+            echo "::error::makensis not found; the Windows installer cannot be built."
+            exit 1
+          }
+          makensis /VERSION
+
       # -ldflags is what lets the binary know its own version. Without it
       # main.version stays "dev" and the updater never checks.
+      #
+      # matrix.extra carries -nsis on Windows, so the installer is built from the
+      # same link as the executable that goes into the zip.
       - name: Build app (unsigned)
         shell: bash
         env:
@@ -198,9 +230,9 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           if [[ -n "${{ matrix.tags }}" ]]; then
-            wails build -platform ${{ matrix.platform }} -tags ${{ matrix.tags }} -ldflags "$LDFLAGS"
+            wails build -platform ${{ matrix.platform }} -tags ${{ matrix.tags }} ${{ matrix.extra }} -ldflags "$LDFLAGS"
           else
-            wails build -platform ${{ matrix.platform }} -ldflags "$LDFLAGS"
+            wails build -platform ${{ matrix.platform }} ${{ matrix.extra }} -ldflags "$LDFLAGS"
           fi
 
       # ── OS code signing ───────────────────────────────────────────────
@@ -266,7 +298,15 @@ jobs:
           # with it and Gatekeeper does not need the network on first launch.
           xcrun stapler staple build/bin/yv.app
 
-      - name: Sign the Windows executable
+      # Signs the executable and then rebuilds the installer around it.
+      #
+      # The order is forced: `wails build -nsis` relinks the exe, so signing
+      # first and rebuilding would discard the signature, while signing the
+      # installer alone would ship a signed wrapper around an unsigned app. The
+      # rebuild is a bare makensis run — the resolved wails_tools.nsh and the
+      # WebView2 bootstrapper are already on disk from the build step, so it
+      # needs no network and takes a second.
+      - name: Sign the Windows executable and installer
         if: matrix.name == 'windows-amd64' && inputs.signing
         shell: bash
         env:
@@ -289,34 +329,67 @@ jobs:
           # Timestamped, so the signature stays valid after the certificate
           # expires. Without /tr every binary signed today stops verifying the
           # day the certificate lapses.
-          "$SIGNTOOL" sign //fd sha256 //td sha256 \
-            //tr http://timestamp.digicert.com \
-            //f "$RUNNER_TEMP/cert.pfx" //p "$CERTIFICATE_PASSWORD" \
-            build/bin/yv.exe
+          sign() {
+            "$SIGNTOOL" sign //fd sha256 //td sha256 \
+              //tr http://timestamp.digicert.com \
+              //f "$RUNNER_TEMP/cert.pfx" //p "$CERTIFICATE_PASSWORD" "$1"
+            "$SIGNTOOL" verify //pa "$1"
+          }
+
+          sign build/bin/yv.exe
+
+          # Rebuild the installer so it carries the signed executable. Run from
+          # the installer directory because project.nsi's relative includes and
+          # OutFile are written from there.
+          rm -f build/bin/yv-amd64-installer.exe
+          ( cd build/windows/installer && \
+            makensis "-DARG_WAILS_AMD64_BINARY=$(cygpath -w "$GITHUB_WORKSPACE/build/bin/yv.exe")" project.nsi )
+          [[ -f build/bin/yv-amd64-installer.exe ]] || {
+            echo "::error::makensis produced no installer"; exit 1; }
+
+          sign build/bin/yv-amd64-installer.exe
           rm -f "$RUNNER_TEMP/cert.pfx"
-          "$SIGNTOOL" verify //pa build/bin/yv.exe
 
       # ── Packaging, one step per platform ──────────────────────────────
+      #
+      # create-dmg is what lays the window out over the backdrop; the script
+      # falls back to a plain image if it fails, so this install is a nicety
+      # rather than a dependency of the release.
+      - name: Install create-dmg
+        if: matrix.name == 'macos-arm64'
+        run: brew list create-dmg >/dev/null 2>&1 || brew install create-dmg
+
       - name: Package DMG
         if: matrix.name == 'macos-arm64'
-        run: |
-          mkdir -p /tmp/yv-dmg dist
-          cp -r build/bin/yv.app /tmp/yv-dmg/
-          hdiutil create -volname "yv" -srcfolder /tmp/yv-dmg -ov -format UDZO \
-            "dist/yv-macos-arm64-${{ steps.vars.outputs.version }}.dmg"
-          rm -rf /tmp/yv-dmg
+        env:
+          OUT_DIR: dist
+          VERSION: ${{ steps.vars.outputs.version }}
+          ARCH: arm64
+        run: bash build/darwin/package-dmg.sh
 
-      - name: Package Windows executable
+      # The installer is what a first-time user downloads: it puts yv in Program
+      # Files, adds the Start-menu entry and the uninstaller, and installs the
+      # WebView2 runtime, without which the app starts and dies with no window.
+      - name: Package Windows installer
         if: matrix.name == 'windows-amd64'
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
-          cp build/bin/yv.exe "dist/yv-windows-amd64-${{ steps.vars.outputs.version }}.exe"
+          # This is the assertion that catches a missing makensis: `wails build
+          # -nsis` only warns, so a skipped installer is otherwise a green build
+          # with an artifact quietly absent from the release.
+          [[ -f build/bin/yv-amd64-installer.exe ]] || {
+            echo "::error::No installer at build/bin/yv-amd64-installer.exe."
+            exit 1
+          }
+          cp build/bin/yv-amd64-installer.exe \
+            "dist/yv-windows-amd64-${{ steps.vars.outputs.version }}-setup.exe"
 
-      # The .exe above stays, for a first-time download. The zip is what updates
-      # use: a running .exe cannot be deleted or overwritten, so the updater
-      # renames it aside and unpacks over the top — which needs an archive, not a
-      # bare executable.
+      # The zip is what updates use: a running .exe cannot be deleted or
+      # overwritten, so the updater renames it aside and unpacks over the top —
+      # which needs an archive, not a bare executable. It doubles as the portable
+      # download, which is why no loose .exe is published beside it.
       #
       # PowerShell rather than bash: the Windows runner's Git Bash has no `zip`,
       # so the bash version of this step died with "command not found" (exit

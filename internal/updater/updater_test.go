@@ -407,11 +407,14 @@ func TestAssetNamesMatchWhatCIUploads(t *testing.T) {
 		"yv-windows-amd64-v0.1.0.zip",
 		"yv-linux-x86_64-v0.1.0.AppImage",
 		"yv-linux-aarch64-v0.1.0.AppImage",
-		// Also uploaded, and deliberately never matched: neither can replace
-		// itself in place.
+		// Also uploaded, and deliberately never matched: none of them can
+		// replace itself in place. The Windows installer is the one worth
+		// watching — it shares the -windows-amd64- infix with the zip, so only
+		// the suffix check keeps the updater off it, and applying it would mean
+		// an elevation prompt in the middle of an update.
 		"yv_0.1.0_amd64.deb",
 		"yv-linux-amd64-v0.1.0.tar.gz",
-		"yv-windows-amd64-v0.1.0.exe",
+		"yv-windows-amd64-v0.1.0-setup.exe",
 	}
 
 	wantFor := map[string]string{

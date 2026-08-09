@@ -2255,3 +2255,97 @@ box shears the glow off flat along one edge.
 | `frontend/src/App.tsx` | Mounts `<Splash />` last, behind a `<Show>` |
 | `frontend/src/styles.css` | `.splash-*` — backdrop, grid, scanlines, sweep, wordmark; the CSS half of reduced motion |
 | `frontend/package.json` | `animejs` ^4.5.0 (MIT), the first runtime dependency beyond solid-js and chart.js |
+
+---
+
+## Implemented: A drag-to-Applications DMG, and a Windows installer
+
+### Goal
+
+Both first-install experiences were below what the artifacts implied. The DMG was
+built from a folder holding nothing but `yv.app`, so it opened on a single icon in
+a bare window with no `/Applications` alias and nothing saying what to do with it.
+Windows had no installer at all — a loose `.exe`, no Start-menu entry, no
+uninstaller, and no WebView2 check.
+
+### The alias is not decoration
+
+Without it the obvious gesture is a double-click, which runs yv **from the mounted
+volume** — and `classifyBundle` then refuses every update for that launch ("yv is
+running from a disk image"). So the missing alias was not a cosmetic gap; it was a
+way to end up with a copy that can never update itself.
+
+It is also safe for the updater, but only by a hair: `findBundle` returns the first
+entry whose name ends in `.app`, and this one is called `Applications`. A future
+rename that gave it a `.app` suffix would silently install the alias.
+
+### Two ways of building the image, one output
+
+`create-dmg` positions the icons over a backdrop by driving Finder over
+AppleScript, which is the part that occasionally fails on a headless runner. So
+`package-dmg.sh` treats it as an enhancement: on failure — or with the tool absent
+— it falls back to `hdiutil` with the alias staged by hand. The fallback is the
+same disk image without the layout, so a flaky Finder costs the window its
+arrangement rather than costing the release its DMG.
+
+The backdrop is **generated**, by `cmd/dmg-background` — stdlib `image/png`, no
+dependency. macOS has no scriptable tool that can draw one (sips only transforms an
+image that exists), and the alternative was committing a binary nobody could
+regenerate or review. It is exactly the window size create-dmg is told to use;
+Finder tiles a mismatch, so the drift shows up as two arrows.
+
+### Windows: what Wails does and does not do for you
+
+`wails build -nsis` builds the installer from `build/windows/installer/project.nsi`.
+Two things about that are worth knowing, and both are invisible from the outside:
+
+- **A missing `makensis` is a warning, not an error.** Wails prints one line and
+  exits 0, having produced no installer. CI would have published a green build with
+  the artifact quietly absent, so the packaging step asserts the file exists and a
+  separate step resolves `makensis` up front — it ships in the runner image but is
+  not on `PATH`.
+- **`wails_tools.nsh` is regenerated on every build; `project.nsi` is written only
+  if missing.** So the `.nsi` is the file worth committing and editing, and
+  hand-editing the `.nsh` accomplishes nothing.
+
+`project.nsi` changes three things from the template: the install directory
+(`Program Files\yv` — the template nests under `companyName`, giving
+`Program Files\Personal\yv` for a one-app "suite"), the uninstall key name (same
+reason: it read `Personalyv` in Add/Remove Programs), and an *unchecked* run-on-
+finish, since the installer runs elevated and launching from it would leave that
+first session running as administrator.
+
+### Signing forces the order
+
+`wails build -nsis` relinks the exe, so signing the executable and then rebuilding
+would discard the signature, while signing only the installer would ship a signed
+wrapper around an unsigned app. The signing step therefore signs the exe, re-runs
+**`makensis` alone** around it — the resolved `.nsh` and the WebView2 bootstrapper
+are already on disk from the build, so it needs no network — and signs the
+installer last.
+
+### The bare Windows `.exe` is gone
+
+The installer covers first-time install, and the `.zip` is a single `yv.exe` at the
+archive root, so "unzip and run" is exactly what the loose exe was.
+
+The `.zip` itself **cannot** go: `pickAsset` matches `-windows-amd64-` plus a
+`.zip` suffix, and `apply_windows.go` unpacks an archive because a running exe
+cannot be overwritten in place. Dropping it would leave every installed copy on
+`ErrNoAsset` for good. The installer shares that infix, so only the suffix check
+keeps the updater off it — which is why it is now pinned in
+`TestAssetNamesMatchWhatCIUploads` as a name that must never be matched. Applying
+it would mean a UAC prompt in the middle of an update the user already approved.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `build/darwin/package-dmg.sh` | New — styled `create-dmg` path, plain `hdiutil` + alias fallback, stale-volume detach |
+| `cmd/dmg-background/main.go` | New — draws `build/darwin/dmg-background.png` (committed) |
+| `build/windows/installer/project.nsi` | New — the Wails template with the install dir, uninstall key and finish page changed |
+| `.github/workflows/build.yml` | `matrix.extra` carries `-nsis`; ensure-makensis step; create-dmg install; DMG via the script; installer packaged; bare `.exe` step deleted; signing rebuilds the installer |
+| `Makefile` | `dmg` delegates to the script; `dmg-background`, `build-windows`, `installer-windows` |
+| `internal/updater/updater_test.go` | The pinned Windows name is now `-setup.exe` |
+| `.gitignore` | Wails-generated `build/windows/*` siblings; `*.dmg` replaces the old `yv.dmg` |
+| `RELEASING.md` | Artifact table: the installer, and why the zip must stay |

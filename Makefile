@@ -28,7 +28,8 @@ else
   WEBKIT_DEV := libwebkit2gtk-4.0-dev
 endif
 
-.PHONY: run install fmt test test-go test-frontend build dmg \
+.PHONY: run install fmt test test-go test-frontend build dmg dmg-background \
+        build-windows installer-windows \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
         doctor-linux update-keys appimage
 
@@ -85,11 +86,48 @@ update-keys:
 	@echo "     secret, and keep an offline copy. It cannot be regenerated."
 	@echo
 
+# ── macOS disk image ────────────────────────────────────────────────────
+#
+# The image users install from: yv.app beside an alias to /Applications, so the
+# app ends up somewhere it can update itself from. Named like every other
+# artifact, because internal/updater matches on these names.
+#
+# create-dmg is what positions the icons over the backdrop. Without it the script
+# still builds the same image, just with Finder's default layout.
 dmg: build
-	mkdir -p /tmp/yv-dmg
-	cp -r build/bin/yv.app /tmp/yv-dmg/
-	hdiutil create -volname "yv" -srcfolder /tmp/yv-dmg -ov -format UDZO yv.dmg
-	rm -rf /tmp/yv-dmg
+	@command -v create-dmg >/dev/null 2>&1 || \
+	  echo "  (brew install create-dmg for the laid-out window)"
+	@bash build/darwin/package-dmg.sh
+
+# Redraws build/darwin/dmg-background.png. The PNG is committed, so this is only
+# needed when the window size or the icon positions in package-dmg.sh change —
+# Finder tiles a backdrop that no longer matches the window.
+dmg-background:
+	go run ./cmd/dmg-background build/darwin/dmg-background.png
+
+# ── Windows ─────────────────────────────────────────────────────────────
+#
+# Cross-compiled from macOS or Linux: the Windows build is cgo-free, unlike the
+# Linux one. These are for trying the packaging locally; CI is what ships.
+build-windows: $(WAILS)
+	$(WAILS) build -platform windows/amd64 -ldflags "$(LDFLAGS)"
+
+# Produces build/bin/yv-amd64-installer.exe from build/windows/installer/project.nsi.
+#
+# The makensis check is not redundant: `wails build -nsis` treats a missing
+# makensis as a warning, finishes successfully, and simply does not write an
+# installer — so without this the target would look like it worked.
+installer-windows: $(WAILS)
+	@command -v makensis >/dev/null 2>&1 || { \
+	  echo "makensis not found — install NSIS first (macOS: brew install nsis)."; \
+	  exit 1; \
+	}
+	$(WAILS) build -platform windows/amd64 -nsis -ldflags "$(LDFLAGS)"
+	@test -f build/bin/yv-amd64-installer.exe || \
+	  { echo "no installer was produced"; exit 1; }
+	@echo
+	@echo "  Built build/bin/yv-amd64-installer.exe"
+	@echo
 
 # ── Linux / Ubuntu ──────────────────────────────────────────────────────
 #

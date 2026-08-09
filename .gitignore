@@ -3,6 +3,16 @@
 # entry and packaging script, all of which a fresh clone needs to build.
 build/bin/
 
+# Wails regenerates these on every Windows build from wails.json and the app
+# icon, so committing them would mean reviewing a diff nobody wrote. The one
+# installer file that is *not* regenerated — installer/project.nsi — is
+# committed, because it carries our edits.
+build/windows/icon.ico
+build/windows/info.json
+build/windows/wails.exe.manifest
+build/windows/installer/wails_tools.nsh
+build/windows/installer/tmp/
+
 # Wails dev mode generated files
 wailsjs/
 frontend/wailsjs/
@@ -46,7 +56,7 @@ frontend/package.json.md5
 # Binary
 yv
 yv.exe
-yv.dmg
+*.dmg
 
 # Update signing keys, from `make update-keys`. The private half signs every
 # release and is unrecoverable if lost; the public half belongs pasted into

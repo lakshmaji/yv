@@ -107,9 +107,16 @@ The tag starts `build.yml`, which:
 - checks the tag matches `package.json` and `wails.json` (in the test job, so a
   mismatch costs two minutes rather than three platform builds);
 - builds macOS, Windows and Linux, with `-ldflags -X main.version=<version>`;
-- packages a DMG, an `.exe`, a `.zip`, a `.deb`, a tarball and an AppImage;
+- packages a DMG, a Windows `-setup.exe`, a `.zip`, a `.deb`, a tarball and an
+  AppImage;
 - writes a `.sha256` and a `.sig` beside every artifact;
 - creates the GitHub Release with the CHANGELOG section as its body.
+
+Two packaging tools are resolved by the workflow rather than assumed: `create-dmg`
+(installed with brew; the DMG script falls back to a plain image without it) and
+`makensis` (present in the Windows runner image but not on `PATH`). The NSIS one is
+checked explicitly because `wails build -nsis` treats a missing `makensis` as a
+warning and exits 0 — a green build with no installer in the release.
 
 **The signing step fails the build if `YV_UPDATE_PRIVATE_KEY` is unset.** That is
 on purpose. An unsigned release looks complete, downloads fine, and is refused by
@@ -122,10 +129,18 @@ every machine it reaches — failing loudly beats publishing that.
 | Platform | Install | Self-updates |
 |---|---|---|
 | macOS | `.dmg` → drag to Applications | yes |
-| Windows | `.exe` | yes, via the `.zip` |
+| Windows | `-setup.exe` (installer) | yes, via the `.zip` |
+| Windows | `.zip` → unpack anywhere (portable) | yes |
 | Linux | `.AppImage` | yes |
 | Linux | `.deb` | **no** — use `apt` |
 | Linux | `.tar.gz` | **no** |
+
+The Windows `.zip` has to be published whether or not anyone downloads it by
+hand: `pickAsset` matches `-windows-amd64-` **and** a `.zip` suffix, and the
+updater unpacks an archive because a running `.exe` cannot be overwritten in
+place. Dropping it would leave every installed copy with "no download for this
+platform", permanently. The installer is deliberately not matched — applying it
+would mean a UAC prompt in the middle of an update the user already approved.
 
 The `.deb` installs to root-owned `/usr/bin`, so replacing the binary would mean a
 password prompt on every update *and* going behind dpkg's back, leaving apt
