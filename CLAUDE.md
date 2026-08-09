@@ -2294,6 +2294,41 @@ image that exists), and the alternative was committing a binary nobody could
 regenerate or review. It is exactly the window size create-dmg is told to use;
 Finder tiles a mismatch, so the drift shows up as two arrows.
 
+### The backdrop cannot use the app's own palette
+
+Finder draws the two icon labels — "yv" and "Applications" — in the colour of
+whichever appearance the *user* is in: near-black in light mode, white in dark.
+Nothing in the disk image can override that, and there is no shadow or pill behind
+them to fall back on.
+
+The first version used the app's `--bg` family, on the reasoning that the window
+should look like the software. In light mode that put black text on near-black and
+the labels were, as reported, invisible. A light backdrop only moves the same
+failure into dark mode.
+
+So the field is deliberately **mid-tone**: a purple cosmic wash — violet drifting to
+orchid, with deep indigo voids and two small bright cores. Purple is the awkward hue
+to hold there: it is red and blue with almost no green, and green carries 71% of
+relative luminance, so a saturated violet is inherently dark and the ones that land
+in the band are necessarily lighter and chalkier than the colour reads as. Hue was
+chosen after luminance, not before.
+
+**The two icon slots are normalised, and that is what makes the nebula possible.**
+`paintSlot` flattens each icon-and-label zone back to one balance-point tone
+(0.18 relative luminance, ~4.6:1 against black *and* white — moving it either way
+buys one appearance's legibility with the other's). Without it every wash in the
+image would be constrained by the worst pixel under a letter, and the first attempt
+at that was a flat wall of one colour. The falloff has a **plateau** rather than a
+peak: a plain radial fade is already weakening by the ends of a long label, which is
+exactly where "Applications" lost its contrast.
+
+The washes are rotated ellipses with radial falloffs rather than blurred discs (a
+falloff *is* a blur, at the cost of a square root instead of a kernel; and a sky
+made of circles reads as a sky made of circles). Blob and star positions are
+hand-placed literals — the backdrop is a drawing, so a diff on the PNG should mean
+somebody changed it, not that a seed moved. No star may sit in a label row: it is
+nearly white, and one behind a letter undoes the whole exercise.
+
 ### Windows: what Wails does and does not do for you
 
 `wails build -nsis` builds the installer from `build/windows/installer/project.nsi`.
