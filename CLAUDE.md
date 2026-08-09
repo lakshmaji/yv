@@ -2349,3 +2349,49 @@ it would mean a UAC prompt in the middle of an update the user already approved.
 | `internal/updater/updater_test.go` | The pinned Windows name is now `-setup.exe` |
 | `.gitignore` | Wails-generated `build/windows/*` siblings; `*.dmg` replaces the old `yv.dmg` |
 | `RELEASING.md` | Artifact table: the installer, and why the zip must stay |
+
+---
+
+## Implemented: The app icon
+
+`build/appicon.png` was still the stock Wails "W". It is now the neon low-poly
+boar — the same animal the splash draws, which is the point: the icon in the Dock
+and the thing that draws itself on launch are one identity, not two.
+
+It is the **only** icon in the repo. Wails derives the macOS `.icns` and the
+Windows `.ico` from it, and `package-deb.sh` / `package-appimage.sh` copy it
+verbatim, so changing this one file changes every platform.
+
+### Why there is a generator rather than a committed crop
+
+`cmd/appicon` renders it from `build/appicon-source.png` (the original wide
+painting, also committed). Three decisions go into the icon — which square to
+take, how far to inset it, what corner radius — and each is the kind of thing
+that gets redone by hand differently next time. `sips` could do the first two,
+but not on Linux, and not the corners.
+
+The canvas follows Apple's icon grid: 824 of artwork centred in 1024, the rest
+transparent margin for the system's own shadow. A full-bleed square would sit in
+the Dock as the one sharp rectangle among rounded neighbours.
+
+Two details that would be wrong if left to the obvious implementation:
+
+- **The corner is anti-aliased**, not a hard inside/outside test. At r=185 a
+  stepped corner is the first thing the eye finds on an otherwise smooth shape.
+  Coverage comes from the signed distance to the rounded rect, folded into one
+  quadrant so the other three cannot disagree.
+- **Sampling is bilinear.** The source square is smaller than the body it is
+  drawn into, so every output pixel lands between source pixels; nearest
+  neighbour puts stair-steps along every neon stroke.
+
+Alpha is evaluated before the colour sample, because the corners are most of the
+work and reading a pixel that is about to be erased is a million wasted ops.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `cmd/appicon/main.go` | New — centred square crop, bilinear scale, rounded-rect alpha |
+| `build/appicon-source.png` | New — the artwork, so the icon is reproducible |
+| `build/appicon.png` | Replaced: the stock Wails "W" → the boar |
+| `Makefile` | `appicon` target |

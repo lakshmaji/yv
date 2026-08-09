@@ -29,7 +29,7 @@ else
 endif
 
 .PHONY: run install fmt test test-go test-frontend build dmg dmg-background \
-        build-windows installer-windows \
+        appicon build-windows installer-windows \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
         doctor-linux update-keys appimage
 
@@ -104,6 +104,15 @@ dmg: build
 # Finder tiles a backdrop that no longer matches the window.
 dmg-background:
 	go run ./cmd/dmg-background build/darwin/dmg-background.png
+
+# ── App icon ────────────────────────────────────────────────────────────
+#
+# Redraws build/appicon.png from build/appicon-source.png. Both are committed,
+# so this is only needed when the artwork changes — but build/appicon.png is the
+# single icon everything derives from (Wails makes the .icns and the .ico from
+# it; the Linux packaging scripts copy it), so changing it is one command.
+appicon:
+	go run ./cmd/appicon
 
 # ── Windows ─────────────────────────────────────────────────────────────
 #
