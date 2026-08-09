@@ -195,10 +195,10 @@ jobs:
         working-directory: frontend
         run: bun install --frozen-lockfile
 
-      # NSIS ships in the Windows runner image but is not on PATH, and `wails
-      # build -nsis` only *warns* when makensis is missing — it exits 0 having
-      # quietly produced no installer. So this resolves it up front and fails
-      # here, where the reason is legible, rather than later at a missing file.
+      # `wails build -nsis` only *warns* when makensis is missing — it exits 0
+      # having quietly produced no installer. So NSIS is resolved up front and
+      # fails here, where the reason is legible, rather than later at a missing
+      # file. It is not in the Windows runner image, so this normally installs it.
       - name: Ensure makensis is available
         if: matrix.name == 'windows-amd64'
         shell: bash
@@ -216,7 +216,10 @@ jobs:
             echo "::error::makensis not found; the Windows installer cannot be built."
             exit 1
           }
-          makensis /VERSION
+          # -VERSION, not /VERSION: Git Bash rewrites a leading slash into a
+          # Windows path, so makensis received "C:/Program Files/Git/VERSION"
+          # and tried to compile it as a script.
+          makensis -VERSION
 
       # -ldflags is what lets the binary know its own version. Without it
       # main.version stays "dev" and the updater never checks.
