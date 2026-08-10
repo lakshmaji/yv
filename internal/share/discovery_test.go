@@ -134,3 +134,40 @@ func waitForPeer(n *Node, id string, within time.Duration) *models.PeerInfo {
 	}
 	return nil
 }
+
+// A failed Start must leave the node restartable.
+//
+// This is the regression test for a bug that made a real failure invisible:
+// Start set n.started before building the host and only Stop ever cleared it, so
+// after a failure the *next* StartDiscovery returned nil with no host at all.
+// The Discovery view calls StartDiscovery on every mount, so one remount turned
+// an honest "Discovery unavailable" into a silent "no devices nearby".
+//
+// The failure is forced by tearing the node down behind Start's back rather than
+// by breaking the network, which no test should need to do.
+func TestStartIsRetryableAfterFailure(t *testing.T) {
+	n := New(nil)
+
+	// Simulate the state Start leaves behind when it bails out: teardown called
+	// on a node that never finished coming up.
+	n.mu.Lock()
+	n.started = true
+	n.mu.Unlock()
+	n.teardown()
+
+	n.mu.Lock()
+	started := n.started
+	n.mu.Unlock()
+	if started {
+		t.Fatal("started is still set after teardown; the next Start will be a silent no-op")
+	}
+
+	if err := n.Start(nil); err != nil {
+		t.Fatalf("restart after a failed start: %v", err)
+	}
+	defer n.Stop()
+
+	if n.host == nil {
+		t.Error("Start returned nil but built no host")
+	}
+}

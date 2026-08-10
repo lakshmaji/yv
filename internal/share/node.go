@@ -300,17 +300,27 @@ func (n *Node) Start(wailsCtx context.Context) error {
 // list on unmount, so no peer:lost storm is emitted here.
 func (n *Node) Stop() {
 	n.mu.Lock()
-	if !n.started {
-		n.mu.Unlock()
+	running := n.started
+	n.mu.Unlock()
+	if !running {
 		return
 	}
-	n.started = false
-	n.mu.Unlock()
 
+	// teardown clears started itself.
 	n.teardown()
 }
 
 func (n *Node) teardown() {
+	// Cleared here rather than only in Stop, because Start also calls teardown on
+	// its own failure paths. Leaving the flag set there meant the *next*
+	// StartDiscovery returned "ok" with no host at all — so a real failure (the
+	// firewall refusing the mDNS socket, say) reported itself honestly once and
+	// then, as soon as the Discovery view remounted, turned into a silent "no
+	// devices nearby" that no amount of looking could explain.
+	n.mu.Lock()
+	n.started = false
+	n.mu.Unlock()
+
 	if n.cancel != nil {
 		n.cancel()
 	}
