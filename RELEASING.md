@@ -76,14 +76,46 @@ copy is the one that matters, since this key cannot be regenerated.
 
 ### 4. Required: `RELEASE_TOKEN`
 
-A PAT with `contents: write` and `pull-requests: write`. **Not optional** — it is
-the mechanism, not a convenience.
+**Not optional** — it is the mechanism, not a convenience.
 
-A tag pushed with the default `GITHUB_TOKEN` does not start another workflow;
-GitHub blocks that so a workflow cannot loop on itself. So a tag pushed by
-`github-actions[bot]` is one `build.yml` never sees, which is exactly how `v0.2.0`
-came to exist as a bare tag with every installer built and none attached. The job
-that pushed it exited 0.
+A fine-grained PAT, created on the account that owns the repo (so there is no org
+approval step), scoped to **this repository only**:
+
+| Permission | Why |
+|---|---|
+| **Contents** — read and write | pushes the version commit and the tag |
+| **Pull requests** — read and write | opens and updates the version PR |
+| Metadata — read | mandatory, enabled for you |
+
+Nothing else, and specifically **not** `Workflows` — that is only needed to push
+changes under `.github/workflows/`, and the version commit touches `package.json`,
+`CHANGELOG.md` and `wails.json` only.
+
+A classic PAT with `repo` works too. The trade is expiry: fine-grained tokens must
+have one (a year at most), so they need rotating, and when one lapses the Release
+job fails at its preflight step naming this secret. A classic PAT can be set never
+to expire, which is the same sentence read less kindly. Neither has to be rotated
+if you move to a GitHub App installation token — the docs' first suggestion, minted
+per run and expiring in an hour.
+
+#### Why `GITHUB_TOKEN` cannot do this
+
+Not a permissions question, which is the trap. From GitHub's own docs on triggering
+a workflow from a workflow:
+
+> events triggered by the `GITHUB_TOKEN` will not create a new workflow run, with
+> the following exceptions [`workflow_dispatch` and `repository_dispatch`]
+>
+> you can use a GitHub App installation access token or a personal access token
+> instead of `GITHUB_TOKEN` to trigger events that require a token
+
+It is a recursion guard, so no `permissions:` block reaches it. The old job *had*
+`contents: write` and pushed `v0.2.0` perfectly — the tag is still on the remote.
+What never arrived was the event, so `build.yml` never ran, and the release was a
+bare tag with every installer built and none attached. The job exited 0.
+
+Which is why `secrets.GITHUB_TOKEN` here would be worse than a failure: Release
+would go green and publish nothing.
 
 It goes on **`actions/checkout`** as well as on the action, because
 `changesets/action` defaults to `commitMode: git-cli` and therefore pushes through
