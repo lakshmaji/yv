@@ -41,7 +41,7 @@ func appMenu(ctx func() context.Context) *menu.Menu {
 		wailsRuntime.EventsEmit(ctx(), "open-dashboard")
 	}))
 	view.Append(menu.Separator())
-	view.Append(menu.Text("Settings…", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+	view.Append(menu.Text("Settings…", settingsAccelerator(), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(ctx(), "open-settings")
 	}))
 	m.Append(menu.SubMenu("View", view))
@@ -57,7 +57,7 @@ func appMenu(ctx func() context.Context) *menu.Menu {
 		wailsRuntime.EventsEmit(ctx(), updateMenuEvent)
 	}))
 	help.Append(menu.Separator())
-	help.Append(menu.Text("Keyboard Shortcuts", keys.CmdOrCtrl("/"), func(_ *menu.CallbackData) {
+	help.Append(menu.Text("Keyboard Shortcuts", shortcutsAccelerator(), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(ctx(), "open-keyboard-shortcuts")
 	}))
 	help.Append(menu.Separator())
