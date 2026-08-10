@@ -2432,3 +2432,121 @@ work and reading a pixel that is about to be erased is a million wasted ops.
 | `build/appicon-source.png` | New — the artwork, so the icon is reproducible |
 | `build/appicon.png` | Replaced: the stock Wails "W" → the boar |
 | `Makefile` | `appicon` target |
+
+---
+
+## Fixed: two machines could discover each other and never connect
+
+### The symptom, and why it was not what it looked like
+
+Reported as "Windows can't see anything". The actual matrix, all three on one
+Wi-Fi network:
+
+| | sees Ubuntu | sees Mac | sees Windows |
+|---|---|---|---|
+| **Ubuntu** | — | ✅ | ✅ |
+| **Mac** | ✅ | — | ❌ |
+| **Windows** | ✅ | ❌ | — |
+
+So Windows was not blind; **Mac and Windows could not see each other, in both
+directions**, while Ubuntu saw and was seen by both.
+
+### Why that matrix means "inbound is blocked on both of them"
+
+A dinosaur is drawn only after a *successful connection*: `HandlePeerFound` hands
+off to `greet`, which calls `fetchHello` — `h.Connect` then a `/yv/hello/1.0.0`
+stream — and only then is the record `announced`. mDNS finding a device shows
+nothing on its own.
+
+And **libp2p connections are bidirectional**, with `Connect` a no-op when one
+already exists. So whichever side manages the outbound dial establishes the link,
+and both ends can then open streams over it:
+
+- Mac dials out to Ubuntu fine. Ubuntu now *has* that connection, so when its own
+  mDNS reports the Mac, `Connect` succeeds instantly over the existing link and it
+  greets back. Both see each other.
+- Mac → Windows is refused by Windows Defender Firewall; Windows → Mac by the
+  macOS application firewall. Neither can open the link, so **there is no link for
+  either to greet over.**
+
+Ubuntu was not the healthy machine — it was the only one with no inbound filter,
+which made it the hub everything else reached. mDNS itself crosses both firewalls
+because UDP filtering is stateful: replies come back to the port our own query
+left from. An unsolicited inbound TCP/QUIC SYN does not.
+
+The practical consequence, and the most useful thing to tell a user: **only one of
+the two ends has to allow inbound.**
+
+### The installer asks for the exception
+
+`project.nsi` adds inbound `netsh advfirewall` rules for `yv.exe` and deletes them
+on uninstall. The installer runs elevated, which is the one moment this can happen
+without a UAC prompt of its own.
+
+Per-program, not per-port, because `node.go` binds `tcp/0` and `udp/0` — the ports
+differ every launch, so no port rule could be written. `private,domain` and never
+`public`: quietly opening unsolicited inbound on a café network is not a thing to
+do on someone's behalf. Failure is logged and not fatal, since yv still works
+against any peer that accepts inbound.
+
+**The portable `.zip` gets no rule** — nothing elevated to add one. That is now a
+real behavioural difference between the two Windows downloads, and it is in
+`RELEASING.md`.
+
+On macOS, `Info.plist` gained `NSLocalNetworkUsageDescription` and
+`NSBonjourServices` (`_yv-share`, matching `share.ServiceTag`), which macOS 15
+requires. That is *not* a full fix and should not be read as one: the application
+firewall's "block all incoming" cannot be waived by an app, and an unsigned bundle
+cannot present a trustworthy prompt. The remedy is the pending Developer ID
+signature.
+
+### The real bug was that none of this was visible
+
+`greet` **discarded the error** and left the record un-announced. No log, no
+event, no diagnostics anywhere in `internal/share`. So "discovered it, could not
+connect" was indistinguishable from "the network is empty" — both ended at
+`NoDevicesModal` advising the user to open yv on another laptop, when the other
+laptop was already open, already discovered, and one firewall rule away.
+
+`peerRec` now keeps `lastErr`/`attempts`/`firstSeen`, and `Node.Status()` reports
+`Seen` (records mDNS created) against `Announced` (records we connected to).
+**`Seen > Announced` is the entire signal**, and the dialog says something
+different for each case, including the `netsh` command and the reminder that a
+Public network profile ignores it.
+
+`EventPeerUnreachable` fires once per peer (mDNS re-announces every minute and
+every retry fails identically), so the toolbar chip can say "1 found · cannot
+connect" without polling. A handshake still in flight reports `still connecting`
+rather than an empty reason, so neither surface can accuse a network that is
+merely mid-connect.
+
+`NoDevicesModal` **replaces** the store list from `GetShareStatus` on open rather
+than merging: the event only ever adds, and a device that has since left is swept
+in Go with no event at all — `peer:lost` fires only for peers that made it onto
+the map.
+
+### Also fixed: a failed Start left discovery permanently silent
+
+`Start` set `n.started` before building the host, and only `Stop` ever cleared it —
+`teardown`, which `Start` itself calls on every failure path, did not. So after
+any failure the *next* `StartDiscovery` returned `"ok"` with no host at all. Since
+the Discovery view calls it on every mount, one remount was enough to turn an
+honest "Discovery unavailable" into a silent "no devices nearby" that no amount of
+looking could explain. `teardown` now clears it, and
+`TestStartIsRetryableAfterFailure` covers it.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `internal/share/node.go` | `lastErr`/`attempts`/`firstSeen`/`reported` on `peerRec`; `Status()`; `EventPeerUnreachable`; `greet` records the failure; `teardown` clears `started` |
+| `internal/models/models.go` | `ShareStatus`, `UnreachablePeer` |
+| `app.go`, `models.go` | `GetShareStatus` binding and the type aliases |
+| `internal/share/discovery_test.go` | Table-driven `Status()` cases, stopped-node case, retry-after-failure regression |
+| `build/windows/installer/project.nsi` | Inbound firewall rules, removed on uninstall |
+| `build/darwin/Info{,.dev}.plist` | `NSLocalNetworkUsageDescription`, `NSBonjourServices` |
+| `frontend/src/components/modals/NoDevicesModal.tsx` | The blocked-connection branch, `netsh` hint, per-peer detail |
+| `frontend/src/components/DiscoveryPanel.tsx` | `blockedPeers`, chip wording, rescan clears the list |
+| `frontend/src/{App,store,types,wails}.ts` | `peer:unreachable`, `unreachable` signal, `ShareStatus` types |
+| `frontend/src/styles.css` | `.nodev-blocked-hint`, `.nodev-cmd`, `.nodev-detail*` |
+| `RELEASING.md` | Why the installer and the zip now behave differently |
