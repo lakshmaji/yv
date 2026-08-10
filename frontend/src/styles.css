@@ -3666,6 +3666,58 @@
       color: var(--muted);
     }
 
+    /* The blocked-connection branch. Warmer than the lead so it reads as the
+       actionable part — this is the case where there *is* something to do. */
+    .nodev-blocked-hint {
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+      border-left: 2px solid var(--accent);
+      padding-left: 10px;
+    }
+
+    /* The command is long and has no spaces to break on inside the path, so it
+       wraps anywhere rather than widening the dialog or scrolling sideways. */
+    .nodev-cmd {
+      display: block;
+      margin: 6px 0;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--fg);
+      overflow-wrap: anywhere;
+      user-select: all;
+    }
+
+    /* Collapsed: the peer ID and the libp2p dial error are the right level of
+       detail for a bug report and the wrong one for a first read. */
+    .nodev-detail {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .nodev-detail summary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nodev-detail-row {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .nodev-detail-row code {
+      font-family: var(--mono);
+      color: var(--fg);
+      flex: none;
+    }
+
     .nodev-fleet {
       display: grid;
       grid-template-columns: repeat(5, 1fr);

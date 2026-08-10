@@ -14,6 +14,7 @@ import type {
   FrequencyResult,
   ActivityHeatmap,
   PeerInfo,
+  UnreachablePeer,
   IncomingShare,
   IncomingConnect,
   ShareProgress,
@@ -159,6 +160,15 @@ function launchDrone(): void {
 // Nearby yv instances. Each one is a dinosaur on the Discovery map; an empty
 // list means an empty island, which is the honest thing to show.
 const [peers, setPeers] = createSignal<PeerInfo[]>([]);
+
+// Devices mDNS reported that we could not connect to, so they have no dinosaur.
+//
+// Kept separate from peers() rather than folded in as a flag: these have no name
+// (the name arrives in the hello, which is the exchange that failed) so there is
+// nothing to seed a dinosaur from, and an animal nobody can click would be worse
+// than none. Seeded by GetShareStatus and maintained by the peer:unreachable
+// event, exactly as peers() is by GetPeers and peer:found.
+const [unreachable, setUnreachable] = createSignal<UnreachablePeer[]>([]);
 
 // A clicked dinosaur only knows its own name, so this is how the click gets back
 // to a peer id. Hostnames can collide; first match wins, which is the same
@@ -505,6 +515,7 @@ export {
   droneVariant, droneFanClip, droneCrashClip,
   noDevicesOpen, setNoDevicesOpen,
   peers, setPeers, peerByName,
+  unreachable, setUnreachable,
   sharePeer, setSharePeer,
   shareBusy, setShareBusy,
   shareError, setShareError,

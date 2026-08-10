@@ -14,6 +14,7 @@ import type {
   MetricsStorageInfo,
   PeerInfo,
   ShareScope,
+  ShareStatus,
   UpdateState,
 } from './types';
 
@@ -89,6 +90,11 @@ interface GoApp {
   StopDiscovery(): Promise<string>;
   /** Peers already known, for a view that mounts after discovery started. */
   GetPeers(): Promise<PeerInfo[]>;
+  /**
+   * What discovery can say about itself. Read by the empty-sweep dialog so it can
+   * tell "nobody is there" apart from "somebody is there and refusing us".
+   */
+  GetShareStatus(): Promise<ShareStatus>;
   /** The hostname peers see when no username is set — the field's placeholder. */
   GetDefaultDeviceName(): Promise<string>;
   /** A fresh connection code to read out. Generated locally, no network. */
