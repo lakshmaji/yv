@@ -48,15 +48,31 @@ updates started being refused in the field.
 
 ### 2. Compile in the public key
 
-Paste the contents of `yv-update-public.pem` into `updatePublicKeyPEM` in
-`internal/updater/signature.go`, and commit it. A Go test checks it parses; the
-app reports `ErrNoTrustedKey` while it is empty.
+```bash
+make embed-update-key
+```
+
+Writes `yv-update-public.pem` into `updatePublicKeyPEM` in
+`internal/updater/signature.go`; commit that file. The app reports
+`ErrNoTrustedKey` while it is empty.
+
+Scripted rather than pasted by hand because a stray blank line or a lost trailing
+newline in a Go backtick string still compiles, still looks right in review, and
+then refuses every update in the field. The script refuses a PEM containing a
+PRIVATE key (the two files sit side by side, one tab-completion apart), checks the
+key through `openssl pkey` before writing, rewrites only the value so the comments
+above it survive, and is idempotent — re-run it to confirm the file matches the
+key you hold.
 
 ### 3. Store the private key
 
-Add the contents of `yv-update-private.pem` as the repository secret
-**`YV_UPDATE_PRIVATE_KEY`**, then put a copy somewhere offline. Delete the local
-file once both are done.
+```bash
+gh secret set YV_UPDATE_PRIVATE_KEY < yv-update-private.pem
+```
+
+Or paste it at Settings → Secrets and variables → Actions. Then put a copy
+somewhere offline, and delete the local file once **both** are done — the offline
+copy is the one that matters, since this key cannot be regenerated.
 
 ### 4. Optional: `RELEASE_TOKEN`
 
@@ -114,9 +130,10 @@ The tag starts `build.yml`, which:
 
 Two packaging tools are resolved by the workflow rather than assumed: `create-dmg`
 (installed with brew; the DMG script falls back to a plain image without it) and
-`makensis` (present in the Windows runner image but not on `PATH`). The NSIS one is
-checked explicitly because `wails build -nsis` treats a missing `makensis` as a
-warning and exits 0 — a green build with no installer in the release.
+`makensis`, which is *not* in the Windows runner image and gets installed with
+choco. The NSIS one is checked explicitly because `wails build -nsis` treats a
+missing `makensis` as a warning and exits 0 — a green build with no installer in
+the release.
 
 **The signing step fails the build if `YV_UPDATE_PRIVATE_KEY` is unset.** That is
 on purpose. An unsigned release looks complete, downloads fine, and is refused by
@@ -141,6 +158,21 @@ updater unpacks an archive because a running `.exe` cannot be overwritten in
 place. Dropping it would leave every installed copy with "no download for this
 platform", permanently. The installer is deliberately not matched — applying it
 would mean a UAC prompt in the middle of an update the user already approved.
+
+### One behavioural difference between the two Windows downloads
+
+The installer runs elevated, so it adds inbound Windows Firewall rules for
+`yv.exe` (`private,domain` profiles only) and removes them on uninstall. Device
+sharing needs to *accept* connections: libp2p links carry traffic both ways once
+established, so a pair only works if at least one end allows inbound — two
+machines that both filter it discover each other over mDNS and then never
+connect.
+
+**The portable `.zip` gets no rule**, because there is nothing elevated to add
+one. Discovery still finds peers and still works against any peer that accepts
+inbound; against another filtered machine it does not, and the Discovery dialog
+prints the `netsh` command to fix it. Worth knowing before telling someone to
+"just unzip it".
 
 The `.deb` installs to root-owned `/usr/bin`, so replacing the binary would mean a
 password prompt on every update *and* going behind dpkg's back, leaving apt

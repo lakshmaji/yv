@@ -7,14 +7,22 @@ name: Release
 # workflow's whole job is to decide *what* that tag should be and to create it.
 #
 #   1. PRs land on main, each carrying a .changeset/*.md saying patch/minor/major.
-#   2. Someone runs the "version" job from the Actions tab. It consumes the
-#      pending changesets, bumps package.json, writes CHANGELOG.md, mirrors the
-#      number into wails.json, and opens a PR.
+#   2. The "version" job runs on every push to main. While any changeset is
+#      pending it keeps one release PR open and up to date: consuming them,
+#      bumping package.json, writing CHANGELOG.md and mirroring the number into
+#      wails.json.
 #   3. Merging that PR trips the "tag" job below, which pushes v<version>.
 #   4. build.yml sees the tag and builds, signs and publishes.
 #
-# Step 2 is deliberately manual rather than a bot that reopens a PR on every
-# push. Releases here are a decision, not a cadence.
+# Step 2 used to be manual, on the reasoning that a release is a decision rather
+# than a cadence. It still is — **merging** the release PR is the decision, and
+# nothing is tagged or published until someone does. Keeping the PR itself manual
+# only meant the version bump was a step you had to remember, and forgetting it
+# left changesets piling up with no sign anything was owed.
+#
+# It is the same job either way: `workflow_dispatch` still runs it on demand, and
+# the push path adds nothing but the trigger. No third-party action is involved —
+# the token here can write to the repo, and that is not something to hand to one.
 
 on:
   push:
@@ -33,7 +41,10 @@ jobs:
   # ── Open the version PR ─────────────────────────────────────────────────
   version:
     name: Version
-    if: github.event_name == 'workflow_dispatch' && inputs.version
+    # Automatic on a push to main; on a manual run, only if the box is checked.
+    # A push where nothing is pending falls out at the "Check for pending
+    # changesets" step below, which is a normal outcome rather than a failure.
+    if: github.event_name == 'push' || inputs.version
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,12 +103,20 @@ jobs:
 
           # --force above plus this guard makes the job re-runnable: a second run
           # updates the existing PR instead of failing on a duplicate.
+          # printf rather than a multi-line string literal: every line inside a
+          # YAML block scalar has to be indented to stay in the block, and that
+          # indentation would travel into the PR body — where four spaces makes
+          # markdown render the paragraph as a code block.
+          BODY=$(printf '%s\n\n%s' \
+            "Consumes the pending changesets. Merging this pushes the \`v${VERSION}\` tag, which starts the Build workflow." \
+            "Maintained automatically: force-updated on every push to main while changesets are pending, so the version and changelog always reflect what has landed. Nothing is tagged or published until this is merged.")
+
           if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
             gh pr create \
               --base main \
               --head "$BRANCH" \
               --title "chore(release): v${VERSION}" \
-              --body "Consumes the pending changesets. Merging this pushes the \`v${VERSION}\` tag, which starts the Build workflow."
+              --body "$BODY"
           fi
           echo "Opened release/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
 

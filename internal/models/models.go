@@ -174,6 +174,32 @@ type PeerInfo struct {
 	PINRequired bool   `json:"pinRequired"`
 }
 
+// UnreachablePeer is a device mDNS found that we could not connect to.
+//
+// It carries no name, because the name arrives in the hello — which is exactly
+// the exchange that failed. A user recognises a device by its dinosaur, and an
+// unreachable peer never gets one, so the ID is all there is to say.
+type UnreachablePeer struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// ShareStatus is what discovery can say about itself when nothing appeared.
+//
+// Seen counts devices mDNS reported; Announced counts the ones we connected to
+// and therefore drew. **Seen > Announced is the whole point of this struct**: it
+// is the difference between an empty network and a blocked one, and until it
+// existed both looked identical from the Discovery view — a silent "no devices
+// nearby" that gave a user nothing to act on.
+type ShareStatus struct {
+	Running     bool              `json:"running"`
+	PeerID      string            `json:"peerId"`
+	ListenAddrs []string          `json:"listenAddrs"`
+	Seen        int               `json:"seen"`
+	Announced   int               `json:"announced"`
+	Unreachable []UnreachablePeer `json:"unreachable"`
+}
+
 // SharePayload is the config one peer sends another.
 //
 // Files are deliberately not here. They travel on their own protocol, streamed
