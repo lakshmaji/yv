@@ -1,0 +1,40 @@
+# yv
+
+## 0.2.0
+
+### Minor Changes
+
+- [#1](https://github.com/lakshmaji/yv/pull/1) [`075bc10`](https://github.com/lakshmaji/yv/commit/075bc107f9c350f5845f9677cb307fa6fbacc462) Thanks [@lakshmaji](https://github.com/lakshmaji)! - Proper installers, and a fix for device sharing between machines that both
+  have a firewall.
+
+  **Windows now has an installer.** It puts yv in Program Files with a
+  Start-menu entry and an uninstaller, installs the WebView2 runtime if it is
+  missing (without which the app started and died with no window), and allows
+  yv through Windows Firewall on private networks. The portable `.zip` is
+  still there for anyone who would rather not install anything.
+
+  **The macOS disk image now shows what to do with it** — yv beside an
+  Applications shortcut, so it gets dragged somewhere it can update itself
+  from. Opening it and double-clicking used to run yv off the disk image,
+  which then refused every update.
+
+  **Device sharing works between two firewalled machines.** Sharing needs to
+  accept incoming connections, and two computers that both block them could
+  find each other and never connect — each worked fine against a third
+  machine, which made it look like one of them was broken. When it still
+  cannot connect, the Discovery view now says so and names the fix, instead of
+  reporting an empty network.
+
+  The app icon is no longer the stock Wails placeholder, and on Windows the
+  Help and View menus show real shortcut names instead of `Ctrl+OEM2`.
+
+- [`1a2f554`](https://github.com/lakshmaji/yv/commit/1a2f5542e02a8374de960c4b957cc37f1a19d971) Thanks [@lakshmaji](https://github.com/lakshmaji)! - yv can now update itself. It checks GitHub for new releases, verifies the
+  download against an RSA signature before trusting it, and installs it — on
+  macOS, Windows, and the Linux AppImage. Package installs are told to use
+  their package manager rather than offered a download that would not apply.
+
+  Check from Help → Check for Updates…, or from About. A quiet check also runs
+  a few seconds after launch and only speaks up when there is something to say.
+
+- [`a9a3957`](https://github.com/lakshmaji/yv/commit/a9a39574b445b7f80b5cf018cf29ad9550318ca4) Thanks [@lakshmaji](https://github.com/lakshmaji)! - About now shows which version you are running. A build that skipped the
+  Makefile reports `dev`, which is the honest answer rather than a blank.
