@@ -23,6 +23,17 @@
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
+        <!-- Device sharing browses and answers mDNS on the local network, and
+             macOS 15 gates that behind an explicit grant. Without the usage
+             description the prompt has nothing to say, and without the service
+             list the Bonjour type we actually use is not covered. The service
+             name must match share.ServiceTag. -->
+        <key>NSLocalNetworkUsageDescription</key>
+        <string>yv finds other computers running yv on this network, so you can send projects and files between them.</string>
+        <key>NSBonjourServices</key>
+        <array>
+            <string>_yv-share</string>
+        </array>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>
