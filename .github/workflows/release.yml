@@ -73,8 +73,17 @@ jobs:
       # `bun run version` is `changeset version && node scripts/sync-version.mjs`,
       # so wails.json comes along with package.json. version_test.go fails the
       # build if it ever does not.
+      #
+      # @changesets/changelog-github — the generator this repo configures — turns
+      # each changeset into a line naming its PR and author, which means an API
+      # call per entry, and it reads the credential from GITHUB_TOKEN and nowhere
+      # else. Without it `changeset version` throws on the first entry and writes
+      # nothing at all. The automatic per-run token is enough: this is metadata
+      # already readable on the repo, not the RELEASE_TOKEN the tag job needs.
       - name: Apply version bump
         if: steps.pending.outputs.count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bun run version
 
       - name: Read the new version
