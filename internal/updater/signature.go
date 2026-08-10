@@ -25,11 +25,22 @@ import (
 //   - Losing the private key means no installed copy can ever be updated again.
 //     They can only be replaced by hand.
 //
-// Empty until a key is generated. Every verification then fails, which is the
-// correct direction to fail in: no key means no way to tell a real release from
-// anything else, and the error below says exactly that rather than reporting a
-// bad signature.
-var updatePublicKeyPEM = ``
+// Generated 2026-08 with `make update-keys`. The private half lives only in the
+// YV_UPDATE_PRIVATE_KEY repository secret and an offline copy.
+var updatePublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtuOnvhQhztt8tW5UJtNM
+HyXaIrSt3sXZzxCcsaiFwltlfThitH18XXpjPjKf49cP+g5b68Xv46C4mBbSsjud
+kGgcTKELS1mkbl99MZC4cgJSURDx/rRMq8/JI9ecUzKeRnyDfTLNlNloiZ1h7TW3
+6+Aii3qYfSii/eAOlbNHt8Iyukl7pgFyIPbHrO++q9eXLny/dXadokO8gSiaecOd
+LOiowqHXzl2A+dZ65ciCF1FUnO9q4TEI6DwLU6zYGlyqSKEpdN+W16IqGgEARUIQ
+dLnqSHN0JEAL3ydizPVizyJi3fFmzifHNx1wI4qLE3oUk216eXIuj7xu3kEwHxc0
+3JXiUkFe/lRnmSaHA3uodb9Sqs59oCf/10AOrEL4jpXS9mxPclQxHHFs4j3fJ8ZD
+Rv22vqBqBjpoJd3XfMPjlhYd1hfOW+UokpHEnKSNod277+AzTfCd6A0aKY5y/DdI
+1NzUrJzjKzakQsm7M0+UrT+tSMuoAh8bJ2eyb+rhKdg4KoGl1XtpJ2LNNit7cvV6
+YvKdAAM3Syd6uJBWDKGz27Ase5ZNAxLVFM2n8nsy9pkb26TOL9jedk/Y6xpYTaB2
+od9P+Kz+nHB+Slrdut5ZcxnsQ7fWqajDaDE2TPCqaij9B7FbinvFvaFzHDRxgKnk
+1JW4IvDnW6nywdQHAqoV7VUCAwEAAQ==
+-----END PUBLIC KEY-----`
 
 // ErrNoTrustedKey means this build shipped without a public key, so it cannot
 // tell a genuine release from anything else.
