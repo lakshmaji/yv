@@ -61,6 +61,39 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # `token` is a *required* input to actions/checkout, so an unset
+      # RELEASE_TOKEN does not fall back to anything — it resolves to "" and
+      # checkout stops with `Input required and not supplied: token`, which names
+      # neither the secret nor the reason this workflow insists on one. Failing
+      # here instead costs one step and says what to do.
+      #
+      # Deliberately not `secrets.RELEASE_TOKEN || github.token`: that would start
+      # the workflow succeeding again while pushing tags as github-actions[bot],
+      # which raises no event, so build.yml would go back to never running and
+      # releases would go back to being bare tags — green, and wrong. A missing
+      # token should stop the release, not silently produce half of one.
+      - name: RELEASE_TOKEN must be set
+        env:
+          HAS_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+        run: |
+          if [[ "$HAS_TOKEN" == "true" ]]; then
+            exit 0
+          fi
+          {
+            echo "### RELEASE_TOKEN is not set"
+            echo ""
+            echo "Add a personal access token with \`contents: write\` and"
+            echo "\`pull-requests: write\` at **Settings → Secrets and variables →"
+            echo "Actions**, named \`RELEASE_TOKEN\`."
+            echo ""
+            echo "It cannot be replaced by the automatic \`GITHUB_TOKEN\`: GitHub"
+            echo "raises no workflow event for anything that token pushes, so the"
+            echo "release tag would never start Build and the release would carry"
+            echo "no installers. See RELEASING.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::RELEASE_TOKEN is not set — see the job summary. A tag pushed with GITHUB_TOKEN does not start Build, so the release would have no installers."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           # Tags are needed to tell "already released" from "not yet", and the
