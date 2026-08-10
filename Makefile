@@ -29,7 +29,7 @@ else
 endif
 
 .PHONY: run install fmt test test-go test-frontend build dmg dmg-background \
-        appicon build-windows installer-windows \
+        appicon build-windows installer-windows embed-update-key \
         deps-linux build-linux run-linux deb install-linux uninstall-linux \
         doctor-linux update-keys appimage
 
@@ -80,11 +80,19 @@ update-keys:
 	@echo
 	@echo "  Two files written. Neither is committed (.gitignore covers both)."
 	@echo
-	@echo "  1. Paste yv-update-public.pem into updatePublicKeyPEM in"
-	@echo "     internal/updater/signature.go, and commit that."
+	@echo "  1. make embed-update-key      # writes the public half into"
+	@echo "                                # internal/updater/signature.go"
 	@echo "  2. Put yv-update-private.pem in the YV_UPDATE_PRIVATE_KEY repository"
 	@echo "     secret, and keep an offline copy. It cannot be regenerated."
+	@echo "  3. Delete yv-update-private.pem once both of those are done."
 	@echo
+
+# Writes yv-update-public.pem into updatePublicKeyPEM. Separate from update-keys
+# because a rotation runs this one alone, against a key generated long before —
+# and, per RELEASING.md, in a release of its own before CI signs with the new
+# private half.
+embed-update-key:
+	@bash scripts/embed-update-key.sh
 
 # ── macOS disk image ────────────────────────────────────────────────────
 #

@@ -48,15 +48,31 @@ updates started being refused in the field.
 
 ### 2. Compile in the public key
 
-Paste the contents of `yv-update-public.pem` into `updatePublicKeyPEM` in
-`internal/updater/signature.go`, and commit it. A Go test checks it parses; the
-app reports `ErrNoTrustedKey` while it is empty.
+```bash
+make embed-update-key
+```
+
+Writes `yv-update-public.pem` into `updatePublicKeyPEM` in
+`internal/updater/signature.go`; commit that file. The app reports
+`ErrNoTrustedKey` while it is empty.
+
+Scripted rather than pasted by hand because a stray blank line or a lost trailing
+newline in a Go backtick string still compiles, still looks right in review, and
+then refuses every update in the field. The script refuses a PEM containing a
+PRIVATE key (the two files sit side by side, one tab-completion apart), checks the
+key through `openssl pkey` before writing, rewrites only the value so the comments
+above it survive, and is idempotent — re-run it to confirm the file matches the
+key you hold.
 
 ### 3. Store the private key
 
-Add the contents of `yv-update-private.pem` as the repository secret
-**`YV_UPDATE_PRIVATE_KEY`**, then put a copy somewhere offline. Delete the local
-file once both are done.
+```bash
+gh secret set YV_UPDATE_PRIVATE_KEY < yv-update-private.pem
+```
+
+Or paste it at Settings → Secrets and variables → Actions. Then put a copy
+somewhere offline, and delete the local file once **both** are done — the offline
+copy is the one that matters, since this key cannot be regenerated.
 
 ### 4. Optional: `RELEASE_TOKEN`
 

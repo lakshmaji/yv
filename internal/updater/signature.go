@@ -25,8 +25,14 @@ import (
 //   - Losing the private key means no installed copy can ever be updated again.
 //     They can only be replaced by hand.
 //
-// Generated 2026-08 with `make update-keys`. The private half lives only in the
-// YV_UPDATE_PRIVATE_KEY repository secret and an offline copy.
+// Empty in a fresh checkout. `make update-keys` generates the pair and
+// `make embed-update-key` writes the public half in here — worded to stay true
+// either way, because that script deliberately rewrites only the value and would
+// otherwise leave a comment claiming the key is absent directly above one.
+//
+// With no key every verification fails, which is the correct direction to fail
+// in: no key means no way to tell a real release from anything else, and
+// ErrNoTrustedKey says exactly that rather than reporting a bad signature.
 var updatePublicKeyPEM = `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtuOnvhQhztt8tW5UJtNM
 HyXaIrSt3sXZzxCcsaiFwltlfThitH18XXpjPjKf49cP+g5b68Xv46C4mBbSsjud
