@@ -1,8 +1,11 @@
 package share
 
 import (
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"yv/internal/models"
 )
@@ -169,5 +172,120 @@ func TestStartIsRetryableAfterFailure(t *testing.T) {
 
 	if n.host == nil {
 		t.Error("Start returned nil but built no host")
+	}
+}
+
+// Status has to separate "nobody is there" from "somebody is there and we cannot
+// reach them". Announced peers are the ones with a dinosaur; the rest are the
+// whole point of the struct.
+func TestStatusSeparatesAnnouncedFromUnreachable(t *testing.T) {
+	// Three fixed peer IDs, decoded from text so the table is readable and the
+	// sort order below is a property of the IDs rather than of map iteration.
+	ids := []peer.ID{}
+	for _, s := range []string{"peer-alpha", "peer-beta", "peer-gamma"} {
+		ids = append(ids, peer.ID(s))
+	}
+
+	tests := []struct {
+		name        string
+		peers       map[peer.ID]*peerRec
+		wantSeen    int
+		wantAnn     int
+		wantUnreach []models.UnreachablePeer
+	}{
+		{
+			name:        "empty network",
+			peers:       map[peer.ID]*peerRec{},
+			wantSeen:    0,
+			wantAnn:     0,
+			wantUnreach: []models.UnreachablePeer{},
+		},
+		{
+			name: "everyone reachable",
+			peers: map[peer.ID]*peerRec{
+				ids[0]: {announced: true},
+				ids[1]: {announced: true},
+			},
+			wantSeen:    2,
+			wantAnn:     2,
+			wantUnreach: []models.UnreachablePeer{},
+		},
+		{
+			name: "found but refused",
+			peers: map[peer.ID]*peerRec{
+				ids[0]: {lastErr: "connect: connection refused", attempts: 3},
+			},
+			wantSeen: 1,
+			wantAnn:  0,
+			wantUnreach: []models.UnreachablePeer{
+				{ID: ids[0].String(), Reason: "connect: connection refused"},
+			},
+		},
+		{
+			name: "a handshake still running is not a failure",
+			peers: map[peer.ID]*peerRec{
+				ids[0]: {greeting: true},
+			},
+			wantSeen: 1,
+			wantAnn:  0,
+			wantUnreach: []models.UnreachablePeer{
+				{ID: ids[0].String(), Reason: "still connecting"},
+			},
+		},
+		{
+			name: "one of each",
+			peers: map[peer.ID]*peerRec{
+				ids[0]: {announced: true},
+				ids[1]: {lastErr: "connect: i/o timeout"},
+				ids[2]: {lastErr: "hello stream: protocol not supported"},
+			},
+			wantSeen: 3,
+			wantAnn:  1,
+			wantUnreach: []models.UnreachablePeer{
+				{ID: ids[1].String(), Reason: "connect: i/o timeout"},
+				{ID: ids[2].String(), Reason: "hello stream: protocol not supported"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := New(nil)
+			n.peers = tt.peers
+
+			got := n.Status()
+			if got.Seen != tt.wantSeen {
+				t.Errorf("Seen = %d, want %d", got.Seen, tt.wantSeen)
+			}
+			if got.Announced != tt.wantAnn {
+				t.Errorf("Announced = %d, want %d", got.Announced, tt.wantAnn)
+			}
+			if !reflect.DeepEqual(got.Unreachable, tt.wantUnreach) {
+				t.Errorf("Unreachable = %+v, want %+v", got.Unreachable, tt.wantUnreach)
+			}
+
+			// The signal the UI actually branches on.
+			blocked := got.Seen > got.Announced
+			wantBlocked := tt.wantSeen > tt.wantAnn
+			if blocked != wantBlocked {
+				t.Errorf("Seen > Announced = %v, want %v", blocked, wantBlocked)
+			}
+		})
+	}
+}
+
+// A node that was never started must not claim to be running, and must not
+// invent a peer ID it does not have.
+func TestStatusOnAStoppedNode(t *testing.T) {
+	st := New(nil).Status()
+
+	if st.Running {
+		t.Error("Running is true before Start")
+	}
+	if st.PeerID != "" {
+		t.Errorf("PeerID = %q with no host", st.PeerID)
+	}
+	if len(st.ListenAddrs) != 0 {
+		t.Errorf("ListenAddrs = %v with no host", st.ListenAddrs)
 	}
 }
