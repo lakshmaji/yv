@@ -1,56 +1,72 @@
 name: Release
 
-# Versioning, split from Build on purpose.
+# Versioning and tagging, split from Build on purpose.
 #
-# build.yml is verified working on macOS and Ubuntu and is not touched by any of
-# this: it still triggers on a `v*` tag and knows nothing about changesets. This
-# workflow's whole job is to decide *what* that tag should be and to create it.
+# build.yml is verified working on macOS, Windows and Ubuntu and is not touched
+# by any of this: it triggers on a `v*` tag and knows nothing about changesets.
+# This workflow's whole job is to decide *what* that tag should be, create it,
+# and open the Release that build.yml then attaches installers to.
 #
 #   1. PRs land on main, each carrying a .changeset/*.md saying patch/minor/major.
-#   2. The "version" job runs on every push to main. While any changeset is
-#      pending it keeps one release PR open and up to date: consuming them,
-#      bumping package.json, writing CHANGELOG.md and mirroring the number into
-#      wails.json.
-#   3. Merging that PR trips the "tag" job below, which pushes v<version>.
-#   4. build.yml sees the tag and builds, signs and publishes.
+#   2. changesets/action keeps one version PR open and up to date while anything
+#      is pending: consuming the changesets, bumping package.json, writing
+#      CHANGELOG.md and mirroring the number into wails.json.
+#   3. Merging that PR leaves nothing pending, so the action runs its `publish`
+#      command instead — `changeset tag` writes v<version>, the action pushes it
+#      and creates the GitHub Release with that version's changelog entry as the
+#      body. See the note on `publish` below: without it this step is skipped.
+#   4. The tag push starts build.yml, which uploads the installers to it.
 #
-# Step 2 used to be manual, on the reasoning that a release is a decision rather
-# than a cadence. It still is — **merging** the release PR is the decision, and
-# nothing is tagged or published until someone does. Keeping the PR itself manual
-# only meant the version bump was a step you had to remember, and forgetting it
-# left changesets piling up with no sign anything was owed.
+# Merging the version PR is the release decision; nothing is tagged or published
+# until someone does it.
 #
-# It is the same job either way: `workflow_dispatch` still runs it on demand, and
-# the push path adds nothing but the trigger. No third-party action is involved —
-# the token here can write to the repo, and that is not something to hand to one.
+# All of step 2 and 3 used to be hand-rolled shell here — a `find .changeset`
+# pending count, a `git checkout -b` / commit / force-push block, a `gh pr view`
+# guard around `gh pr create` with a printf-built body, and a second job that
+# re-derived the version to tag it. changesets/action does all of it, and the two
+# jobs collapsed into the one below.
+#
+# ── Why RELEASE_TOKEN, and why it is not optional ──────────────────────────
+#
+# GitHub suppresses workflow triggers for anything pushed with the automatic
+# GITHUB_TOKEN, to stop a workflow looping on itself. That is not a corner case
+# here, it is the whole mechanism: a tag pushed by github-actions[bot] is a tag
+# build.yml never sees, which is exactly how v0.2.0 came to exist with no
+# installers attached — the job that pushed it was green, and said so only in a
+# step summary nobody reads.
+#
+# `commitMode` defaults to "git-cli", so the action pushes through the git remote
+# actions/checkout configured. The token therefore has to be on the *checkout*,
+# not only on the action. It is on both: checkout for the tag push, github-token
+# for the PR and release API calls.
+#
+# Needs `contents: write` and `pull-requests: write`.
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Consume pending changesets and open a version PR"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
+# One release at a time. Two pushes in quick succession would otherwise race to
+# force-update the same version branch.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
-  # ── Open the version PR ─────────────────────────────────────────────────
-  version:
-    name: Version
-    # Automatic on a push to main; on a manual run, only if the box is checked.
-    # A push where nothing is pending falls out at the "Check for pending
-    # changesets" step below, which is a normal outcome rather than a failure.
-    if: github.event_name == 'push' || inputs.version
+  release:
+    name: Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags are needed to tell "already released" from "not yet", and the
+          # credential persisted from here is what pushes the new one.
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -59,130 +75,47 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      # Nothing to release is a normal outcome, not a failure — someone may have
-      # run this before any changeset landed.
-      - name: Check for pending changesets
-        id: pending
-        run: |
-          count=$(find .changeset -name '*.md' -not -name 'README.md' | wc -l | tr -d ' ')
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          if [[ "$count" == "0" ]]; then
-            echo "No pending changesets — nothing to version." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      # `bun run version` is `changeset version && node scripts/sync-version.mjs`,
-      # so wails.json comes along with package.json. version_test.go fails the
-      # build if it ever does not.
+      # Pinned to the v1.9.0 commit rather than a moving tag. The input names
+      # changed in v2 (`version` -> `version-script` and so on) and Actions
+      # ignores inputs it does not recognise *silently*, so a float onto v2 would
+      # not fail — it would quietly stop running `bun run version`, skip
+      # sync-version.mjs, and leave wails.json behind package.json until
+      # version_test.go failed the tag build for reasons pointing nowhere near
+      # here.
       #
-      # @changesets/changelog-github — the generator this repo configures — turns
-      # each changeset into a line naming its PR and author, which means an API
-      # call per entry, and it reads the credential from GITHUB_TOKEN and nowhere
-      # else. Without it `changeset version` throws on the first entry and writes
-      # nothing at all. The automatic per-run token is enough: this is metadata
-      # already readable on the repo, not the RELEASE_TOKEN the tag job needs.
-      - name: Apply version bump
-        if: steps.pending.outputs.count != '0'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: bun run version
-
-      - name: Read the new version
-        if: steps.pending.outputs.count != '0'
-        id: v
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      # gh rather than a third-party PR action, for the same reason the release
-      # job in build.yml uses it: this token can write to the repo, and that is
-      # not something to hand to an external action.
-      - name: Open the version PR
-        if: steps.pending.outputs.count != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.v.outputs.version }}"
-          BRANCH="release/v${VERSION}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add -A
-          git commit -m "chore(release): v${VERSION}"
-          git push --force origin "$BRANCH"
-
-          # --force above plus this guard makes the job re-runnable: a second run
-          # updates the existing PR instead of failing on a duplicate.
-          # printf rather than a multi-line string literal: every line inside a
-          # YAML block scalar has to be indented to stay in the block, and that
-          # indentation would travel into the PR body — where four spaces makes
-          # markdown render the paragraph as a code block.
-          BODY=$(printf '%s\n\n%s' \
-            "Consumes the pending changesets. Merging this pushes the \`v${VERSION}\` tag, which starts the Build workflow." \
-            "Maintained automatically: force-updated on every push to main while changesets are pending, so the version and changelog always reflect what has landed. Nothing is tagged or published until this is merged.")
-
-          if ! gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "chore(release): v${VERSION}" \
-              --body "$BODY"
-          fi
-          echo "Opened release/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-
-  # ── Tag once the version PR merges ──────────────────────────────────────
-  tag:
-    name: Tag
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      # Tags are needed to tell "already released" from "not yet".
-      - uses: actions/checkout@v4
+      # `version` is `changeset version && node scripts/sync-version.mjs`, so
+      # wails.json comes along with package.json.
+      #
+      # `publish` is a misnomer for this repo — there is no npm package, the root
+      # package.json is only a version anchor — but it is **required**, and not
+      # because tagging is being hand-rolled. The action
+      # does no tagging of its own: pushing the tag and opening the release both
+      # live inside its runPublish, and its dispatch switch opens with
+      #
+      #   case !hasChangesets && !hasPublishScript:
+      #     core.info("... Not publishing because no publish script found."); return
+      #
+      # So with this line absent, merging the version PR does nothing at all —
+      # no tag, no release, no build, and an info-level log as the only trace.
+      #
+      # `changeset tag` rather than `changeset publish`, which would attempt a
+      # registry call. Passed inline: it is one command, so a package.json script
+      # would only add a name to look up. `version` earns its script because it is
+      # two commands that must not come apart.
+      #
+      # If the root package.json ever goes back to `private: true`, tagging then
+      # depends on `privatePackages.tag` in .changeset/config.json — which is set,
+      # precisely so that flip cannot silently stop this printing a "New tag:"
+      # line and take the whole release chain down with nothing red.
+      #
+      # @changesets/changelog-github makes an API call per entry to name each
+      # changeset's PR and author, and reads its credential from GITHUB_TOKEN.
+      # The action passes github-token through to both scripts, so that is
+      # covered.
+      - uses: changesets/action@3841a0683d3cfa6dae0f9bb335290003010fe3f0 # v1.9.0
         with:
-          fetch-depth: 0
-          # A tag pushed with the default GITHUB_TOKEN does not start another
-          # workflow — GitHub blocks that to stop a workflow looping on itself.
-          # So build.yml would never see it. RELEASE_TOKEN (a PAT with `contents:
-          # write`) is what makes the handoff work; without it the tag is still
-          # created and the step below says how to start the build by hand.
-          token: ${{ secrets.RELEASE_TOKEN || github.token }}
-
-      - name: Tag if this is a new version
-        env:
-          HAS_PAT: ${{ secrets.RELEASE_TOKEN != '' }}
-        run: |
-          set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
-
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "$TAG already exists — nothing to do." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          # A version bump with changesets still pending means someone edited
-          # package.json by hand mid-flight. Tagging then would release a version
-          # whose changelog is incomplete.
-          if [[ $(find .changeset -name '*.md' -not -name 'README.md' | wc -l) -ne 0 ]]; then
-            echo "Version is $VERSION but changesets are still pending — not tagging." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "$TAG"
-          git push origin "$TAG"
-
-          if [[ "$HAS_PAT" == "true" ]]; then
-            echo "Pushed $TAG — Build is starting." >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "Pushed **$TAG**, but with the default token, so Build did not start."
-              echo ""
-              echo "Either add a \`RELEASE_TOKEN\` secret, or re-push the tag locally:"
-              echo '```'
-              echo "git fetch --tags && git push --force origin $TAG"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          version: bun run version
+          publish: bunx changeset tag
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+          github-token: ${{ secrets.RELEASE_TOKEN }}

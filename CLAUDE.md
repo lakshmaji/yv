@@ -2550,3 +2550,173 @@ looking could explain. `teardown` now clears it, and
 | `frontend/src/{App,store,types,wails}.ts` | `peer:unreachable`, `unreachable` signal, `ShareStatus` types |
 | `frontend/src/styles.css` | `.nodev-blocked-hint`, `.nodev-cmd`, `.nodev-detail*` |
 | `RELEASING.md` | Why the installer and the zip now behave differently |
+
+---
+
+## Fixed: a release published a bare tag and no installers
+
+### The symptom, and what it was not
+
+`v0.2.0` offered only "Source code (zip / tar.gz)". Every installer had been
+built — the DMG, the NSIS `-setup.exe`, the `.zip`, the `.deb`, the tarball and
+both AppImages — and none was ever attached.
+
+It was read as "the artifacts repo we compare against has no releases either, so
+attachments must hang off tags". They do not, and it cannot: a tag is a pointer
+to a commit and has nowhere to put a file. Only a Release object has assets, and
+`lakshmaji-till/artifacts` has nine of them — its tags page lists those tags
+*because* each belongs to a release. `yv` had none:
+`gh api repos/lakshmaji/yv/releases --jq length` → `0`, and
+`releases/tags/v0.2.0` → **404**. The page renders anyway because GitHub
+synthesises a tag view for any tag, showing the two source archives it generates
+on the fly. That synthesised page is the whole resemblance.
+
+### The cause was the token, not the packaging
+
+`build.yml` was correct and untouched by the diagnosis. It had simply never run
+at a tag — every run in the repo's history was on `main`:
+
+```
+gh api repos/lakshmaji/yv/actions/runs \
+  --jq '.workflow_runs[] | select(.event=="push") | .head_branch'
+```
+
+GitHub suppresses workflow triggers for anything pushed with the automatic
+`GITHUB_TOKEN`, so a tag pushed by `github-actions[bot]` is a tag `build.yml`
+never sees. The old `tag` job pushed with `github.token` and **exited 0**, saying
+so only in a step summary. A green run that released nothing is the worst
+available failure mode, and it is the one this had.
+
+The reference workflow makes the same trip work for exactly one reason, visible
+in its run list: `actor` on every tag push is a person, never the bot.
+
+### changesets/action replaced all of the shell
+
+Gone: the `find .changeset` pending count, the `git checkout -b` / commit /
+`push --force` block, the `gh pr view` guard around `gh pr create` with its
+`printf`-built body, and the entire second `tag` job that re-derived the version.
+Two jobs became one step.
+
+Three properties made it fit without a custom tag script, all verified against
+the installed CLI rather than assumed:
+
+- **The tag is already spelled `v0.2.1`.** `tool === "root"` — a single-package
+  repo, which is what this is — takes the `v${version}` branch, matching
+  `build.yml`'s existing `tags: ["v*"]`.
+- **Idempotency is built in**, and checks the *remote* as well as local tags, so
+  re-running cannot double-tag.
+- **Whether it tags at all depends on the `private` flag.** changesets skips
+  private packages unless `privatePackages.tag` is on, and the root package.json
+  used to be `private: true` — so tagging was off. It is now `private: false`, so
+  tagging needs no opt-in, and `privatePackages: { version: true, tag: true }` is
+  kept as a guard rather than a switch. This is the sharp edge of the whole
+  arrangement, and the reason for the belt: with neither in place `changeset tag`
+  prints nothing, the action sees no `New tag:` line, and the release does not
+  happen — silently, exit 0. Proven every way round in a scratch repo before
+  being relied on.
+
+  The cost of `private: false` is a lost guard, and it is worth naming: `private:
+  true` is what makes an accidental `npm publish` — or a `changeset publish`
+  copied in from another repo — impossible. This is a Go/Wails desktop app with
+  no npm package to its name, so nothing should ever publish `yv` to a registry;
+  the only thing stopping it now is that no workflow calls publish.
+
+`publish` is a misnomer here and reads like something that could be dropped —
+there is no npm package, only a version anchor, and the action looks like it
+should tag by itself. It does not, and this is the one line whose removal would
+quietly undo the whole fix. Pushing the tag and opening the release both live
+inside the action's `runPublish`, and its dispatch switch opens with:
+
+```ts
+case !hasChangesets && !hasPublishScript:
+  core.info("… Not publishing because no publish script found.");
+  return;
+```
+
+So without it, merging the version PR does nothing at all — no tag, no release,
+no build — and leaves an info-level log as the only trace. `changeset tag` rather
+than `changeset publish`, which would attempt a registry call. Passed inline: it
+is one command, so a `package.json` script would only add a name to look up,
+where `version` earns its script by being two commands that must not come apart.
+
+**The action is pinned to a commit, not a tag.** v2 renamed every input
+(`version` → `version-script` and so on) and Actions ignores unrecognised inputs
+*silently* — so a float onto v2 would not fail. It would quietly stop running
+`bun run version`, skip `sync-version.mjs`, and leave `wails.json` behind
+`package.json` until `version_test.go` failed the tag build for reasons pointing
+nowhere near the cause.
+
+`RELEASE_TOKEN` is now required rather than optional, and goes on
+**`actions/checkout`** as well as the action: `commitMode` defaults to `git-cli`,
+so the push uses the remote checkout configured. A token given only to the action
+would leave the tag being pushed by the bot again.
+
+### Upload, not create
+
+`changesets/action` opens the Release itself, reading `CHANGELOG.md` and using
+that version's entry as the body — the same extraction `build.yml` was doing in
+`awk` from the same file, so that step is deleted. But it opens it on `ubuntu`
+seconds after the tag is pushed, minutes before any binary exists, so
+`build.yml` now *uploads* onto it (`--clobber`, so a re-run replaces rather than
+collides).
+
+`createGithubReleases` is left at its default `true`, and that is load-bearing:
+in the root-package branch `git.pushTag` sits **inside** that conditional. Turning
+it off to avoid the briefly-empty Release would stop the tag being pushed at all,
+which is the original bug wearing a different hat.
+
+### `workflow_dispatch` is gone from both workflows
+
+It was never the mechanism in the reference either — its run history shows one
+dispatch, on a feature branch, against nine tag pushes.
+
+Removing it from `build.yml` cost the `signing` / `notarize` inputs, which gated
+the OS code-signing steps. They are now the repository variables `SIGNING` and
+`NOTARIZE`, compared against the string `'true'` — `vars.*` is always a string, so
+a bare truthiness check would treat `'false'` as on. Signing was always a property
+of the *build*, not of how the run was started; a tag push cannot carry inputs, so
+as inputs they could never have applied to a real release.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `package.json` | `private: true` → `false`, so tagging needs no opt-in |
+| `.changeset/config.json` | `privatePackages: { version: true, tag: true }` — inert now, and the only thing that would keep tagging alive if `private` flips back |
+| `.github/workflows/release.yml` | Two hand-rolled jobs → one `changesets/action` step, pinned to the v1.9.0 commit; `RELEASE_TOKEN` on both checkout and action; `publish: bunx changeset tag` inline rather than a package.json script |
+| `.github/workflows/build.yml` | New `changeset` job; `workflow_dispatch` and its inputs removed; signing gated on `vars.SIGNING` / `vars.NOTARIZE`; notes extraction deleted; `gh release create` → `gh release upload --clobber` |
+| `RELEASING.md` | `RELEASE_TOKEN` now required and why; the tag step; variables instead of inputs; four new troubleshooting entries |
+
+### Also added: a PR must carry a changeset
+
+changesets' own automation guide frames this as two separate decisions — ensuring
+PRs *have* changesets, and running version/publish — and only the second was
+wired up. The gap was quiet in the worst way: a PR landing without a changeset
+failed nothing, it just meant no version PR was ever opened, and the change sat
+released to nobody until somebody noticed the version had not moved.
+
+`changeset status --since` is the blocking half. It is its own job rather than a
+step in `test`, because a missing changeset is release hygiene, not a broken
+build — it should go red without standing between a commit and its artifacts, and
+it skips the Go and frontend toolchains entirely so it answers in seconds.
+
+Two things it has to know about. `--since` needs a merge base, so `fetch-depth: 0`
+plus an explicit fetch of the base branch — a `pull_request` checkout gives the
+merge ref, and a fork PR (which a public repo gets) has no `origin/<base>` to
+compare against. And it exempts `changeset-release/<base>`, the branch
+changesets/action raises the version PR from (`run.ts:286`), whose whole purpose is
+to *consume* the changesets and which would therefore fail the check every time.
+
+The non-blocking complement is [changeset-bot](https://github.com/apps/changeset-bot),
+which comments on PRs missing a changeset. It is a GitHub App and has to be
+installed on the repo by hand; nothing here depends on it.
+
+### Not verified
+
+The handoff cannot be exercised without cutting a release. Proven locally: the
+resolved config (`tool = root`), that the `private` flag and `privatePackages.tag`
+between them decide whether `v9.9.9` is tagged (all combinations tried in a
+scratch repo), that `bun run version` moves `package.json` and `wails.json`
+together and writes the changelog entry, that `changeset tag` then emits
+`New tag:  v0.2.1`, and that it skips a version already tagged on the remote.
+`v0.2.0` was deliberately left bare rather than backfilled.

@@ -74,13 +74,21 @@ Or paste it at Settings → Secrets and variables → Actions. Then put a copy
 somewhere offline, and delete the local file once **both** are done — the offline
 copy is the one that matters, since this key cannot be regenerated.
 
-### 4. Optional: `RELEASE_TOKEN`
+### 4. Required: `RELEASE_TOKEN`
 
-A tag pushed with the default `GITHUB_TOKEN` does not start another workflow —
-GitHub blocks that so a workflow cannot loop on itself — so `build.yml` would
-never see it. A `RELEASE_TOKEN` secret (a PAT with `contents: write`) makes the
-handoff automatic. Without it the tag is still created and the job summary prints
-the one command needed to start the build by hand.
+A PAT with `contents: write` and `pull-requests: write`. **Not optional** — it is
+the mechanism, not a convenience.
+
+A tag pushed with the default `GITHUB_TOKEN` does not start another workflow;
+GitHub blocks that so a workflow cannot loop on itself. So a tag pushed by
+`github-actions[bot]` is one `build.yml` never sees, which is exactly how `v0.2.0`
+came to exist as a bare tag with every installer built and none attached. The job
+that pushed it exited 0.
+
+It goes on **`actions/checkout`** as well as on the action, because
+`changesets/action` defaults to `commitMode: git-cli` and therefore pushes through
+the remote checkout configured. A token given only to the action would leave the
+tag being pushed by the bot again.
 
 ---
 
@@ -98,9 +106,9 @@ release body, and the release body is what the update dialog shows.
 
 ### 2. Version
 
-Run the **Release** workflow from the Actions tab with `version` checked. It
-consumes the pending changesets, bumps `package.json`, writes `CHANGELOG.md`,
-mirrors the number into `wails.json`, and opens a PR.
+Nothing to run. `changesets/action` keeps one version PR open and up to date on
+every push to `main` while anything is pending — consuming the changesets, bumping
+`package.json`, writing `CHANGELOG.md` and mirroring the number into `wails.json`.
 
 Or locally:
 
@@ -121,7 +129,21 @@ inside it — and the updater then compares the wrong number.
 
 ### 3. Merge, and the tag follows
 
-Merging the version PR trips the `tag` job, which pushes `v<version>`.
+Merging the version PR leaves nothing pending, so the action runs its `publish`
+command (`bunx changeset tag`) instead of opening another one. Despite the name it
+is not optional: the action does no tagging outside `runPublish`, and skips
+straight past with an info log if no publish command is set. That writes
+`v<version>` — the
+`v` prefix is not configured anywhere, it is what changesets uses for a
+single-package repo — and the action pushes it and opens the GitHub Release with
+that version's `CHANGELOG.md` entry as the body.
+
+The root `package.json` is `private: false`, so tagging needs no further opt-in.
+`privatePackages: { version: true, tag: true }` is set in `.changeset/config.json`
+anyway: changesets skips private packages by default, so if `private` is ever set
+back to `true`, those flags are the only thing keeping this step alive — without
+them `changeset tag` prints nothing and exits 0, and the release quietly does not
+happen.
 
 ### 4. Build publishes
 
@@ -133,7 +155,12 @@ The tag starts `build.yml`, which:
 - packages a DMG, a Windows `-setup.exe`, a `.zip`, a `.deb`, a tarball and an
   AppImage;
 - writes a `.sha256` and a `.sig` beside every artifact;
-- creates the GitHub Release with the CHANGELOG section as its body.
+- uploads all of it onto the Release that `release.yml` already opened.
+
+Upload rather than create, because the Release exists minutes before any binary
+does — it is opened on `ubuntu` seconds after the tag is pushed. That is also why
+`build.yml` no longer extracts the changelog section itself: `changesets/action`
+does the same extraction from the same file when it opens the Release.
 
 Two packaging tools are resolved by the workflow rather than assumed: `create-dmg`
 (installed with brew; the DMG script falls back to a plain image without it) and
@@ -196,8 +223,12 @@ and what to do about it.
 ## Code signing
 
 **Not set up yet** — there is no Apple Distribution certificate and no Windows
-Authenticode certificate. The steps exist in `build.yml` behind a
-`workflow_dispatch` input defaulting to false, so they never run on a push.
+Authenticode certificate. The steps exist in `build.yml` behind the repository
+variables `SIGNING` and `NOTARIZE`, which are unset, so they never run.
+
+They were `workflow_dispatch` inputs, which made signing a property of *how a run
+was started* — no use to a release, which starts from a tag push and cannot carry
+inputs. A variable is the same off-by-default switch with nothing manual about it.
 
 Keep the two kinds of signing straight:
 
@@ -212,8 +243,10 @@ Gatekeeper's "cannot be verified" on macOS, SmartScreen on Windows. Neither recu
 on an auto-update — the updater replaces files in place and never goes through the
 browser download path that applies the quarantine attribute.
 
-When the certificates arrive, add these secrets and run the workflow with
-`signing` (and `notarize`) checked:
+When the certificates arrive, add these secrets and set `SIGNING` (and `NOTARIZE`)
+to `true` under Settings → Secrets and variables → Actions → Variables. Both are
+compared against the string `'true'`, since `vars.*` is always a string and any
+non-empty value — `'false'` included — would otherwise read as on:
 
 | Secret | For |
 |---|---|
@@ -250,8 +283,26 @@ YV_UPDATE_PRIVATE_KEY="$(cat yv-update-private.pem)" go run ./cmd/sign-artifact 
 gh release upload v0.1.0 dist/*.sha256 dist/*.sig
 ```
 
-**The tag was pushed but nothing built.** No `RELEASE_TOKEN`. Re-push the tag from
-a local checkout: `git push --force origin v0.1.0`.
+**The tag was pushed but nothing built.** `RELEASE_TOKEN` is missing or expired, so
+the tag went up as `github-actions[bot]` and raised no event. Confirm with
+`gh run list` — a healthy release shows a run whose ref is the tag; check the actor
+on it, which should be a person and never the bot. Fix the token, then re-push the
+tag from a local checkout: `git push --force origin v0.1.0`.
+
+**A Release exists but has no installers.** The tag triggered nothing (as above),
+or `build.yml` failed before its upload step. The Release itself comes from
+`release.yml` and is created before any binary exists, so an empty one is normal
+for the few minutes the builds take — and permanent if they fail. Re-run the build
+for that tag; the upload uses `--clobber` and is safe to repeat.
+
+**The version PR stopped being updated, or the release did not tag.** Check the
+root `package.json` still says `private: false` **or** `.changeset/config.json`
+still has `privatePackages.tag: true`. If neither holds, `changeset tag` is a no-op
+that exits 0 and the whole chain goes quiet with nothing red.
+
+**A PR is red on "Changeset present".** It changes something releasable and carries
+no `.changeset/*.md`. Add one with `bun changeset`, or `bunx changeset add --empty`
+if it genuinely should ship no release (tests, CI, tooling).
 
 **A user reports "cannot verify updates".** They are on a build made before the
 public key was compiled in. They need to download once by hand; every release

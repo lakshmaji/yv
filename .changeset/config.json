@@ -6,6 +6,18 @@
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
+  "// privatePackages": [
+    "Inert while the root package.json says `private: false`, and kept anyway.",
+    "changesets skips versioning and tagging private packages by default, so if",
+    "`private` is ever set back to true — which is the natural instinct for a",
+    "desktop app that must never reach npm — these two flags are the only thing",
+    "keeping the release chain alive. Without them `changeset tag` prints",
+    "nothing and exits 0: no tag, so build.yml never runs, so a release with no",
+    "installers, and nothing red anywhere. That is the exact failure v0.2.0 had.",
+    "See changesets' docs/versioning-apps.md, which prescribes both flags for",
+    "apps and non-npm packages."
+  ],
+  "privatePackages": { "version": true, "tag": true },
   "updateInternalDependencies": "patch",
   "ignore": []
 }
