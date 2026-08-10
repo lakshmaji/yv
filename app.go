@@ -272,15 +272,6 @@ func (a *App) GetPeers() []models.PeerInfo {
 	return peers
 }
 
-// GetShareStatus reports what discovery can say about itself.
-//
-// Called by the dialog that appears when nothing was found, so that it can tell
-// "nobody is there" apart from "somebody is there and the connection is being
-// refused" — which, before this existed, both read as "no devices nearby".
-func (a *App) GetShareStatus() models.ShareStatus {
-	return a.share.Status()
-}
-
 // InitiateShare offers config to a peer and streams it if they accept.
 //
 // scope is "app" for every project or "project" for one. No code is passed: the

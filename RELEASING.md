@@ -193,20 +193,17 @@ place. Dropping it would leave every installed copy with "no download for this
 platform", permanently. The installer is deliberately not matched — applying it
 would mean a UAC prompt in the middle of an update the user already approved.
 
-### One behavioural difference between the two Windows downloads
+### Neither Windows download touches the firewall
 
-The installer runs elevated, so it adds inbound Windows Firewall rules for
-`yv.exe` (`private,domain` profiles only) and removes them on uninstall. Device
-sharing needs to *accept* connections: libp2p links carry traffic both ways once
-established, so a pair only works if at least one end allows inbound — two
-machines that both filter it discover each other over mDNS and then never
-connect.
+An earlier revision had the installer add inbound Windows Firewall rules for
+`yv.exe`. That was reverted along with the rest of the change it shipped in — see
+the discovery-regression note in `CLAUDE.md`. Both Windows downloads now behave
+identically: no rule is added, and none is removed on uninstall.
 
-**The portable `.zip` gets no rule**, because there is nothing elevated to add
-one. Discovery still finds peers and still works against any peer that accepts
-inbound; against another filtered machine it does not, and the Discovery dialog
-prints the `netsh` command to fix it. Worth knowing before telling someone to
-"just unzip it".
+If a Windows machine turns out to need one, it is a per-program rule (the node
+binds `tcp/0` and `udp/0`, so the ports are ephemeral) on `private,domain` only,
+and it must be re-introduced with the Windows pair actually measured first — not
+inferred from a matrix.
 
 The `.deb` installs to root-owned `/usr/bin`, so replacing the binary would mean a
 password prompt on every update *and* going behind dpkg's back, leaving apt

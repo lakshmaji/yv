@@ -2435,7 +2435,11 @@ work and reading a pixel that is about to be erased is a million wasted ops.
 
 ---
 
-## Fixed: two machines could discover each other and never connect
+## Reverted: "two machines could discover each other and never connect"
+
+**This change was reverted.** It broke Mac↔Ubuntu discovery, which had been
+working, and it was built on a diagnosis that was never measured. Read the
+post-mortem at the end of this section before re-attempting any of it.
 
 ### The symptom, and why it was not what it looked like
 
@@ -2550,6 +2554,84 @@ looking could explain. `teardown` now clears it, and
 | `frontend/src/{App,store,types,wails}.ts` | `peer:unreachable`, `unreachable` signal, `ShareStatus` types |
 | `frontend/src/styles.css` | `.nodev-blocked-hint`, `.nodev-cmd`, `.nodev-detail*` |
 | `RELEASING.md` | Why the installer and the zip now behave differently |
+
+---
+
+## Post-mortem: the above was reverted, and why
+
+Shipping it broke Mac↔Ubuntu discovery **in both directions**. That pair had been
+working; Ubuntu↔Windows was unaffected. So the change fixed a case that could not
+be reproduced and broke one that could.
+
+### The diagnosis was inferred, never measured
+
+The whole argument above rests on "inbound is blocked on the Mac". Nobody ran the
+one command that decides it:
+
+```
+/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+→ Firewall is disabled. (State = 0)
+```
+
+The Mac's application firewall was **off**. It could not have been refusing
+anything, so the Mac↔Windows column of the matrix has some other cause, and the
+Mac↔Ubuntu column — which worked — was never a firewall case at all. A three-row
+table is a hypothesis, not evidence; it is consistent with a firewall and with
+several other things, and only a measurement separates them.
+
+The deeper mistake is that the table was *complete enough to be persuasive*.
+Ubuntu-as-the-permissive-hub explains every cell, which is exactly what made it
+feel proven. An explanation that fits all the data is still worthless if a
+competing one fits it too.
+
+### The regression: the plist keys
+
+The only thing in the change that can alter macOS network behaviour is the eleven
+lines added to `build/darwin/Info{,.dev}.plist`:
+
+```xml
+<key>NSBonjourServices</key>
+<array><string>_yv-share</string></array>
+```
+
+`_yv-share` is **malformed** for that key. Apple requires a fully-qualified DNS-SD
+type — `_name._tcp` or `_name._udp`. It was written to match `share.ServiceTag`,
+which is itself the bare string libp2p hands to zeroconf, producing the
+non-conforming wire type `_yv-share.local.`.
+
+And `NSBonjourServices` **restricts rather than permits**: on macOS 15+ the
+local-network gate narrows the app to the declared types, so a list matching
+nothing is strictly worse than omitting the key — which is the state the app was
+in while it worked. That is a *transmit* block, which is why the Mac stopped both
+announcing and browsing and the failure was symmetric. Ubuntu and Windows read no
+plist, which is why only the Mac pair changed.
+
+The tell, once someone looked: a system `dns-sd` browse made peers appear
+briefly. mDNSResponder is a system process and is not gated; yv's own raw
+multicast is.
+
+### What is still true, and worth keeping
+
+- libp2p connections **are** bidirectional, and `Connect` is a no-op when one
+  exists — so only one end of a pair has to accept inbound. That reasoning is
+  sound; it was applied to a case that had no firewall in it.
+- `greet` **did** discard the dial error, and "found but could not connect" was
+  genuinely indistinguishable from an empty network. Fixing that is worth doing on
+  its own merits, and it is what would have caught this in an hour rather than a
+  release.
+- `teardown` not clearing `started` was a real bug, unrelated to any of the above.
+
+### If any of it is re-attempted
+
+- **The plist keys must not go back as they were.** They would need
+  `share.ServiceTag` changed to a conforming `_yv-share._udp` *and* the plist to
+  match — a **wire-format break**, since a 0.2.x peer browsing `_yv-share` cannot
+  see a peer advertising `_yv-share._udp`. Its own change, its own changeset.
+- **Measure the machine before writing a rule for it.** `socketfilterfw` on macOS,
+  `Get-NetConnectionProfile` and `netsh advfirewall firewall show rule` on Windows.
+  A `profile=private,domain` rule is inert on a network Windows has classified
+  Public, which is the default for an unknown SSID.
+- Ubuntu↔Windows already works, so there may be no Windows firewall problem at all.
 
 ---
 

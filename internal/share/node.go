@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -108,12 +107,7 @@ const (
 const (
 	EventPeerFound = "peer:found"
 	EventPeerLost  = "peer:lost"
-	// EventPeerUnreachable fires when a device was discovered but could not be
-	// connected to. It is not a quieter peer:found — it is the one signal that
-	// separates an empty network from a blocked one, and the UI says something
-	// different for each.
-	EventPeerUnreachable = "peer:unreachable"
-	EventIncoming        = "share:incoming"
+	EventIncoming  = "share:incoming"
 	// EventConnectRequest carries the code this device wants read back to it.
 	EventConnectRequest = "share:connect-request"
 	// EventConnected and EventConnectClosed take that prompt off screen again.
@@ -148,21 +142,6 @@ type peerRec struct {
 	// announced is set once peer:found has been emitted, which is what makes
 	// removal idempotent — peer:lost only fires for a peer the UI knows about.
 	announced bool
-
-	// Why this peer is not on screen, when it is not.
-	//
-	// A record exists the moment mDNS reports the device; it only becomes
-	// announced once we have actually connected to it and read its hello. Those
-	// are very different situations for a user — "nobody is there" versus "they
-	// are there and something is refusing the connection" — and before these
-	// fields the second was indistinguishable from the first, because greet
-	// dropped the error on the floor. See Status.
-	firstSeen time.Time
-	attempts  int
-	lastErr   string
-	// reported keeps peer:unreachable to one event per peer, since mDNS
-	// re-announces roughly once a minute and every retry fails the same way.
-	reported bool
 }
 
 // Node is a running discovery + share endpoint.
@@ -321,27 +300,17 @@ func (n *Node) Start(wailsCtx context.Context) error {
 // list on unmount, so no peer:lost storm is emitted here.
 func (n *Node) Stop() {
 	n.mu.Lock()
-	running := n.started
-	n.mu.Unlock()
-	if !running {
+	if !n.started {
+		n.mu.Unlock()
 		return
 	}
+	n.started = false
+	n.mu.Unlock()
 
-	// teardown clears started itself.
 	n.teardown()
 }
 
 func (n *Node) teardown() {
-	// Cleared here rather than only in Stop, because Start also calls teardown on
-	// its own failure paths. Leaving the flag set there meant the *next*
-	// StartDiscovery returned "ok" with no host at all — so a real failure (the
-	// firewall refusing the mDNS socket, say) reported itself honestly once and
-	// then, as soon as the Discovery view remounted, turned into a silent "no
-	// devices nearby" that no amount of looking could explain.
-	n.mu.Lock()
-	n.started = false
-	n.mu.Unlock()
-
 	if n.cancel != nil {
 		n.cancel()
 	}
@@ -378,60 +347,6 @@ func (n *Node) Peers() []models.PeerInfo {
 	return out
 }
 
-// Status reports what discovery can say about itself, for a UI that has nothing
-// to show and has to explain why.
-//
-// The interesting field is the gap between Seen and Announced. A record is
-// created the instant mDNS reports a device, but a dinosaur is only drawn once
-// fetchHello has connected to it — so a device behind a firewall that refuses
-// unsolicited inbound connections is *found* and never *shown*. Reporting only
-// the announced peers, as Peers does, makes that case identical to an empty
-// network.
-//
-// Read-only and cheap, so a dialog can call it directly.
-func (n *Node) Status() models.ShareStatus {
-	n.mu.Lock()
-	st := models.ShareStatus{
-		Running:     n.started,
-		Seen:        len(n.peers),
-		Unreachable: make([]models.UnreachablePeer, 0, len(n.peers)),
-	}
-	for id, rec := range n.peers {
-		if rec.announced {
-			st.Announced++
-			continue
-		}
-		// A handshake still in flight is not a failure, and saying so with an
-		// empty reason would let the UI report one. Spelled out here rather than
-		// left for the caller to infer from `attempts`.
-		reason := rec.lastErr
-		if reason == "" {
-			reason = "still connecting"
-		}
-		st.Unreachable = append(st.Unreachable, models.UnreachablePeer{
-			ID:     id.String(),
-			Reason: reason,
-		})
-	}
-	n.mu.Unlock()
-
-	// Map iteration order is random; a dialog listing these should not reshuffle
-	// them every time it reads, and a test should not have to sort them itself.
-	sort.Slice(st.Unreachable, func(i, j int) bool {
-		return st.Unreachable[i].ID < st.Unreachable[j].ID
-	})
-
-	// Outside the lock: the host has its own, and holding both in one order here
-	// while a libp2p callback takes them in the other is how deadlocks are made.
-	if h := n.host; h != nil {
-		st.PeerID = h.ID().String()
-		for _, a := range h.Addrs() {
-			st.ListenAddrs = append(st.ListenAddrs, a.String())
-		}
-	}
-	return st
-}
-
 // --- discovery ---
 
 // HandlePeerFound implements mdns.Notifee. It is called repeatedly for a live
@@ -448,11 +363,7 @@ func (n *Node) HandlePeerFound(ai peer.AddrInfo) {
 		rec = &peerRec{}
 		n.peers[ai.ID] = rec
 	}
-	now := time.Now()
-	if !known {
-		rec.firstSeen = now
-	}
-	rec.lastSeen = now
+	rec.lastSeen = time.Now()
 	if len(ai.Addrs) > 0 {
 		rec.addrs = ai.Addrs
 	}
@@ -483,28 +394,11 @@ func (n *Node) greet(ai peer.AddrInfo) {
 	if err != nil {
 		// Leave the record in place: mDNS will re-announce and we will retry.
 		// If the peer is genuinely gone, the TTL sweep collects it.
-		//
-		// The error is kept rather than dropped. It is the only evidence that a
-		// device is on the network and something between here and there is
-		// refusing the connection — most often a host firewall declining
-		// unsolicited inbound, which is invisible from this side otherwise.
-		rec.attempts++
-		rec.lastErr = err.Error()
-		first := !rec.reported
-		rec.reported = true
 		n.mu.Unlock()
-
-		if first {
-			n.emit(EventPeerUnreachable, models.UnreachablePeer{
-				ID:     ai.ID.String(),
-				Reason: err.Error(),
-			})
-		}
 		return
 	}
 	rec.info = info
 	rec.announced = true
-	rec.lastErr = ""
 	n.mu.Unlock()
 
 	if h := n.host; h != nil {

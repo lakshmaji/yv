@@ -148,34 +148,6 @@ export interface PeerInfo {
 }
 
 /**
- * A device mDNS found that could not be connected to.
- *
- * No name: the name arrives in the hello, which is the exchange that failed.
- */
-export interface UnreachablePeer {
-  id: string;
-  reason: string;
-}
-
-/**
- * What discovery can say about itself when nothing appeared.
- *
- * `seen > announced` is the field that matters: a peer record exists as soon as
- * mDNS reports a device, but a dinosaur is only drawn once we have connected to
- * it. So a machine whose firewall refuses unsolicited inbound connections is
- * found and never shown — and that is a completely different message to the user
- * than an empty network.
- */
-export interface ShareStatus {
-  running: boolean;
-  peerId: string;
-  listenAddrs: string[] | null;
-  seen: number;
-  announced: number;
-  unreachable: UnreachablePeer[] | null;
-}
-
-/**
  * Bytes moved so far on a file transfer, throttled by the sender.
  *
  * `total` is what the offer promised, so a bar can be drawn before the first

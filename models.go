@@ -29,11 +29,9 @@ type (
 	ActivityHeatmap    = models.ActivityHeatmap
 	MetricsStorageInfo = models.MetricsStorageInfo
 
-	PeerInfo        = models.PeerInfo
-	SharePayload    = models.SharePayload
-	ShareOffer      = models.ShareOffer
-	ShareStatus     = models.ShareStatus
-	UnreachablePeer = models.UnreachablePeer
+	PeerInfo     = models.PeerInfo
+	SharePayload = models.SharePayload
+	ShareOffer   = models.ShareOffer
 
 	UpdateState = models.UpdateState
 )

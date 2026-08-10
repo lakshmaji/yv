@@ -43,7 +43,6 @@ import type {
   ResourceStats,
   ProcessStats,
   PeerInfo,
-  UnreachablePeer,
   IncomingShare,
   IncomingConnect,
   ShareProgress,
@@ -51,7 +50,6 @@ import type {
 } from './types';
 import {
   setPeers,
-  setUnreachable,
   setSharePeer,
   setIncomingConnect,
   shareBusy,
@@ -240,15 +238,6 @@ export default function App() {
         // mDNS re-announces periodically, so dedup or a peer grows a new
         // dinosaur every announcement.
         setPeers(prev => (prev.some(x => x.id === p.id) ? prev : [...prev, p]));
-        // A retry that finally succeeded: it has a dinosaur now, so it is no
-        // longer something to explain.
-        setUnreachable(prev => prev.filter(x => x.id !== p.id));
-      }),
-      // Discovered and refused. Not a quieter peer:found — it is what lets the
-      // empty-sweep dialog say "they are there and something is blocking us"
-      // instead of "nobody is there", which are the same screen otherwise.
-      runtime.EventsOn('peer:unreachable', (u: UnreachablePeer) => {
-        setUnreachable(prev => (prev.some(x => x.id === u.id) ? prev : [...prev, u]));
       }),
       runtime.EventsOn('peer:lost', (e: { id: string }) => {
         setPeers(prev => prev.filter(x => x.id !== e.id));
