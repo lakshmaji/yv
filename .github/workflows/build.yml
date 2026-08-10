@@ -6,20 +6,6 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      # Off by default and unavailable on a push, so the signing steps below are
-      # inert until someone deliberately asks for them. Until the certificates
-      # exist there is nothing to ask for; the steps are here so that adding them
-      # later is a secrets change rather than a redesign.
-      signing:
-        description: "Code-sign the app (needs Apple and Windows certificates)"
-        type: boolean
-        default: false
-      notarize:
-        description: "Notarize the macOS build (requires signing)"
-        type: boolean
-        default: false
 
 # Read-only by default; only the release job widens this.
 permissions:
@@ -30,6 +16,54 @@ env:
   BUN_VERSION: "1.3.9"
 
 jobs:
+  # ── Every PR carries a changeset ────────────────────────────────────────
+  #
+  # The blocking half of what changesets calls out as two separate decisions:
+  # *ensuring* PRs have changesets, and *running* version/publish. Only the
+  # second was wired up, and the gap is quiet in the worst way — a PR that lands
+  # without a changeset does not fail anything, it just means no version PR is
+  # ever opened and the change sits released-to-nobody until someone notices the
+  # version has not moved.
+  #
+  # Deliberately its own job, not a step in `test`: a missing changeset is a
+  # release-hygiene problem, not a broken build, so it should go red on its own
+  # without standing between a commit and its artifacts. It also skips the whole
+  # Go and frontend toolchain, so it answers in seconds.
+  #
+  # `--since` needs a merge base, hence `fetch-depth: 0` and an explicit fetch of
+  # the base branch: on a `pull_request` event checkout gives the merge ref, and
+  # a fork PR has no `origin/<base>` remote-tracking ref to compare against.
+  #
+  # Exempts the version PR, which changesets/action raises from
+  # `changeset-release/<base>` (run.ts:286) and whose entire purpose is to
+  # *consume* the changesets — it would fail this check every single time.
+  #
+  # For a PR that genuinely should release nothing (tests, CI, tooling),
+  # `bunx changeset add --empty` records that intent instead of bypassing it.
+  changeset:
+    name: Changeset present
+    if: github.event_name == 'pull_request' && github.head_ref != format('changeset-release/{0}', github.base_ref)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the base branch
+        run: git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # Exits 1 when packages changed but no changeset did. Says nothing when
+      # nothing releasable changed, so a docs-only PR passes untouched.
+      - name: changeset status
+        run: bunx changeset status --since="origin/${GITHUB_BASE_REF}"
+
   # ── Tests ───────────────────────────────────────────────────────────────
   #
   # Gates the builds, so a broken commit cannot produce a downloadable artifact
@@ -246,10 +280,19 @@ jobs:
       # The updater works with or without these; what they change is the warning
       # a new user sees when they download the app by hand.
       #
-      # Both are gated on the workflow_dispatch input, so nothing here runs on a
-      # push and today's unsigned path is exactly preserved.
+      # Both are gated on repository variables, so nothing here runs until
+      # someone sets one and today's unsigned path is exactly preserved. These
+      # were `workflow_dispatch` inputs, which made signing a property of how a
+      # run was started — no use for a release, which starts from a tag push. A
+      # variable is the same off-by-default switch without a manual trigger, and
+      # adding the certificates stays a settings change rather than a redesign.
+      #
+      # `vars.*` is always a string, so it is compared against 'true' rather than
+      # used as a boolean — an unset variable is '' and falsy either way, but
+      # `vars.SIGNING` alone would be truthy for *any* non-empty value, 'false'
+      # included.
       - name: Sign the macOS app
-        if: matrix.name == 'macos-arm64' && inputs.signing
+        if: matrix.name == 'macos-arm64' && vars.SIGNING == 'true'
         env:
           CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -286,7 +329,7 @@ jobs:
           codesign --verify --strict --verbose=2 build/bin/yv.app
 
       - name: Notarize the macOS app
-        if: matrix.name == 'macos-arm64' && inputs.signing && inputs.notarize
+        if: matrix.name == 'macos-arm64' && vars.SIGNING == 'true' && vars.NOTARIZE == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -310,7 +353,7 @@ jobs:
       # WebView2 bootstrapper are already on disk from the build step, so it
       # needs no network and takes a second.
       - name: Sign the Windows executable and installer
-        if: matrix.name == 'windows-amd64' && inputs.signing
+        if: matrix.name == 'windows-amd64' && vars.SIGNING == 'true'
         shell: bash
         env:
           CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -485,8 +528,20 @@ jobs:
 
   # ── Release ─────────────────────────────────────────────────────────────
   #
-  # Tag pushes additionally get a GitHub Release with every artifact attached, so
-  # there is a stable download URL rather than one that expires with the run.
+  # release.yml has already created the Release for this tag, with that version's
+  # CHANGELOG.md entry as the body — changesets/action does exactly the section
+  # extraction this job used to do in awk, from the same source, so that step is
+  # gone. What is missing at that point is the artifacts: the Release is opened on
+  # ubuntu seconds after the tag is pushed, long before three platforms have
+  # finished building. This job fills it in, so there is a stable download URL
+  # rather than one that expires with the run.
+  #
+  # Hence upload rather than create. Ordering is not a race: changesets/action
+  # awaits pushTag before createRelease, and this job waits on test *and* build,
+  # so the Release is minutes old by the time the upload runs. If it is somehow
+  # absent, `gh release upload` fails loudly, which is the right outcome — a
+  # release with no installers attached is the exact defect being fixed, and it
+  # should never again be something a green run can leave behind.
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -495,10 +550,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Needed for the changelog; the artifacts come from the build job.
-      - uses: actions/checkout@v4
-
       # merge-multiple flattens the three per-platform artifacts into one dir.
+      # No checkout: the body came from release.yml and the artifacts come from
+      # the build job, so nothing here reads the repo.
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -507,41 +561,13 @@ jobs:
       - name: List assets
         run: ls -lh dist
 
-      # The release body is what the update dialog shows, so it should be what a
-      # contributor actually wrote in their changeset rather than a generated
-      # list of commit subjects.
-      #
-      # Falls back to --generate-notes if the section cannot be found: a
-      # malformed changelog should degrade to the old behaviour, not block a
-      # release whose artifacts are already built and signed.
-      - name: Extract release notes
-        id: notes
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [[ -f CHANGELOG.md ]] && \
-             awk -v v="## $VERSION" '$0 == v {found=1; next} /^## /{if (found) exit} found' \
-               CHANGELOG.md > /tmp/notes.md && [[ -s /tmp/notes.md ]]; then
-            echo "file=/tmp/notes.md" >> "$GITHUB_OUTPUT"
-          else
-            echo "No CHANGELOG.md section for $VERSION — falling back to generated notes." >> "$GITHUB_STEP_SUMMARY"
-            echo "file=" >> "$GITHUB_OUTPUT"
-          fi
-
       # The gh CLI rather than a third-party action: it is preinstalled, and this
       # avoids trusting an external action with a write-scoped token.
-      - name: Create release
+      #
+      # --clobber so a re-run of a failed release replaces its assets instead of
+      # failing on the ones that did upload.
+      - name: Attach installers to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          NOTES: ${{ steps.notes.outputs.file }}
-        run: |
-          if [[ -n "$NOTES" ]]; then
-            NOTES_ARG=(--notes-file "$NOTES")
-          else
-            NOTES_ARG=(--generate-notes)
-          fi
-          gh release create "${GITHUB_REF#refs/tags/}" \
-            --title "${GITHUB_REF#refs/tags/}" \
-            "${NOTES_ARG[@]}" \
-            --verify-tag \
-            dist/*
+        run: gh release upload "${GITHUB_REF#refs/tags/}" --clobber dist/*
