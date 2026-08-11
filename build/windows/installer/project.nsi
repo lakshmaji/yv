@@ -103,42 +103,6 @@ Section
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
-    # Device discovery needs to accept unsolicited inbound connections, and
-    # Windows blocks those by default. Without a rule here, two machines that
-    # both filter inbound can discover each other over mDNS and then never
-    # connect — libp2p links are bidirectional, so a pair only works if at least
-    # one end accepts. That failure is silent from the app's side, which is what
-    # made it hard to diagnose the first time.
-    #
-    # Per-program, not per-port: the app binds ephemeral TCP and UDP ports
-    # (internal/share/node.go listens on tcp/0 and udp/0), so they differ every
-    # launch and no port rule could be written.
-    #
-    # private,domain and deliberately never public. Opening unsolicited inbound
-    # on a café network is not something to do quietly on a user's behalf, and
-    # yv's connect-code gate assumes a network the user chose to join.
-    #
-    # Note this is also why the portable .zip behaves differently: it has no
-    # installer, so it never gets these rules.
-    DetailPrint "Allowing yv through Windows Firewall (private networks)"
-    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="yv (TCP-In)"'
-    Pop $0
-    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="yv (UDP-In)"'
-    Pop $0
-    nsExec::ExecToLog 'netsh advfirewall firewall add rule name="yv (TCP-In)" dir=in action=allow program="$INSTDIR\${PRODUCT_EXECUTABLE}" protocol=TCP profile=private,domain enable=yes'
-    Pop $0
-    # Not fatal. A machine whose policy forbids this still runs yv perfectly
-    # against a peer that accepts inbound, and the Discovery dialog now explains
-    # the rest — so failing the whole install here would cost more than it saves.
-    ${If} $0 != 0
-        DetailPrint "Could not add the inbound TCP rule (code $0). yv will still run."
-    ${EndIf}
-    nsExec::ExecToLog 'netsh advfirewall firewall add rule name="yv (UDP-In)" dir=in action=allow program="$INSTDIR\${PRODUCT_EXECUTABLE}" protocol=UDP profile=private,domain enable=yes'
-    Pop $0
-    ${If} $0 != 0
-        DetailPrint "Could not add the inbound UDP rule (code $0). yv will still run."
-    ${EndIf}
-
     !insertmacro wails.writeUninstaller
 SectionEnd
 
@@ -151,13 +115,6 @@ Section "uninstall"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
-
-    # Leaving a firewall exception behind for a program that is no longer
-    # installed is exactly the kind of stale hole nobody goes looking for.
-    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="yv (TCP-In)"'
-    Pop $0
-    nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="yv (UDP-In)"'
-    Pop $0
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols

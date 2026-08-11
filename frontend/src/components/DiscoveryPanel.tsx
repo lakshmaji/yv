@@ -19,8 +19,6 @@ import {
   peers,
   setPeers,
   peerByName,
-  unreachable,
-  setUnreachable,
   openShareWith,
   shareStage,
   sharePeer,
@@ -406,16 +404,6 @@ export default function DiscoveryPanel() {
    * window a discovered device can end up with no dinosaur. Saying so is the
    * difference between "nobody is there" and "you cannot reach them from here".
    */
-  /**
-   * Devices found over mDNS that we could not connect to.
-   *
-   * Excludes handshakes still in flight, which have not failed yet — the same
-   * filter NoDevicesModal applies, and for the same reason.
-   */
-  const blockedPeers = createMemo(() =>
-    unreachable().filter((p) => p.reason !== 'still connecting'),
-  );
-
   const peerStatus = () => {
     if (discoveryError()) return { label: '⚠ Discovery unavailable', warn: true };
 
@@ -424,13 +412,6 @@ export default function DiscoveryPanel() {
     // second is a dead end the user can act on, so it says so and reopens the
     // dialog — the drone leaves no trace behind to click on.
     if (found === 0 && droneState() === 'gone') {
-      // Discovered and refused is a different dead end to an empty network, and
-      // the one the user can actually do something about — so the chip says
-      // which, rather than making them open the dialog to find out.
-      const stuck = blockedPeers().length;
-      if (stuck > 0) {
-        return { label: `⚠ ${stuck} found · cannot connect`, warn: true };
-      }
       return { label: '◌ No devices found', warn: true };
     }
     if (found === 0) return { label: '◌ Searching for nearby devices…', warn: false };
@@ -507,10 +488,6 @@ export default function DiscoveryPanel() {
     // Clear first, so the herd visibly goes away and a drone is up covering the
     // wait — the countdown then measures the new sweep, not the old one.
     setPeers([]);
-    // The previous sweep's refusals say nothing about this one: the host may
-    // have been allowed through the firewall in between, which is the most
-    // likely reason somebody is pressing this button.
-    setUnreachable([]);
     setDiscoveryError(null);
     reroll();
     launchDrone();
