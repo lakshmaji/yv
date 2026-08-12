@@ -1,7 +1,7 @@
 {
   "name": "yv",
   "private": false,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "description": "Version anchor for changesets. The app itself is Go + Wails; frontend/package.json is the web build's manifest and is deliberately not a workspace member here.",
   "scripts": {
