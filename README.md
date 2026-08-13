@@ -3,6 +3,8 @@
 [![Build](https://github.com/lakshmaji/yv/actions/workflows/build.yml/badge.svg)](https://github.com/lakshmaji/yv/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+[![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
+[![SolidJS](https://img.shields.io/badge/Frontend-SolidJS-%232C4F7C?logo=solid&logoColor=white)](https://www.solidjs.com/)
 
 **A command runner for developers who work across many projects.**
 
