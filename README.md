@@ -40,7 +40,7 @@ yv is a **playbook for your shell commands**. Instead of typing them, you click 
 - **Peer-to-peer sharing** — send a project config or files directly to another device on the same network. No cloud, no account.
 - **Auto-updates** — yv updates itself silently on macOS, Windows, and Linux (AppImage). No manual downloads after the first one.
 
-All data lives on your machine. Nothing is tracked or sent anywhere.
+Project data stays on your machine by default. Peer sharing sends selected data to devices on your local network, and update checks contact GitHub. Nothing is tracked.
 
 ---
 
@@ -58,6 +58,12 @@ Download the latest build from **[github.com/lakshmaji/yv/releases](https://gith
 ```bash
 # Linux .deb
 sudo apt install ./yv_*.deb
+```
+
+Every release asset ships with a `.sha256` checksum beside it. To verify a download before installing:
+
+```bash
+shasum -a 256 -c yv-macos-arm64-*.dmg.sha256
 ```
 
 ### macOS: first launch
@@ -79,7 +85,7 @@ One-time step. After that it opens normally.
 
 yv checks for updates silently a few seconds after launch. **Help → Check for Updates…** asks on demand. Updates are verified against a key built into your copy before anything is applied.
 
-On Linux, only the **AppImage** self-updates. The `.deb` installs to root-owned `/usr/bin` — use `apt upgrade` instead.
+On Linux, only the **AppImage** self-updates. The `.deb` installs to root-owned `/usr/bin` and has no configured APT repository — to upgrade, download the new `.deb` from the releases page and run `sudo apt install ./yv_*.deb` again.
 
 ---
 

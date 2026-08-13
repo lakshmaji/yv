@@ -16,7 +16,7 @@ No cloud account, no relay server — peer-to-peer on your LAN only.
 
 ### Connect by code
 
-Tap a dinosaur to start sharing. The sending device draws an 8-character code and displays it large. You read it out; the other person types it. Only the hash ever crosses the wire — a stranger on the same Wi-Fi cannot intercept or guess the code.
+Tap a dinosaur to start sharing. The sending device draws an 8-character code and displays it large. You read it out; the other person types it into their device. Only the hash crosses the wire — typing the code locally is the only way to connect; replaying the hash alone does not open a connection. Requests expire after 2 minutes if unanswered, and are dropped after 5 wrong attempts.
 
 Connections last 15 minutes, extended automatically while a transfer is in progress.
 
@@ -30,7 +30,7 @@ Once connected, send one project or your entire config as JSON or YAML. The othe
 
 ### Send files
 
-Send arbitrary files up to 500 MB each, 1 GB and 64 files per transfer. Progress is shown live on both ends. Files land in `~/Downloads/yv-received` (macOS / Linux) or the equivalent on Windows, never overwriting existing files.
+Send arbitrary files — 500 MB per file, 1 GB total per transfer, and 64 files per transfer. Progress is shown live on both ends. Files land in `~/Downloads/yv-received` (macOS / Linux) or the equivalent on Windows, never overwriting existing files.
 
 ![Share files up to 500 MB](./.github/assets/share-files-500mb.png)
 
@@ -74,7 +74,7 @@ Each shortcut card shows step pills that update live: running → ok / failed / 
 
 ## Spotlight search
 
-`⌘K` opens a global search over every command in every project. Matches on label, shell text, group, project name, and pre/post hook contents.
+`⌘K` or `⌘F` opens a global search over every command in every project. Matches on label, shell text, group, project name, and pre/post hook contents.
 
 Keyboard navigation: `↑` / `↓` to move, `↵` to reveal the command in its project, `⌘↵` to reveal and run immediately.
 
@@ -110,7 +110,7 @@ Each command can have:
 
 ## Export and import
 
-Export any project (or all of them) as JSON or YAML. Commit it to your repo. Your teammates import it and get the same commands with the same settings — one click to run.
+Export any project (or all of them) as JSON or YAML. Commit it to your repo. Your teammates import it and get the same commands and non-secret settings — one click to run.
 
 Environments are always excluded from exports, so a config you share carries no secrets.
 

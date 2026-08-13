@@ -50,7 +50,7 @@ The first run downloads the Wails CLI if it is not already on your PATH. Subsequ
 ## Tests
 
 ```bash
-make test            # Go tests (./internal/...) + frontend tests (vitest)
+make test            # Go tests (./...) + frontend tests (vitest)
 make test-go         # Go tests only
 make test-frontend   # frontend tests only (vitest, node environment)
 ```
@@ -70,7 +70,7 @@ make fmt             # gofmt -w on all .go files (skips wailsjs/ generated files
 ## Build
 
 ```bash
-make build           # app bundle in build/bin/
+make build           # macOS ARM64 app bundle in build/bin/
 ```
 
 ### Platform packaging
@@ -88,7 +88,7 @@ A build that goes through the Makefile embeds the current version. A build that 
 
 ## Project structure
 
-```
+```text
 yv/
 ├── main.go              — Wails bootstrap, macOS title bar config, quit dialog
 ├── app.go               — App facade: thin Wails-bound wrappers for all methods
