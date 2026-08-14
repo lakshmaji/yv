@@ -8,7 +8,7 @@
 
 **A command runner for developers who work across many projects.**
 
-![yv](./.github/assets/yv.png)
+![Projects and commands](./.github/assets/projects.png)
 
 ![Device discovery map](./.github/assets/device-discovery.png)
 
@@ -18,7 +18,6 @@
 
 <video src="https://github.com/user-attachments/assets/91f946e4-bbb8-41c3-84c2-79434c81ff84" controls muted loop width="100%"></video>
 
-![Projects and commands](./.github/assets/projects.png)
 
 ---
 
