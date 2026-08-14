@@ -1,7 +1,8 @@
 # yv
 
 [![Build](https://github.com/lakshmaji/yv/actions/workflows/build.yml/badge.svg)](https://github.com/lakshmaji/yv/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![License: PolyForm NC](https://img.shields.io/badge/license-PolyForm%20NC%201.0-orange.svg)](./LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/lakshmaji)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 [![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
 [![SolidJS](https://img.shields.io/badge/Frontend-SolidJS-%232C4F7C?logo=solid&logoColor=white)](https://www.solidjs.com/)
@@ -111,6 +112,20 @@ Issues and pull requests are welcome — [open an issue](https://github.com/laks
 
 ---
 
+## Sponsor
+
+yv is free for personal and noncommercial use. If it saves you time — fewer commands forgotten, faster onboarding for new teammates, less back-and-forth explaining runbooks — consider sponsoring.
+
+Your support funds the time and effort it takes to keep improving this tool: new features, bug fixes, and making the daily lives of developers, project managers, and anyone drowning in context switches a little easier.
+
+**[Sponsor on GitHub →](https://github.com/sponsors/lakshmaji)**
+
+---
+
 ## License
 
-[MIT](./LICENSE) © 2026 Lakshmaji
+Free for personal and noncommercial use under the [PolyForm Noncommercial License 1.0.0](./LICENSE).
+
+Commercial use (teams, companies, or any revenue-generating context) requires a separate license — contact [lakshmaji.mutyala@oolio.com](mailto:lakshmaji.mutyala@oolio.com) to purchase one.
+
+© 2026 Lakshmaji Mutyala
