@@ -1,7 +1,7 @@
 # yv
 
 [![Build](https://github.com/lakshmaji/yv/actions/workflows/build.yml/badge.svg)](https://github.com/lakshmaji/yv/actions/workflows/build.yml)
-[![License: PolyForm NC](https://img.shields.io/badge/license-PolyForm%20NC%201.0-orange.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/lakshmaji)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 [![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
@@ -124,8 +124,4 @@ Your support funds the time and effort it takes to keep improving this tool: new
 
 ## License
 
-Free for personal and noncommercial use under the [PolyForm Noncommercial License 1.0.0](./LICENSE).
-
-Commercial use (teams, companies, or any revenue-generating context) requires a separate license — contact [lakshmaji.mutyala@oolio.com](mailto:lakshmaji.mutyala@oolio.com) to purchase one.
-
-© 2026 Lakshmaji Mutyala
+[MIT](./LICENSE) © 2026 Lakshmaji Mutyala
