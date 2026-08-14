@@ -14,9 +14,9 @@
 
 ![Device discovery map](./.github/assets/discovery.gif)
 
-<video src="./.github/assets/discovery.mov" controls muted loop width="100%"></video>
+<video src="https://github.com/user-attachments/assets/b639a1d1-0299-4ee7-bf7a-8ebaadcd517f" controls muted loop width="100%"></video>
 
-<video src="./.github/assets/quick-launch.mov" controls muted loop width="100%"></video>
+<video src="https://github.com/user-attachments/assets/91f946e4-bbb8-41c3-84c2-79434c81ff84" controls muted loop width="100%"></video>
 
 ![Projects and commands](./.github/assets/projects.png)
 
