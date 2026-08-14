@@ -14,9 +14,9 @@
 
 ![Device discovery map](./.github/assets/discovery.gif)
 
-<video src="https://github.com/lakshmaji/yv/raw/main/.github/assets/discovery.mov" controls muted loop width="100%"></video>
+<video src="./.github/assets/discovery.mov" controls muted loop width="100%"></video>
 
-<video src="https://github.com/lakshmaji/yv/raw/main/.github/assets/quick-launch.mov" controls muted loop width="100%"></video>
+<video src="./.github/assets/quick-launch.mov" controls muted loop width="100%"></video>
 
 ![Projects and commands](./.github/assets/projects.png)
 
