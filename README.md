@@ -10,6 +10,8 @@
 
 ![yv](./.github/assets/yv.png)
 
+![Device discovery map](./.github/assets/device-discovery.png)
+
 ![Device discovery map](./.github/assets/discovery.gif)
 
 <video src="https://github.com/lakshmaji/yv/raw/main/.github/assets/discovery.mov" controls muted loop width="100%"></video>
