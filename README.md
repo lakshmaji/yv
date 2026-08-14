@@ -2,17 +2,23 @@
 
 [![Build](https://github.com/lakshmaji/yv/actions/workflows/build.yml/badge.svg)](https://github.com/lakshmaji/yv/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/lakshmaji)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 [![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
 [![SolidJS](https://img.shields.io/badge/Frontend-SolidJS-%232C4F7C?logo=solid&logoColor=white)](https://www.solidjs.com/)
 
 **A command runner for developers who work across many projects.**
 
-![yv](./.github/assets/yv.png)
+![Projects and commands](./.github/assets/projects.png)
 
 ![Device discovery map](./.github/assets/device-discovery.png)
 
-![Projects and commands](./.github/assets/projects.png)
+![Device discovery map](./.github/assets/discovery.gif)
+
+<video src="https://github.com/user-attachments/assets/b639a1d1-0299-4ee7-bf7a-8ebaadcd517f" controls muted loop width="100%"></video>
+
+<video src="https://github.com/user-attachments/assets/91f946e4-bbb8-41c3-84c2-79434c81ff84" controls muted loop width="100%"></video>
+
 
 ---
 
@@ -106,6 +112,16 @@ Issues and pull requests are welcome — [open an issue](https://github.com/laks
 
 ---
 
+## Sponsor
+
+yv is free for personal and noncommercial use. If it saves you time — fewer commands forgotten, faster onboarding for new teammates, less back-and-forth explaining runbooks — consider sponsoring.
+
+Your support funds the time and effort it takes to keep improving this tool: new features, bug fixes, and making the daily lives of developers, project managers, and anyone drowning in context switches a little easier.
+
+**[Sponsor on GitHub →](https://github.com/sponsors/lakshmaji)**
+
+---
+
 ## License
 
-[MIT](./LICENSE) © 2026 Lakshmaji
+[MIT](./LICENSE) © 2026 Lakshmaji Mutyala
