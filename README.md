@@ -41,7 +41,7 @@ yv is a **playbook for your shell commands**. Instead of typing them, you click 
 ## What it does
 
 - **Click to run** — each project holds a list of shell commands. One click runs any of them, with live output streaming into an inline terminal.
-- **Shareable config** — export a project as JSON or YAML and commit it alongside your code. Teammates import it and get the same runbook immediately.
+- **Shareable config** — export a project as a [`yv.yaml`](./docs/yv-yaml.md) and commit it alongside your code. Teammates import it and get the same runbook immediately.
 - **Environments** — hook in named variable sets (`local`, `staging`, `prod`) per project. Secrets stay on your machine and never appear in exported config.
 - **Peer-to-peer sharing** — send a project config or files directly to another device on the same network. No cloud, no account.
 - **Auto-updates** — yv updates itself silently on macOS, Windows, and Linux (AppImage). No manual downloads after the first one.
