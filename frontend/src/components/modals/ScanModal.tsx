@@ -4,42 +4,8 @@ import {
 } from '../../store';
 import { go } from '../../wails';
 import { shortenPath } from '../../lib/utils';
+import { defaultSelection, needsDecision, ordered, usable } from '../../lib/scanList';
 import type { ImportRecord, ScanHit } from '../../types';
-
-/** A row is selectable only if the file actually parsed. */
-function usable(hit: ScanHit): boolean {
-  return !hit.error;
-}
-
-/**
- * Default selection: a new project arrives ticked, a replacement does not.
- *
- * A background scan that turns up eighteen files must not present eighteen
- * pre-armed overwrites — adding a project the user has never seen is additive,
- * replacing one they have been editing is not.
- */
-function defaultSelection(hits: ScanHit[]): Set<string> {
-  const sel = new Set<string>();
-  for (const h of hits) {
-    if (usable(h) && !h.exists && !h.unchanged) sel.add(h.path);
-  }
-  return sel;
-}
-
-/** A row is worth a decision only if it is importable and has actually moved. */
-function actionable(hit: ScanHit): boolean {
-  return usable(hit) && !hit.unchanged;
-}
-
-/**
- * Rows needing a decision first, then the ones already dealt with, then the
- * broken ones. Sorting beats hiding: a config that is present and up to date is
- * exactly what someone scrolling for a missing project needs to see.
- */
-function ordered(hits: ScanHit[]): ScanHit[] {
-  const rank = (h: ScanHit) => (h.error ? 2 : h.unchanged ? 1 : 0);
-  return [...hits].sort((a, b) => rank(a) - rank(b));
-}
 
 export default function ScanModal() {
   const [root, setRoot] = createSignal('');
@@ -52,6 +18,7 @@ export default function ScanModal() {
   const [error, setError] = createSignal('');
   const [history, setHistory] = createSignal<ImportRecord[]>([]);
   const [showHistory, setShowHistory] = createSignal(false);
+  const [showUnchanged, setShowUnchanged] = createSignal(false);
   // True when the dialog opened by itself with results the background job
   // found, which is a different situation from the user going looking.
   const [prompted, setPrompted] = createSignal(false);
@@ -73,6 +40,7 @@ export default function ScanModal() {
     setNotice('');
     setError('');
     setShowHistory(false);
+    setShowUnchanged(false);
     void refreshHistory();
 
     // Opened by hand with a folder configured: scan straight away. The dialog
@@ -133,14 +101,12 @@ export default function ScanModal() {
     setExpanded(next);
   }
 
-  const selectable = createMemo(() => hits().filter(usable));
-  // What is actually worth the user's attention, which is what the counts and
-  // Select all speak to. Everything else is shown but not offered.
-  const pendingChanges = createMemo(() => hits().filter(actionable));
-  const unchangedCount = createMemo(() => hits().filter((h) => h.unchanged && !h.error).length);
+  const pending = createMemo(() => hits().filter(needsDecision));
+  const unchanged = createMemo(() => hits().filter((h) => !needsDecision(h)));
+  const selectable = createMemo(() => pending().filter(usable));
 
   function selectAll() {
-    setSelected(new Set(pendingChanges().map((h) => h.path)));
+    setSelected(new Set(selectable().map((h) => h.path)));
   }
   function selectNone() {
     setSelected(new Set<string>());
@@ -211,25 +177,20 @@ export default function ScanModal() {
             </div>
           </Show>
 
-          <Show when={hits().length > 0}>
+          <Show when={pending().length > 0}>
             <div class="scan-toolbar">
               <div class="scan-toolbar-actions">
-                <button onClick={selectAll} disabled={!pendingChanges().length}>Select all</button>
+                <button onClick={selectAll} disabled={!selectable().length}>Select all</button>
                 <button onClick={selectNone} disabled={!selected().size}>Select none</button>
               </div>
-              <span class="scan-count">
-                {selected().size} of {hits().length} selected
-                <Show when={unchangedCount()}>
-                  <span class="scan-count-quiet"> · {unchangedCount()} unchanged</span>
-                </Show>
-              </span>
+              <span class="scan-count">{selected().size} of {pending().length} selected</span>
             </div>
           </Show>
 
           <div class="scan-list">
-            <For each={hits()}>
+            <For each={pending()}>
               {(hit) => (
-                <div class={'scan-hit' + (hit.error ? ' broken' : hit.unchanged ? ' unchanged' : '')}>
+                <div class={'scan-hit' + (hit.error ? ' broken' : '')}>
                   <div class="scan-hit-main">
                     <input
                       type="checkbox"
@@ -246,14 +207,9 @@ export default function ScanModal() {
                           when={!hit.error}
                           fallback={<span class="scan-badge err">cannot import</span>}
                         >
-                          <Show
-                            when={!hit.unchanged}
-                            fallback={<span class="scan-badge same">unchanged</span>}
-                          >
-                            <span class={'scan-badge ' + (hit.exists ? 'replace' : 'new')}>
-                              {hit.exists ? 'replace' : 'new'}
-                            </span>
-                          </Show>
+                          <span class={'scan-badge ' + (hit.exists ? 'replace' : 'new')}>
+                            {hit.exists ? 'replace' : 'new'}
+                          </span>
                           <span class="scan-hit-count">
                             {hit.exists
                               ? `${hit.existingCommands ?? 0} → ${hit.project.commands?.length ?? 0} commands`
@@ -322,14 +278,45 @@ export default function ScanModal() {
               )}
             </For>
 
-            <Show when={!hits().length}>
+            <Show when={!pending().length}>
               <div class="scan-empty">
-                {root()
-                  ? 'Nothing found yet — press Rescan.'
-                  : 'Choose a folder to search for yv.yaml files.'}
+                {!root()
+                  ? 'Choose a folder to search for yv.yaml files.'
+                  : unchanged().length
+                    ? `Everything is up to date — ${unchanged().length} ${unchanged().length === 1 ? 'config is' : 'configs are'} already imported and unchanged.`
+                    : 'No yv.yaml files found in this folder.'}
               </div>
             </Show>
           </div>
+
+          {/* Out of the way rather than gone. Re-importing an identical file
+              does nothing, so these are not decisions and do not belong in the
+              list above — but "my project is missing" is answered by seeing it
+              sitting here, found and current. Same disclosure as the history
+              below it rather than a new tab. */}
+          <Show when={unchanged().length}>
+            <div class="scan-aside">
+              <button class="scan-history-toggle" onClick={() => setShowUnchanged(!showUnchanged())}>
+                {showUnchanged() ? '▾' : '▸'} Unchanged ({unchanged().length})
+              </button>
+              <Show when={showUnchanged()}>
+                <div class="scan-history-list">
+                  <For each={unchanged()}>
+                    {(hit) => (
+                      <div class="scan-quiet-row">
+                        <span class="scan-quiet-name">
+                          {hit.project?.name || hit.project?.id || 'unreadable'}
+                        </span>
+                        <span class="scan-history-path" title={hit.path}>
+                          {shortenPath(hit.path)}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </Show>
 
           <div class="scan-history">
             <button class="scan-history-toggle" onClick={() => setShowHistory(!showHistory())}>
@@ -367,7 +354,7 @@ export default function ScanModal() {
               class="btn-primary"
               type="button"
               onClick={importSelected}
-              disabled={busy() || !hits().length}
+              disabled={busy() || !pending().length}
             >
               {busy()
                 ? 'Importing…'
