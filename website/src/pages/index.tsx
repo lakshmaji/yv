@@ -11,7 +11,12 @@ export default function Home(): ReactNode {
   return (
     <Layout title={siteConfig.title} description={siteConfig.tagline}>
       <header className={clsx('hero hero--primary', styles.heroBanner)}>
-        <div className="container">
+        <div className={styles.blobBackground}>
+          <div className={clsx(styles.blob, styles.blob1)} />
+          <div className={clsx(styles.blob, styles.blob2)} />
+          <div className={clsx(styles.blob, styles.blob3)} />
+        </div>
+        <div className={clsx('container', styles.heroContent)}>
           <Heading as="h1" className="hero__title">
             {siteConfig.title}
           </Heading>

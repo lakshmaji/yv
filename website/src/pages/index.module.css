@@ -15,3 +15,69 @@
     padding: 2rem;
   }
 }
+
+/* Abstract monochromatic blobs, drawn from Infima's grayscale tokens so they
+   adapt automatically between light and dark mode without hardcoded colors. */
+.blobBackground {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  animation: blob-drift 26s ease-in-out infinite alternate;
+}
+
+.blob1 {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  left: -100px;
+  background: var(--ifm-color-emphasis-800);
+}
+
+.blob2 {
+  width: 360px;
+  height: 360px;
+  bottom: -140px;
+  right: -80px;
+  background: var(--ifm-color-emphasis-400);
+  animation-duration: 32s;
+  animation-delay: -6s;
+}
+
+.blob3 {
+  width: 300px;
+  height: 300px;
+  top: 30%;
+  right: 15%;
+  background: var(--ifm-color-emphasis-600);
+  animation-duration: 20s;
+  animation-delay: -12s;
+}
+
+@keyframes blob-drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(40px, 30px) scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none;
+  }
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
