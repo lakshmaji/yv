@@ -81,3 +81,18 @@
   position: relative;
   z-index: 1;
 }
+
+.title {
+  perspective: 600px;
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter {
+    opacity: 1;
+  }
+}
