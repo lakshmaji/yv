@@ -25,3 +25,22 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
   return bytes + ' B';
 }
+
+/**
+ * Shortens a filesystem path to its last `keep` segments.
+ *
+ * A row has room for roughly one line of path, and the useful end of a path is
+ * the *last* part — the repository folder is what identifies it, the home
+ * directory prefix is the same on every row.
+ *
+ * The obvious CSS answer, `direction: rtl` with an ellipsis, is wrong for a
+ * path: the leading "/" is a bidi-neutral character, so it gets reordered to
+ * the far end and "/Users/me/code" renders as "Users/me/code/". Shortening the
+ * string avoids the reordering entirely.
+ */
+export function shortenPath(path: string, keep = 3): string {
+  if (!path) return '';
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length <= keep) return path;
+  return '…/' + parts.slice(-keep).join('/');
+}

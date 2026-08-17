@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"unicode"
 
+	"yv/internal/atomicfile"
 	"yv/internal/audio"
 	"yv/internal/models"
 )
@@ -41,6 +42,13 @@ const (
 	// MaxUsernameLen bounds the display name sent to nearby peers. It is drawn
 	// under a dinosaur and read aloud over a desk, not written in a form.
 	MaxUsernameLen = 32
+
+	// MinScanInterval floors how often a folder scan may repeat. The scan walks
+	// a whole directory tree, so a hand-edited "1" would have the app rescanning
+	// continuously. Zero stays legal and means never, the same way a zero
+	// RetentionDays means the default.
+	MinScanInterval = 15
+	MaxScanInterval = 7 * 24 * 60 // a week, in minutes
 
 	schemaVersion = 1
 )
@@ -176,7 +184,7 @@ func (s *Store) write(cur models.Settings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0o600)
+	return atomicfile.Write(path, raw, 0o600)
 }
 
 func storePath() (string, error) {
@@ -216,6 +224,13 @@ func Normalize(in models.Settings) models.Settings {
 	out.DroneVariant = strings.TrimSpace(out.DroneVariant)
 	out.DroneFanClip = strings.TrimSpace(out.DroneFanClip)
 	out.DroneCrashClip = strings.TrimSpace(out.DroneCrashClip)
+
+	out.ScanDir = strings.TrimSpace(out.ScanDir)
+	if out.ScanInterval < 0 || out.ScanDir == "" {
+		// An interval with no folder to scan is not a setting, it is a timer
+		// with nothing to do.
+		out.ScanInterval = 0
+	}
 	return out
 }
 
@@ -269,6 +284,9 @@ func Validate(in models.Settings) error {
 	if err := ValidateDroneVariant(in.DroneVariant); err != nil {
 		return err
 	}
+	if err := ValidateScanInterval(in.ScanInterval); err != nil {
+		return err
+	}
 	// The drone's own clips are audio paths like any other, so they answer to the
 	// same extension allowlist as the roars rather than a rule of their own.
 	for _, clip := range []string{in.DroneFanClip, in.DroneCrashClip} {
@@ -280,6 +298,18 @@ func Validate(in models.Settings) error {
 		}
 	}
 	return audio.ValidatePaths(in.AudioClips)
+}
+
+// ValidateScanInterval rejects a repeat interval the UI should explain rather
+// than one Normalize would silently rewrite. Zero is allowed and means never.
+func ValidateScanInterval(minutes int) error {
+	if minutes == 0 {
+		return nil
+	}
+	if minutes < MinScanInterval || minutes > MaxScanInterval {
+		return fmt.Errorf("scan interval must be between %d and %d minutes", MinScanInterval, MaxScanInterval)
+	}
+	return nil
 }
 
 // NormalizeUsername trims a stored name and strips the control characters that

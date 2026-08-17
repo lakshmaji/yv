@@ -13,6 +13,7 @@ import {
   updateModalOpen, setUpdateModalOpen, setUpdateState,
   activeView, setActiveView,
   settingsModalOpen, setSettingsModalOpen, loadAppSettings,
+  scanModalOpen, setScanModalOpen, setScanHits,
   splashDone,
 } from './store';
 import { go, runtime } from './wails';
@@ -32,6 +33,7 @@ import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import AboutModal from './components/modals/AboutModal';
 import UpdateModal from './components/modals/UpdateModal';
 import SettingsModal from './components/modals/SettingsModal';
+import ScanModal from './components/modals/ScanModal';
 import IncomingShareModal from './components/modals/IncomingShareModal';
 import IncomingConnectModal from './components/modals/IncomingConnectModal';
 import DashboardPanel from './components/DashboardPanel';
@@ -43,6 +45,7 @@ import type {
   ResourceStats,
   ProcessStats,
   PeerInfo,
+  ScanHit,
   IncomingShare,
   IncomingConnect,
   ShareProgress,
@@ -130,6 +133,14 @@ export default function App() {
     void loadAppSettings(go.GetSettings);
   });
 
+  // Whether anything is stacked over the app. Two callers ask: Escape, deciding
+  // whether it should un-maximize a terminal or close a modal, and the
+  // background scan, deciding whether it may open its dialog unprompted.
+  const anyModalOpen = () =>
+    !!(editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
+      settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen() ||
+      updateModalOpen() || scanModalOpen());
+
   function handleKeydown(e: KeyboardEvent) {
     // ⌘K / ⌘F open the global Spotlight search from anywhere in the app.
     if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'f')) {
@@ -153,11 +164,7 @@ export default function App() {
     if (e.key === 'Escape') {
       // A maximized terminal is below any modal, so it only yields to Esc
       // once nothing is stacked on top of it.
-      const modalOpen =
-        editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
-        settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen() ||
-        updateModalOpen();
-      if (maximizedCmd() && !modalOpen) {
+      if (maximizedCmd() && !anyModalOpen()) {
         setMaximizedCmd(null);
         return;
       }
@@ -169,6 +176,9 @@ export default function App() {
       setSettingsModalOpen(false);
       setAboutModalOpen(false);
       setUpdateModalOpen(false);
+      // Deliberately leaves scanHits alone: dismissing without deciding is not
+      // an answer, so the prompt returns on the next scan.
+      setScanModalOpen(false);
     }
   }
 
@@ -180,6 +190,8 @@ export default function App() {
   let unsubUpdateState: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubDashboard: (() => void) | undefined;
+  let unsubScan: (() => void) | undefined;
+  let unsubScanNew: (() => void) | undefined;
   let unsubPeers: Array<() => void> = [];
 
   onMount(() => {
@@ -226,6 +238,19 @@ export default function App() {
     });
     unsubDashboard = runtime.EventsOn('open-dashboard', () => {
       setActiveView('dashboard');
+    });
+    unsubScan = runtime.EventsOn('open-scan', () => {
+      setScanModalOpen(true);
+    });
+
+    // The background scan found configs the user has not been asked about.
+    // This is the one dialog that can appear unprompted, so it holds back when
+    // anything else is up — including the splash — and leaves the Sidebar badge
+    // to carry it instead. Nothing is imported either way.
+    unsubScanNew = runtime.EventsOn('scan:new', (hits: ScanHit[]) => {
+      if (!hits?.length) return;
+      setScanHits(hits);
+      if (!anyModalOpen() && splashDone()) setScanModalOpen(true);
     });
 
     // Peer and share events are wired here rather than in DiscoveryPanel on
@@ -302,6 +327,8 @@ export default function App() {
     unsubUpdateState?.();
     unsubSettings?.();
     unsubDashboard?.();
+    unsubScan?.();
+    unsubScanNew?.();
     unsubPeers.forEach(off => off());
   });
 
@@ -332,6 +359,7 @@ export default function App() {
       <AboutModal />
       <UpdateModal />
       <SettingsModal />
+      <ScanModal />
       {/* Global, not inside DiscoveryPanel: a request can arrive on any view. */}
       <Show when={incomingConnect()}>
         <IncomingConnectModal />

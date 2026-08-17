@@ -23,6 +23,11 @@ const aboutEvent = "open-about"
 // by something reached far more often.
 const updateMenuEvent = "open-update"
 
+// scanMenuEvent opens the yv.yaml review dialog on demand. The same dialog is
+// opened by the background scan when it finds something new; this is the way in
+// when the user wants to look rather than be told.
+const scanMenuEvent = "open-scan"
+
 // appMenu builds the macOS menu bar. It reconstructs the standard App / Edit /
 // Window menus (which Wails provides automatically when no menu is set) and adds
 // custom "View" and "Help" menus.
@@ -39,6 +44,12 @@ func appMenu(ctx func() context.Context) *menu.Menu {
 	view := menu.NewMenu()
 	view.Append(menu.Text("Dashboard", keys.CmdOrCtrl("d"), func(_ *menu.CallbackData) {
 		wailsRuntime.EventsEmit(ctx(), "open-dashboard")
+	}))
+	view.Append(menu.Separator())
+	// No accelerator, for the same reason as Check for Updates: a deliberate,
+	// infrequent action, and every obvious key here is already spoken for.
+	view.Append(menu.Text("Scan for yv.yaml…", nil, func(_ *menu.CallbackData) {
+		wailsRuntime.EventsEmit(ctx(), scanMenuEvent)
 	}))
 	view.Append(menu.Separator())
 	view.Append(menu.Text("Settings…", settingsAccelerator(), func(_ *menu.CallbackData) {

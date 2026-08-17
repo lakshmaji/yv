@@ -34,6 +34,67 @@ type CommandConfig struct {
 	PostCommands []PostCommand `json:"postCommands,omitempty"`
 }
 
+// --- folder scanning ---
+
+// ScanHit is one yv.yaml the scanner found, as the review dialog sees it.
+type ScanHit struct {
+	// Path is the yv.yaml itself; Dir is the folder holding it, which is the
+	// working directory a file that omits one falls back to.
+	Path string `json:"path"`
+	Dir  string `json:"dir"`
+
+	// Hash is sha256 of the file's bytes. It is what makes "new" mean new: a
+	// path the user has already answered for stays silent until it changes.
+	Hash string `json:"hash"`
+
+	// Project is the parsed file, carried whole so the dialog can show every
+	// command before the user agrees to import anything. Zero when Error is set.
+	Project Project `json:"project"`
+
+	// Exists reports that a stored project already has this id, so importing
+	// replaces it rather than adding one.
+	Exists bool `json:"exists"`
+	// ExistingCommands is what the stored project has today, so a row can read
+	// "12 -> 14 commands". Zero unless Exists.
+	ExistingCommands int `json:"existingCommands,omitempty"`
+
+	// Unchanged reports that this exact file has already been reviewed — its
+	// recorded hash matches what is on disk now. It is the answer to "is there
+	// really a change here", which a name and a command count cannot give:
+	// re-importing an identical file is work with no effect, and a list that
+	// cannot say so asks the user to diff it by eye.
+	Unchanged bool `json:"unchanged,omitempty"`
+
+	// Error explains why this file cannot be imported. A bad file is listed
+	// with its reason rather than dropped: silence is the one thing that gives
+	// the author no way to find a typo.
+	Error string `json:"error,omitempty"`
+	// Dropped counts commands discarded as unusable in an otherwise valid file.
+	Dropped int `json:"dropped,omitempty"`
+}
+
+// ScanResult is one walk of a folder.
+type ScanResult struct {
+	Hits []ScanHit `json:"hits"`
+	// Truncated says why the walk stopped early, and is empty when it
+	// completed. Returning partial results silently would read as "that project
+	// has no yv.yaml", which is the wrong thing for a user to conclude.
+	Truncated string `json:"truncated,omitempty"`
+	ElapsedMs int64  `json:"elapsedMs"`
+	Scanned   int    `json:"scanned"`
+}
+
+// ImportRecord is one line of the import audit log.
+type ImportRecord struct {
+	At          string `json:"at"`     // RFC3339
+	Source      string `json:"source"` // "scan" | "file"
+	Path        string `json:"path"`
+	ProjectID   string `json:"projectId"`
+	ProjectName string `json:"projectName"`
+	Action      string `json:"action"` // "added" | "replaced"
+	Commands    int    `json:"commands"`
+}
+
 // EnvVar is a single environment variable belonging to an Environment.
 // Secret only affects UI masking — values are stored the same way either way.
 type EnvVar struct {
@@ -158,6 +219,15 @@ type Settings struct {
 	// Separate from the hum because they are different sounds doing different
 	// jobs — one is ambient and looped, the other is the end of the sweep.
 	DroneCrashClip string `json:"droneCrashClip,omitempty"`
+
+	// ScanDir is the folder searched for committed yv.yaml files. Empty — the
+	// zero value, and so the default — means scanning is off entirely, which is
+	// what an older settings file gets without any migration.
+	ScanDir string `json:"scanDir,omitempty"`
+	// ScanInterval is how often that folder is rescanned, in minutes. Zero means
+	// never, for the same reason: a feature that starts walking someone's disk
+	// because they upgraded is not one they opted into.
+	ScanInterval int `json:"scanInterval,omitempty"`
 }
 
 // --- peer sharing ---

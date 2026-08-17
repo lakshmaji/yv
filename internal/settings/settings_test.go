@@ -474,3 +474,110 @@ func TestNormalizeTrimsDroneFields(t *testing.T) {
 		t.Errorf("DroneCrashClip = %q, want %q", got.DroneCrashClip, "/boom.wav")
 	}
 }
+
+func TestValidateScanInterval(t *testing.T) {
+	tests := []struct {
+		name    string
+		minutes int
+		wantErr bool
+	}{
+		{"zero means never", 0, false},
+		{"the floor", MinScanInterval, false},
+		{"four hours", 240, false},
+		{"a day", 1440, false},
+		{"the ceiling", MaxScanInterval, false},
+		{"below the floor", MinScanInterval - 1, true},
+		{"a hand-edited 1 would rescan continuously", 1, true},
+		{"above the ceiling", MaxScanInterval + 1, true},
+		{"negative", -5, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateScanInterval(tt.minutes)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateScanInterval(%d) = nil, want an error", tt.minutes)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateScanInterval(%d) = %v, want nil", tt.minutes, err)
+			}
+		})
+	}
+}
+
+func TestNormalizeScanSettings(t *testing.T) {
+	tests := []struct {
+		name         string
+		in           models.Settings
+		wantDir      string
+		wantInterval int
+	}{
+		{
+			name:         "trimmed",
+			in:           models.Settings{ScanDir: "  /home/dev/development  ", ScanInterval: 240},
+			wantDir:      "/home/dev/development",
+			wantInterval: 240,
+		},
+		{
+			// A timer with nothing to walk is not a setting.
+			name:         "an interval without a folder is off",
+			in:           models.Settings{ScanInterval: 240},
+			wantDir:      "",
+			wantInterval: 0,
+		},
+		{
+			name:         "whitespace-only folder is no folder",
+			in:           models.Settings{ScanDir: "   ", ScanInterval: 60},
+			wantDir:      "",
+			wantInterval: 0,
+		},
+		{
+			name:         "negative clamps to never",
+			in:           models.Settings{ScanDir: "/tmp", ScanInterval: -1},
+			wantDir:      "/tmp",
+			wantInterval: 0,
+		},
+		{
+			name:         "the zero value is scanning off",
+			in:           models.Settings{},
+			wantDir:      "",
+			wantInterval: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Normalize(tt.in)
+			if got.ScanDir != tt.wantDir {
+				t.Errorf("ScanDir: got %q, want %q", got.ScanDir, tt.wantDir)
+			}
+			if got.ScanInterval != tt.wantInterval {
+				t.Errorf("ScanInterval: got %d, want %d", got.ScanInterval, tt.wantInterval)
+			}
+		})
+	}
+}
+
+// The settings file survives a round trip with the new fields, and clearing
+// the folder turns scanning off rather than leaving an orphaned interval.
+func TestScanSettingsRoundTrip(t *testing.T) {
+	isolateHome(t)
+	s := NewStore()
+
+	saved, err := s.Save(models.Settings{ScanDir: "/home/dev/development", ScanInterval: 240})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if saved.ScanDir != "/home/dev/development" || saved.ScanInterval != 240 {
+		t.Fatalf("saved: %+v", saved)
+	}
+	if got := s.Get(); got.ScanDir != "/home/dev/development" || got.ScanInterval != 240 {
+		t.Errorf("reloaded: %+v", got)
+	}
+
+	cleared, err := s.Save(models.Settings{ScanDir: "", ScanInterval: 240})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if cleared.ScanInterval != 0 {
+		t.Errorf("clearing the folder left the interval at %d", cleared.ScanInterval)
+	}
+}

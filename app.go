@@ -87,6 +87,7 @@ func (a *App) startup(ctx context.Context) {
 	go func() { _ = a.metrics.Prune(time.Now()) }()
 	// Clears anything an interrupted update left behind, then checks quietly.
 	a.startUpdateWatch(ctx)
+	a.startScanMonitor(ctx)
 }
 
 // closeMetrics flushes the partial metrics bucket and releases the day files.
@@ -149,8 +150,8 @@ func (a *App) UpdateProject(projectID, name, workingDir, labelBgColor, labelTxCo
 	return a.cfg.UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor)
 }
 
-func (a *App) ExportProject(projectID, format string) (string, error) {
-	return a.cfg.ExportProject(a.getCtx(), projectID, format)
+func (a *App) ExportProject(projectID string) (string, error) {
+	return a.cfg.ExportProject(a.getCtx(), projectID)
 }
 
 func (a *App) ExportProjects() (string, error) {
@@ -163,6 +164,40 @@ func (a *App) ImportProjects() (string, error) {
 
 func (a *App) ImportProject() (string, error) {
 	return a.cfg.ImportProject(a.getCtx())
+}
+
+// --- yv.yaml folder scanning ---
+
+// ScanForConfigs walks a folder for yv.yaml files. It writes nothing; the user
+// decides what to import from the result.
+func (a *App) ScanForConfigs(root string) models.ScanResult {
+	// Its own deadline rather than the app context's: a scan that stalls on an
+	// unresponsive network mount must give up on its own, and quitting the app
+	// cancels it either way.
+	ctx, cancel := context.WithTimeout(a.getCtx(), config.ScanTimeout)
+	defer cancel()
+	return a.cfg.ScanForConfigs(ctx, root)
+}
+
+// ApplyScanned imports the chosen config files, replacing projects by id.
+func (a *App) ApplyScanned(paths []string) string {
+	msg, err := a.cfg.ApplyScanned(paths)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return msg
+}
+
+// MarkScanSeen records that the user has answered for these files, so the
+// background scan stops offering them.
+func (a *App) MarkScanSeen(hits []models.ScanHit) string {
+	a.cfg.MarkSeen(hits)
+	return "ok"
+}
+
+// GetImportHistory returns the most recent imports, newest first.
+func (a *App) GetImportHistory(limit int) []models.ImportRecord {
+	return a.cfg.GetImportHistory(limit)
 }
 
 // --- Environment delegation ---

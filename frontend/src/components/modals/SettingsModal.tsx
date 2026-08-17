@@ -4,8 +4,19 @@ import { go } from '../../wails';
 import { PANELS, togglePanel } from '../../lib/dashboardPanels';
 import { addClips, clipDir, clipLabel, playClip } from '../../lib/audio';
 import { DRONE_VARIANTS, variantById } from '../../lib/drone';
-import { formatBytes } from '../../lib/utils';
+import { formatBytes, shortenPath } from '../../lib/utils';
 import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
+
+// The useful range spans three orders of magnitude and every value in it is
+// arbitrary, so a fixed list beats a number input nobody knows how to fill in.
+// Kept at or above settings.MinScanInterval in Go, which is the enforcement point.
+const SCAN_INTERVALS = [
+  { minutes: 0, label: 'Never' },
+  { minutes: 60, label: 'Every hour' },
+  { minutes: 240, label: 'Every 4 hours' },
+  { minutes: 720, label: 'Every 12 hours' },
+  { minutes: 1440, label: 'Once a day' },
+];
 
 // Mirrors internal/settings.MinRetentionDays / MaxRetentionDays, which is the
 // enforcement point.
@@ -32,6 +43,9 @@ export default function SettingsModal() {
   const [variantId, setVariantId] = createSignal('');
   const [fanClip, setFanClip] = createSignal('');
   const [crashClip, setCrashClip] = createSignal('');
+  // Where to look for committed yv.yaml files, and how often.
+  const [scanDir, setScanDir] = createSignal('');
+  const [scanInterval, setScanInterval] = createSignal(0);
   const [storage, setStorage] = createSignal<MetricsStorageInfo | null>(null);
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -62,6 +76,8 @@ export default function SettingsModal() {
     setVariantId(variantById(current.droneVariant).id);
     setFanClip(current.droneFanClip || '');
     setCrashClip(current.droneCrashClip || '');
+    setScanDir(current.scanDir || '');
+    setScanInterval(current.scanInterval || 0);
     setConfirmClear(false);
     setError('');
     setBroken([]);
@@ -73,6 +89,16 @@ export default function SettingsModal() {
 
   // A clip left mid-roar would keep playing over the app once the modal is gone.
   onCleanup(stopPreview);
+
+  async function pickScanDir() {
+    const dir = await go.PickFolder();
+    if (!dir) return; // cancelled
+    setScanDir(dir);
+    // Choosing a folder for the first time is as close to opting in as this
+    // gets, so give it a schedule rather than leaving a folder that is never
+    // actually looked at.
+    if (scanInterval() === 0) setScanInterval(240);
+  }
 
   async function refreshStorage() {
     try {
@@ -190,6 +216,8 @@ export default function SettingsModal() {
       droneVariant: variantId(),
       droneFanClip: fanClip().trim(),
       droneCrashClip: crashClip().trim(),
+      scanDir: scanDir().trim(),
+      scanInterval: scanInterval(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -596,6 +624,57 @@ export default function SettingsModal() {
               onPick={() => void pickSingleClip(setCrashClip)}
               onClear={() => setCrashClip('')}
             />
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Project scanning</div>
+            <div class="settings-section-hint">
+              Commit a <code>yv.yaml</code> to a repository and yv can find it. Pick the folder
+              your code lives in and yv will offer to import any project configs it finds —
+              you are always asked first, and importing never runs anything.
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Scan folder</div>
+                <div class="settings-row-hint">
+                  Sub-folders are searched too. Dependency and build directories —
+                  <code>node_modules</code>, <code>build</code>, <code>Pods</code>, and anything
+                  starting with a dot — are skipped.
+                </div>
+              </div>
+              <span class="settings-row-control settings-scan-control">
+                <span class="settings-scan-path" title={scanDir() || undefined}>
+                  {scanDir() ? shortenPath(scanDir(), 3) : 'Not set'}
+                </span>
+                <button onClick={pickScanDir}>Browse…</button>
+                <Show when={scanDir()}>
+                  <button onClick={() => { setScanDir(''); setScanInterval(0); }}>Clear</button>
+                </Show>
+              </span>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-main">
+                <div class="settings-row-label">Scan automatically</div>
+                <div class="settings-row-hint">
+                  {scanDir()
+                    ? 'You are asked before anything is imported, and only about files that are new or have changed.'
+                    : 'Pick a scan folder first.'}
+                </div>
+              </div>
+              <span class="settings-row-control">
+                <select
+                  disabled={!scanDir()}
+                  value={String(scanInterval())}
+                  onChange={(e) => setScanInterval(Number(e.currentTarget.value))}
+                >
+                  <For each={SCAN_INTERVALS}>
+                    {(opt) => <option value={String(opt.minutes)}>{opt.label}</option>}
+                  </For>
+                </select>
+              </span>
+            </div>
           </div>
 
           <div class="settings-section">

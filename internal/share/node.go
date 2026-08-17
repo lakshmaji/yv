@@ -260,8 +260,14 @@ func (n *Node) Start(wailsCtx context.Context) error {
 	n.wails = wailsCtx
 	n.mu.Unlock()
 
+	// Published under the lock: a sweepLoop or handler goroutine left over from
+	// a previous Start may still be reading these while this one writes them.
+	// Stop -> Start is not exotic here, it is what leaving and re-entering the
+	// Discovery view does.
 	ctx, cancel := context.WithCancel(context.Background())
+	n.mu.Lock()
 	n.ctx, n.cancel = ctx, cancel
+	n.mu.Unlock()
 
 	h, err := libp2p.New(
 		libp2p.ListenAddrStrings(
@@ -292,7 +298,7 @@ func (n *Node) Start(wailsCtx context.Context) error {
 	}
 	n.mdns = svc
 
-	go n.sweepLoop()
+	go n.sweepLoop(ctx)
 	return nil
 }
 
@@ -309,6 +315,26 @@ func (n *Node) Stop() {
 
 	n.teardown()
 }
+
+// context returns the context of the current Start, or a cancelled one when the
+// node is stopped. Guarded because handler goroutines can still be in flight
+// while Stop runs.
+func (n *Node) context() context.Context {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ctx == nil {
+		return stoppedCtx
+	}
+	return n.ctx
+}
+
+// stoppedCtx stands in for "this node is not running": already cancelled, so
+// every select on it takes the shutdown branch immediately.
+var stoppedCtx = func() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}()
 
 func (n *Node) teardown() {
 	if n.cancel != nil {
@@ -414,7 +440,7 @@ func (n *Node) fetchHello(ai peer.AddrInfo) (models.PeerInfo, error) {
 		return models.PeerInfo{}, fmt.Errorf("host closed")
 	}
 
-	ctx, cancel := context.WithTimeout(n.ctx, helloTimeout)
+	ctx, cancel := context.WithTimeout(n.context(), helloTimeout)
 	defer cancel()
 
 	if err := h.Connect(ctx, ai); err != nil {
@@ -510,7 +536,7 @@ func (n *Node) onDisconnected(id peer.ID) {
 func (n *Node) probe(id peer.ID, addrs []ma.Multiaddr) {
 	select {
 	case <-time.After(probeDelay):
-	case <-n.ctx.Done():
+	case <-n.context().Done():
 		return
 	}
 
@@ -535,7 +561,7 @@ func (n *Node) probe(id peer.ID, addrs []ma.Multiaddr) {
 		if h.Network().Connectedness(id) == network.Connected {
 			alive = true
 		} else {
-			ctx, cancel := context.WithTimeout(n.ctx, probeTimeout)
+			ctx, cancel := context.WithTimeout(n.context(), probeTimeout)
 			alive = h.Connect(ctx, peer.AddrInfo{ID: id, Addrs: addrs}) == nil
 			cancel()
 		}
@@ -558,13 +584,15 @@ func (n *Node) probe(id peer.ID, addrs []ma.Multiaddr) {
 
 // sweepLoop reaps peers that stopped being announced. This is the backstop for
 // a peer we never connected to, or one that disappeared without a disconnect.
-func (n *Node) sweepLoop() {
+// The context is a parameter rather than a field read: this goroutine outlives
+// the Start that created it, so reading n.ctx here would race the next one.
+func (n *Node) sweepLoop(ctx context.Context) {
 	t := time.NewTicker(sweepInterval)
 	defer t.Stop()
 
 	for {
 		select {
-		case <-n.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-t.C:
 			now := time.Now()

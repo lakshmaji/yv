@@ -100,6 +100,7 @@ On Linux, only the **AppImage** self-updates. The `.deb` installs to root-owned 
 - **[Features & screenshots](./FEATURES.md)** — what the app looks like and what each part does
 - **[Development setup](./DEVELOPMENT.md)** — how to build and run locally
 - **[Environments guide](./docs/environments.md)** — per-project variables and secrets
+- **[`yv.yaml` format](./docs/yv-yaml.md)** — commit a project config to your repo and let yv find it
 - **[Releasing](./RELEASING.md)** — versioning, signing keys, CI pipeline
 
 ---

@@ -63,11 +63,11 @@ export default function ProjectSettingsModal() {
     setSelectedId(filtered[0]?.id ?? null);
   }
 
-  async function handleExport(format: string) {
+  async function handleExport() {
     const id = settingsProjectId();
     if (!id) return;
     try {
-      const path = await go.ExportProject(id, format);
+      const path = await go.ExportProject(id);
       if (path) alert('Exported to ' + path);
     } catch (err) { alert('Export failed: ' + err); }
   }
@@ -157,9 +157,11 @@ export default function ProjectSettingsModal() {
 
           <div class="project-settings-export">
             <div class="project-settings-export-label">Export Project</div>
+            <div class="project-settings-export-hint">
+              Commit the file to this project's repository and yv can find it again.
+            </div>
             <div class="project-settings-export-btns">
-              <button onClick={() => handleExport('json')}>↑ Export as JSON</button>
-              <button onClick={() => handleExport('yaml')}>↑ Export as YAML</button>
+              <button onClick={handleExport}>↑ Export as yv.yaml</button>
             </div>
           </div>
           <div class="danger-zone">

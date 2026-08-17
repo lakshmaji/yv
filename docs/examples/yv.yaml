@@ -1,0 +1,50 @@
+# A complete yv.yaml exercising every supported field.
+#
+# This file is parsed by internal/config's test suite, so it cannot drift from
+# what the app actually accepts. If you change it, run `make test-go`.
+id: checkout-api
+name: Checkout API
+labelBgColor: "#1f6feb"
+labelTxColor: "#ffffff"
+
+groups:
+  - Docker
+  - Test
+
+groupPaths:
+  Docker: deploy/local
+
+commands:
+  - id: checkout-api-up
+    label: Start stack
+    command: docker compose up -d
+    group: Docker
+
+  - id: checkout-api-logs
+    label: Tail logs
+    command: docker compose logs -f api
+    group: Docker
+    interactive: true
+
+  - id: checkout-api-unit
+    label: Unit tests
+    command: go test ./... -short
+    group: Test
+
+  - id: checkout-api-it
+    label: Integration tests
+    command: ./scripts/integration.sh
+    group: Test
+    workingDir: /opt/fixtures
+    preCommands:
+      - direnv exec . true
+    postCommands:
+      - command: docker compose down
+        timeout: 60
+
+shortcuts:
+  - id: checkout-api-verify
+    name: Verify
+    commandIds:
+      - checkout-api-up
+      - checkout-api-unit

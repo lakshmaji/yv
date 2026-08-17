@@ -15,6 +15,9 @@ import type {
   PeerInfo,
   ShareScope,
   UpdateState,
+  ScanHit,
+  ScanResult,
+  ImportRecord,
 } from './types';
 
 interface WailsRuntime {
@@ -63,9 +66,13 @@ interface GoApp {
   CheckPath(path: string): Promise<boolean>;
   PickFolder(): Promise<string>;
   ExportProjects(): Promise<string>;
-  ExportProject(id: string, format: string): Promise<string>;
+  ExportProject(id: string): Promise<string>;
   ImportProjects(): Promise<string>;
   ImportProject(): Promise<string>;
+  ScanForConfigs(root: string): Promise<ScanResult>;
+  ApplyScanned(paths: string[]): Promise<string>;
+  MarkScanSeen(hits: ScanHit[]): Promise<string>;
+  GetImportHistory(limit: number): Promise<ImportRecord[]>;
   UpdateProject(id: string, name: string, dir: string, labelBgColor: string, labelTxColor: string): Promise<string>;
   SendInput(cmdId: string, text: string): Promise<string>;
   GetEnvironments(projectId: string): Promise<ProjectEnvs>;

@@ -10,51 +10,20 @@ import (
 func TestMarshalUnmarshalProjects(t *testing.T) {
 	cases := []struct {
 		name string
-		ext  string
 		in   []models.Project
 	}{
-		{
-			name: "json single project",
-			ext:  ".json",
-			in:   []models.Project{{ID: "p1", Name: "Test", WorkingDir: "/tmp"}},
-		},
-		{
-			name: "yaml single project",
-			ext:  ".yaml",
-			in:   []models.Project{{ID: "p1", Name: "Test", WorkingDir: "/tmp"}},
-		},
-		{
-			name: "json empty slice",
-			ext:  ".json",
-			in:   []models.Project{},
-		},
-		{
-			name: "yaml empty slice",
-			ext:  ".yaml",
-			in:   []models.Project{},
-		},
-		{
-			name: "yml extension",
-			ext:  ".yml",
-			in:   []models.Project{{ID: "p2", Name: "Second"}},
-		},
-		{
-			name: "json multiple projects",
-			ext:  ".json",
-			in: []models.Project{
-				{ID: "p1", Name: "First"},
-				{ID: "p2", Name: "Second"},
-			},
-		},
+		{"single project", []models.Project{{ID: "p1", Name: "Test", WorkingDir: "/tmp"}}},
+		{"empty slice", []models.Project{}},
+		{"multiple projects", []models.Project{{ID: "p1", Name: "First"}, {ID: "p2", Name: "Second"}}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			data, err := marshalProjects(tc.in, tc.ext)
+			data, err := marshalProjects(tc.in)
 			if err != nil {
 				t.Fatalf("marshalProjects: %v", err)
 			}
-			got, err := unmarshalProjects(data, tc.ext)
+			got, err := unmarshalProjects(data)
 			if err != nil {
 				t.Fatalf("unmarshalProjects: %v", err)
 			}
@@ -73,58 +42,116 @@ func TestMarshalUnmarshalProjects(t *testing.T) {
 	}
 }
 
+// The emitted keys must be the json tag names. yaml.v3 lowercases Go field
+// names when left to itself, which would put "workingdir" and "precommands" in
+// a file people are told to hand-edit and commit.
+func TestExportedYAMLUsesTheJSONFieldNames(t *testing.T) {
+	data, err := toYAML(models.Project{
+		ID:         "p1",
+		Name:       "Test",
+		WorkingDir: "/tmp",
+		Commands: []models.CommandConfig{{
+			ID: "c1", Label: "Build", Command: "make", Group: "G",
+			WorkingDir:   "/tmp/sub",
+			PreCommands:  []string{"nvm use 18"},
+			PostCommands: []models.PostCommand{{Command: "say done", Timeout: 5}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("toYAML: %v", err)
+	}
+
+	for _, want := range []string{"workingDir:", "preCommands:", "postCommands:"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing %q in:\n%s", want, data)
+		}
+	}
+	for _, bad := range []string{"workingdir:", "precommands:", "postcommands:"} {
+		if strings.Contains(string(data), bad) {
+			t.Errorf("emitted lowercased key %q in:\n%s", bad, data)
+		}
+	}
+}
+
+// A file written by a build from before the casing fix has all-lowercase keys.
+// Those still load, because encoding/json matches object keys to struct fields
+// ignoring case. That is a property of the stdlib rather than of this code, so
+// it is pinned here: a refactor away from the JSON round trip would silently
+// start dropping every multi-word field of everyone's existing exports.
+func TestOldLowercaseKeysStillLoad(t *testing.T) {
+	old := `
+- id: p1
+  name: Legacy
+  workingdir: /tmp/legacy
+  groups: [Android]
+  grouppaths:
+    Android: /tmp/legacy/android
+  labelbgcolor: "#123456"
+  commands:
+    - id: c1
+      label: Build
+      command: make
+      group: Android
+      workingdir: /tmp/legacy/sub
+      precommands: ["nvm use 18"]
+      postcommands:
+        - command: say done
+          timeout: 5
+`
+	got, err := unmarshalProjects([]byte(old))
+	if err != nil {
+		t.Fatalf("unmarshalProjects: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d projects, want 1", len(got))
+	}
+	p := got[0]
+	if p.WorkingDir != "/tmp/legacy" {
+		t.Errorf("WorkingDir: got %q, want %q", p.WorkingDir, "/tmp/legacy")
+	}
+	if p.GroupPaths["Android"] != "/tmp/legacy/android" {
+		t.Errorf("GroupPaths: got %v", p.GroupPaths)
+	}
+	if p.LabelBgColor != "#123456" {
+		t.Errorf("LabelBgColor: got %q", p.LabelBgColor)
+	}
+	if len(p.Commands) != 1 {
+		t.Fatalf("got %d commands, want 1", len(p.Commands))
+	}
+	c := p.Commands[0]
+	if c.WorkingDir != "/tmp/legacy/sub" {
+		t.Errorf("cmd WorkingDir: got %q", c.WorkingDir)
+	}
+	if len(c.PreCommands) != 1 || c.PreCommands[0] != "nvm use 18" {
+		t.Errorf("PreCommands: got %v", c.PreCommands)
+	}
+	if len(c.PostCommands) != 1 || c.PostCommands[0].Timeout != 5 {
+		t.Errorf("PostCommands: got %v", c.PostCommands)
+	}
+}
+
 func TestUnmarshalOneProject(t *testing.T) {
 	cases := []struct {
 		name    string
-		ext     string
 		input   string
 		wantID  string
 		wantErr bool
 	}{
-		{
-			name:   "json single object",
-			ext:    ".json",
-			input:  `{"id":"p1","name":"Test"}`,
-			wantID: "p1",
-		},
-		{
-			name:   "json array takes first",
-			ext:    ".json",
-			input:  `[{"id":"p1","name":"First"},{"id":"p2","name":"Second"}]`,
-			wantID: "p1",
-		},
-		{
-			name:   "yaml single object",
-			ext:    ".yaml",
-			input:  "id: p1\nname: Test\n",
-			wantID: "p1",
-		},
-		{
-			name:   "yaml array takes first",
-			ext:    ".yaml",
-			input:  "- id: p1\n  name: First\n- id: p2\n  name: Second\n",
-			wantID: "p1",
-		},
-		{
-			name:    "json invalid",
-			ext:     ".json",
-			input:   `not json`,
-			wantErr: true,
-		},
-		{
-			name:    "json empty object no id",
-			ext:     ".json",
-			input:   `{}`,
-			wantErr: true,
-		},
+		{name: "yaml single object", input: "id: p1\nname: Test\n", wantID: "p1"},
+		{name: "yaml list takes first", input: "- id: p1\n  name: First\n- id: p2\n", wantID: "p1"},
+		// JSON is valid YAML, so an export from an older build still reads.
+		{name: "json single object", input: `{"id":"p1","name":"Test"}`, wantID: "p1"},
+		{name: "json array takes first", input: `[{"id":"p1"},{"id":"p2"}]`, wantID: "p1"},
+		{name: "not parseable", input: "\tid: [unclosed", wantErr: true},
+		{name: "empty object has no id", input: `{}`, wantErr: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := unmarshalOneProject([]byte(tc.input), tc.ext)
+			got, err := unmarshalOneProject([]byte(tc.input))
 			if tc.wantErr {
 				if err == nil {
-					t.Error("expected error, got nil")
+					t.Errorf("expected error, got project %+v", got)
 				}
 				return
 			}
