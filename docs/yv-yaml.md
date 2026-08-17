@@ -1,6 +1,6 @@
 # `yv.yaml` — the project config format
 
-[← back to the README](../README.md)
+[← back to the README](https://github.com/lakshmaji/yv/blob/main/README.md)
 
 Commit a `yv.yaml` to a repository and yv can find it, import it, and keep it up to
 date as your team changes it. It is the same file yv writes when you export a
