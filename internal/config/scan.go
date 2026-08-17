@@ -293,6 +293,7 @@ func (s *Store) ApplyScanned(paths []string) (string, error) {
 	var (
 		added, replaced int
 		failed          []string
+		records         []models.ImportRecord
 	)
 
 	for _, path := range paths {
@@ -302,20 +303,32 @@ func (s *Store) ApplyScanned(paths []string) (string, error) {
 			continue
 		}
 
+		action := "added"
 		if i, ok := index[p.ID]; ok {
 			projects[i] = p
 			replaced++
+			action = "replaced"
 		} else {
 			index[p.ID] = len(projects)
 			projects = append(projects, p)
 			added++
 		}
+		records = append(records, models.ImportRecord{
+			Source:      "scan",
+			Path:        path,
+			ProjectID:   p.ID,
+			ProjectName: p.Name,
+			Action:      action,
+			Commands:    len(p.Commands),
+		})
 	}
 
 	if added+replaced > 0 {
 		if err := writeProjects(configP, projects); err != nil {
 			return "", err
 		}
+		// After the write, so the log never claims an import that did not land.
+		appendImports(records)
 	}
 
 	return importSummary(added, replaced, failed), nil

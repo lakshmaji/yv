@@ -205,7 +205,7 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("parse: %w", err)
 	}
 
-	return s.ImportProjectsFromSlice(incoming)
+	return s.importSlice(incoming, path)
 }
 
 // ImportProjectsFromSlice merges projects into the stored config by ID: a
@@ -216,6 +216,13 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 // projects arriving over the network from another device — one implementation
 // for both paths, so a change to the merge rule cannot apply to only one of them.
 func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, error) {
+	return s.importSlice(incoming, "")
+}
+
+// importSlice is the merge, with the source path the audit log wants. The
+// exported wrapper keeps the peer-share caller's signature unchanged; a share
+// has no file path, and "" is what the log records for it.
+func (s *Store) importSlice(incoming []models.Project, source string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -226,6 +233,7 @@ func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, erro
 	}
 
 	added, skipped := 0, 0
+	var records []models.ImportRecord
 	for _, p := range incoming {
 		if p.ID == "" || seen[p.ID] {
 			skipped++
@@ -234,6 +242,14 @@ func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, erro
 		seen[p.ID] = true
 		existing = append(existing, p)
 		added++
+		records = append(records, models.ImportRecord{
+			Source:      importSource(source),
+			Path:        source,
+			ProjectID:   p.ID,
+			ProjectName: p.Name,
+			Action:      "added",
+			Commands:    len(p.Commands),
+		})
 	}
 
 	configP, err := configPath()
@@ -243,6 +259,7 @@ func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, erro
 	if err := writeProjects(configP, existing); err != nil {
 		return "", err
 	}
+	appendImports(records)
 
 	if skipped > 0 {
 		return fmt.Sprintf("Imported %d project(s), skipped %d (already exist)", added, skipped), nil
@@ -295,7 +312,24 @@ func (s *Store) ImportProject(ctx context.Context) (string, error) {
 	if err := writeProjects(configP, existing); err != nil {
 		return "", err
 	}
+	appendImports([]models.ImportRecord{{
+		Source:      "file",
+		Path:        path,
+		ProjectID:   p.ID,
+		ProjectName: p.Name,
+		Action:      "added",
+		Commands:    len(p.Commands),
+	}})
 	return fmt.Sprintf("Imported project %q", p.Name), nil
+}
+
+// importSource distinguishes a file the user chose from a project pushed over
+// the network, since only one of those is something they went and found.
+func importSource(path string) string {
+	if path == "" {
+		return "peer"
+	}
+	return "file"
 }
 
 func configPath() (string, error) {

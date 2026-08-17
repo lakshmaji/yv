@@ -165,6 +165,40 @@ func (a *App) ImportProject() (string, error) {
 	return a.cfg.ImportProject(a.getCtx())
 }
 
+// --- yv.yaml folder scanning ---
+
+// ScanForConfigs walks a folder for yv.yaml files. It writes nothing; the user
+// decides what to import from the result.
+func (a *App) ScanForConfigs(root string) models.ScanResult {
+	// Its own deadline rather than the app context's: a scan that stalls on an
+	// unresponsive network mount must give up on its own, and quitting the app
+	// cancels it either way.
+	ctx, cancel := context.WithTimeout(a.getCtx(), config.ScanTimeout)
+	defer cancel()
+	return a.cfg.ScanForConfigs(ctx, root)
+}
+
+// ApplyScanned imports the chosen config files, replacing projects by id.
+func (a *App) ApplyScanned(paths []string) string {
+	msg, err := a.cfg.ApplyScanned(paths)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return msg
+}
+
+// MarkScanSeen records that the user has answered for these files, so the
+// background scan stops offering them.
+func (a *App) MarkScanSeen(hits []models.ScanHit) string {
+	a.cfg.MarkSeen(hits)
+	return "ok"
+}
+
+// GetImportHistory returns the most recent imports, newest first.
+func (a *App) GetImportHistory(limit int) []models.ImportRecord {
+	return a.cfg.GetImportHistory(limit)
+}
+
 // --- Environment delegation ---
 
 // GetEnvironments returns every environment defined for a project, plus the
