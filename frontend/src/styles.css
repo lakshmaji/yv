@@ -2664,6 +2664,26 @@
     .settings-row-control select:focus { outline: none; border-color: var(--accent); }
     .settings-unit { font-size: 11px; color: var(--muted); }
 
+    /* The chosen folder can be long, so it gets a bounded box that truncates
+       from the left — the leaf folder is the part that identifies it. */
+    .settings-scan-control { max-width: 60%; }
+    .settings-scan-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      max-width: 240px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+    .settings-row-control select:disabled { opacity: .5; cursor: not-allowed; }
+
     .settings-toggle input[type="checkbox"] {
       width: auto;
       flex-shrink: 0;

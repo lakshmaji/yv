@@ -212,6 +212,15 @@ type Settings struct {
 	// Separate from the hum because they are different sounds doing different
 	// jobs — one is ambient and looped, the other is the end of the sweep.
 	DroneCrashClip string `json:"droneCrashClip,omitempty"`
+
+	// ScanDir is the folder searched for committed yv.yaml files. Empty — the
+	// zero value, and so the default — means scanning is off entirely, which is
+	// what an older settings file gets without any migration.
+	ScanDir string `json:"scanDir,omitempty"`
+	// ScanInterval is how often that folder is rescanned, in minutes. Zero means
+	// never, for the same reason: a feature that starts walking someone's disk
+	// because they upgraded is not one they opted into.
+	ScanInterval int `json:"scanInterval,omitempty"`
 }
 
 // --- peer sharing ---

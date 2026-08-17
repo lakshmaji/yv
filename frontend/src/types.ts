@@ -127,6 +127,10 @@ export interface AppSettings {
   droneFanClip?: string;
   /** Played once when a drone bursts after an empty sweep. Empty means silent. */
   droneCrashClip?: string;
+  /** Folder searched for committed yv.yaml files. Empty means scanning is off. */
+  scanDir?: string;
+  /** How often to rescan, in minutes. 0 means never. */
+  scanInterval?: number;
 }
 
 // --- peer sharing ---
