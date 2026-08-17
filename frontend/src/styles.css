@@ -2704,7 +2704,7 @@
       font-size: 11px;
       color: var(--muted);
     }
-    .settings-clip-clear:hover { color: var(--danger, #f85149); }
+    .settings-clip-clear:hover { color: var(--red); }
 
     /* Empty state doubles as the add target: with no clips, the row button
        above is the only affordance and it is easy to read past. */
@@ -2811,7 +2811,7 @@
       font-size: 9px;
       text-transform: uppercase;
       letter-spacing: .5px;
-      color: var(--danger, #f85149);
+      color: var(--red);
       background: rgba(248,81,73,.12);
     }
     .settings-clip-row.broken .settings-clip-name { color: var(--muted); }
@@ -2830,7 +2830,7 @@
        column of delete buttons — but never hidden from the keyboard. */
     .settings-clip-row:hover .settings-clip-remove,
     .settings-clip-remove:focus-visible { opacity: 1; }
-    .settings-clip-remove:hover { color: var(--danger, #f85149); }
+    .settings-clip-remove:hover { color: var(--red); }
 
     /* ── Discovery landscape ─────────────────────────────── */
     /* Reuses #dashboard-header / .dash-toolbar / .dash-refresh, so the header
@@ -4308,3 +4308,266 @@
   color: #22e8ff;
   opacity: 1;
 }
+
+    /* ── yv.yaml scan review ────────────────────────────────────────────── */
+
+    /* Pending hits reach the user here when the dialog held back because
+       something else was already open. */
+    #btn-scan {
+      margin: 0 10px 8px;
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 12px;
+      text-align: center;
+      width: calc(100% - 20px);
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: border-color .15s, color .15s;
+    }
+    #btn-scan:hover { border-color: var(--accent); color: var(--accent); }
+    #sidebar.collapsed #btn-scan { display: none; }
+
+    .scan-pending-count {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 9px;
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 16px;
+    }
+
+    .scan-modal {
+      width: 720px;
+      max-width: 92vw;
+      display: flex;
+      flex-direction: column;
+      max-height: 84vh;
+    }
+
+    .scan-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin: -6px 0 10px;
+      overflow-wrap: anywhere;
+    }
+
+    .scan-root-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .scan-root-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+    }
+    /* Truncates from the left: the leaf folder is what identifies a path. */
+    .scan-root-path {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+
+    .scan-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 0 8px;
+    }
+    .scan-toolbar-actions { display: flex; gap: 6px; }
+    .scan-count { font-size: 11px; color: var(--muted); }
+
+    /* The list scrolls rather than the dialog: the footer carries the decision
+       and must stay reachable with eighteen projects in view. */
+    .scan-list {
+      flex: 1;
+      min-height: 80px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .scan-hit { border-bottom: 1px solid var(--border); }
+    .scan-hit:last-child { border-bottom: none; }
+    .scan-hit.broken { opacity: .72; }
+
+    .scan-hit-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+    }
+    .scan-hit-main input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+    .scan-hit-body { flex: 1; min-width: 0; cursor: pointer; }
+    .scan-hit.broken .scan-hit-body { cursor: default; }
+
+    .scan-hit-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .scan-hit-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .scan-hit-count { font-size: 11px; color: var(--muted); }
+    .scan-hit-dropped { font-size: 11px; color: var(--yellow); }
+    .scan-hit-path {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+    .scan-hit-error {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .scan-badge {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+    }
+    .scan-badge.new     { color: var(--green);  border-color: #3fb95055; background: #3fb95015; }
+    .scan-badge.replace { color: var(--yellow); border-color: #d2992255; background: #d2992215; }
+    .scan-badge.err     { color: var(--red);    border-color: #f8514955; background: #f8514915; }
+
+    .scan-expand {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+    .scan-expand:hover { color: var(--text); }
+
+    /* The commands, in full. Agreeing to run someone else's shell without
+       reading it is the thing this dialog exists to prevent. */
+    .scan-preview {
+      padding: 2px 10px 10px 34px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .scan-cmd { display: flex; flex-direction: column; gap: 2px; }
+    .scan-cmd-head { display: flex; align-items: center; gap: 6px; }
+    .scan-cmd-label { font-size: 11px; font-weight: 600; color: var(--text); }
+    .scan-cmd-group {
+      font-size: 9px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 0 5px;
+    }
+    .scan-cmd-text {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--card);
+      border-radius: 4px;
+      padding: 3px 6px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    /* Hooks run automatically around a command the user did press Run on, so
+       they are labelled rather than folded into a count. */
+    .scan-cmd-text.hook { opacity: .85; font-style: italic; }
+    .scan-hook-tag {
+      font-style: normal;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--accent);
+      margin-right: 4px;
+    }
+
+    .scan-empty {
+      padding: 18px 12px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .scan-history { margin-top: 10px; }
+    .scan-history-toggle {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 0;
+    }
+    .scan-history-toggle:hover { color: var(--text); }
+    .scan-history-list {
+      margin-top: 6px;
+      max-height: 140px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .scan-history-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-bottom: 1px solid var(--border);
+    }
+    .scan-history-row:last-child { border-bottom: none; }
+    .scan-history-at { font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
+    .scan-history-action { color: var(--accent); flex-shrink: 0; }
+    .scan-history-name { font-weight: 600; flex-shrink: 0; }
+    .scan-history-path {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--mono);
+      color: var(--muted);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+
+    .scan-error {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--red);
+      overflow-wrap: anywhere;
+    }
+    .scan-notice {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }

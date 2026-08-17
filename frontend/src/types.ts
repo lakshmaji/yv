@@ -93,6 +93,42 @@ export interface ProcessStats {
 /** Dashboard sections the user can show or hide. */
 export type PanelId = 'stats' | 'memory' | 'frequency' | 'activity';
 
+// --- folder scanning ---
+
+/** One yv.yaml the scanner found. */
+export interface ScanHit {
+  path: string;
+  dir: string;
+  /** sha256 of the file. Empty when the file could not be read. */
+  hash: string;
+  project: Project;
+  /** A stored project already has this id, so importing replaces it. */
+  exists: boolean;
+  existingCommands?: number;
+  /** Why this file cannot be imported. Set means the row is not selectable. */
+  error?: string;
+  /** Commands discarded as unusable in an otherwise valid file. */
+  dropped?: number;
+}
+
+export interface ScanResult {
+  hits: ScanHit[];
+  /** Why the walk stopped early. Empty means it completed. */
+  truncated?: string;
+  elapsedMs: number;
+  scanned: number;
+}
+
+export interface ImportRecord {
+  at: string;
+  source: string;
+  path: string;
+  projectId: string;
+  projectName: string;
+  action: string;
+  commands: number;
+}
+
 export interface AppSettings {
   schemaVersion: number;
   metricsEnabled: boolean;

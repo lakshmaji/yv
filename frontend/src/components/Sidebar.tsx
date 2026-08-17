@@ -8,6 +8,7 @@ import {
   runningCount, projectRunningCount,
   setSettingsProjectId, setSearchQuery, setSpotlightOpen,
   activeView, setActiveView,
+  setScanModalOpen, scanHits,
 } from '../store';
 import { go } from '../wails';
 import { uid } from '../lib/utils';
@@ -281,23 +282,36 @@ export default function Sidebar(props: SidebarProps) {
 
       <button
         id="btn-import-project"
-        title="Import a single project from JSON or YAML"
+        title="Import a single project from a yv.yaml file"
         onClick={handleImportProject}
       >
         ↓ Import Project
       </button>
 
+      {/* The badge is how a scan reaches the user when the dialog held back —
+          it opens itself only when nothing else is in the way. */}
+      <button
+        id="btn-scan"
+        title="Find yv.yaml files in your code folders"
+        onClick={() => setScanModalOpen(true)}
+      >
+        ⌕ Scan folder
+        <Show when={scanHits().length}>
+          <span class="scan-pending-count">{scanHits().length}</span>
+        </Show>
+      </button>
+
       <div id="data-actions">
         <button
           id="btn-export"
-          title="Export all projects to JSON or YAML"
+          title="Export all projects as YAML"
           onClick={handleExport}
         >
           ↑ Export
         </button>
         <button
           id="btn-import"
-          title="Import projects from JSON or YAML"
+          title="Import projects from a yv.yaml file"
           onClick={handleImport}
         >
           ↓ Import

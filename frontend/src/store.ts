@@ -18,6 +18,7 @@ import type {
   IncomingConnect,
   ShareProgress,
   UpdateState,
+  ScanHit,
 } from './types';
 import { variantById } from './lib/drone';
 
@@ -251,6 +252,15 @@ function resetShareState(): void {
 
 // Global settings modal (opened from View → Settings… / ⌘,)
 const [settingsModalOpen, setSettingsModalOpen] = createSignal(false);
+
+// --- yv.yaml folder scanning ---
+
+const [scanModalOpen, setScanModalOpen] = createSignal(false);
+
+// Hits the user has been shown but not yet answered for. Lives here rather
+// than in the modal because the background scan finds them while the dialog is
+// unmounted, and the Sidebar badge reads the same list.
+const [scanHits, setScanHits] = createSignal<ScanHit[]>([]);
 const [appSettings, setAppSettings] = createSignal<AppSettings>({
   schemaVersion: 1,
   metricsEnabled: false,
@@ -521,6 +531,8 @@ export {
   incomingResult, setIncomingResult,
   incomingError, setIncomingError,
   settingsModalOpen, setSettingsModalOpen,
+  scanModalOpen, setScanModalOpen,
+  scanHits, setScanHits,
   appSettings, setAppSettings, loadAppSettings,
   dashGroupBy, setDashGroupBy,
   dashRangeDays, setDashRangeDays,

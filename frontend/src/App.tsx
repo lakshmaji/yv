@@ -13,6 +13,7 @@ import {
   updateModalOpen, setUpdateModalOpen, setUpdateState,
   activeView, setActiveView,
   settingsModalOpen, setSettingsModalOpen, loadAppSettings,
+  scanModalOpen, setScanModalOpen,
   splashDone,
 } from './store';
 import { go, runtime } from './wails';
@@ -32,6 +33,7 @@ import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
 import AboutModal from './components/modals/AboutModal';
 import UpdateModal from './components/modals/UpdateModal';
 import SettingsModal from './components/modals/SettingsModal';
+import ScanModal from './components/modals/ScanModal';
 import IncomingShareModal from './components/modals/IncomingShareModal';
 import IncomingConnectModal from './components/modals/IncomingConnectModal';
 import DashboardPanel from './components/DashboardPanel';
@@ -156,7 +158,7 @@ export default function App() {
       const modalOpen =
         editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
         settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen() ||
-        updateModalOpen();
+        updateModalOpen() || scanModalOpen();
       if (maximizedCmd() && !modalOpen) {
         setMaximizedCmd(null);
         return;
@@ -169,6 +171,9 @@ export default function App() {
       setSettingsModalOpen(false);
       setAboutModalOpen(false);
       setUpdateModalOpen(false);
+      // Deliberately leaves scanHits alone: dismissing without deciding is not
+      // an answer, so the prompt returns on the next scan.
+      setScanModalOpen(false);
     }
   }
 
@@ -180,6 +185,7 @@ export default function App() {
   let unsubUpdateState: (() => void) | undefined;
   let unsubSettings: (() => void) | undefined;
   let unsubDashboard: (() => void) | undefined;
+  let unsubScan: (() => void) | undefined;
   let unsubPeers: Array<() => void> = [];
 
   onMount(() => {
@@ -226,6 +232,9 @@ export default function App() {
     });
     unsubDashboard = runtime.EventsOn('open-dashboard', () => {
       setActiveView('dashboard');
+    });
+    unsubScan = runtime.EventsOn('open-scan', () => {
+      setScanModalOpen(true);
     });
 
     // Peer and share events are wired here rather than in DiscoveryPanel on
@@ -302,6 +311,7 @@ export default function App() {
     unsubUpdateState?.();
     unsubSettings?.();
     unsubDashboard?.();
+    unsubScan?.();
     unsubPeers.forEach(off => off());
   });
 
@@ -332,6 +342,7 @@ export default function App() {
       <AboutModal />
       <UpdateModal />
       <SettingsModal />
+      <ScanModal />
       {/* Global, not inside DiscoveryPanel: a request can arrive on any view. */}
       <Show when={incomingConnect()}>
         <IncomingConnectModal />
