@@ -163,6 +163,11 @@ func readHit(path string, d fs.DirEntry, existing map[string]int) models.ScanHit
 	// Checked before opening, so an enormous file costs no read.
 	if info, err := d.Info(); err == nil && info.Size() > maxYAMLSize {
 		hit.Error = fmt.Sprintf("file is %d KB, larger than the %d KB limit", info.Size()/1024, maxYAMLSize/1024)
+		// Stood in for the content hash, which cannot be computed without the
+		// read this branch exists to avoid. Without one the file could never be
+		// marked as answered and would be re-offered on every scan forever;
+		// keying on the size means it comes back if it is ever rewritten.
+		hit.Hash = fmt.Sprintf("oversize-%d", info.Size())
 		return hit
 	}
 

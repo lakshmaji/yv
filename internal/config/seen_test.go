@@ -33,9 +33,27 @@ func TestUnseenHits(t *testing.T) {
 			want: []string{"/a"},
 		},
 		{
-			name: "a broken file has no hash and keeps being reported",
-			seen: []models.ScanHit{{Path: "/a", Hash: "h1"}},
-			hits: []models.ScanHit{{Path: "/broken", Error: "cannot parse"}},
+			// A file that could not be read has no hash and so can never be
+			// marked; it keeps being offered, which is right because the cause
+			// is usually transient.
+			name: "an unreadable file has no hash and keeps being reported",
+			seen: []models.ScanHit{{Path: "/unreadable", Error: "cannot read"}},
+			hits: []models.ScanHit{{Path: "/unreadable", Error: "cannot read"}},
+			want: []string{"/unreadable"},
+		},
+		{
+			// A file that parsed badly is hashed like any other, so saying "not
+			// now" to it sticks. Re-nagging about a broken config in a repo the
+			// user does not own would be a prompt they cannot end.
+			name: "an answered broken file falls silent",
+			seen: []models.ScanHit{{Path: "/broken", Hash: "h1", Error: "cannot parse"}},
+			hits: []models.ScanHit{{Path: "/broken", Hash: "h1", Error: "cannot parse"}},
+			want: nil,
+		},
+		{
+			name: "a broken file that changed is reported again",
+			seen: []models.ScanHit{{Path: "/broken", Hash: "h1", Error: "cannot parse"}},
+			hits: []models.ScanHit{{Path: "/broken", Hash: "h2"}},
 			want: []string{"/broken"},
 		},
 	}

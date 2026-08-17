@@ -221,8 +221,11 @@ func TestScanBounds(t *testing.T) {
 		if !strings.Contains(res.Hits[0].Error, "larger than") {
 			t.Errorf("Error: got %q, want a size complaint", res.Hits[0].Error)
 		}
-		if res.Hits[0].Hash != "" {
-			t.Error("an oversized file must not be read, so it has no hash")
+		// It carries a stand-in hash keyed on the size rather than the contents,
+		// so the user can dismiss it — but the read it exists to avoid must not
+		// have happened, which is what the size-derived form proves.
+		if !strings.HasPrefix(res.Hits[0].Hash, "oversize-") {
+			t.Errorf("Hash: got %q, want a size-derived stand-in (the file must not be read)", res.Hits[0].Hash)
 		}
 	})
 

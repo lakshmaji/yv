@@ -52,10 +52,15 @@ func loadSeen() map[string]string {
 // UnseenHits keeps only the hits worth interrupting the user for: a path never
 // asked about, or one whose contents have changed since it was.
 //
-// A hit that failed to parse is never "seen" — it has no hash — so a broken
-// file keeps being reported until it is fixed or removed. That is deliberate:
-// the alternative is a config that silently never appears and no way to find
-// out why.
+// A file that failed to parse is hashed and marked like any other, so it is
+// reported once and then falls silent until its contents change — at which
+// point the user hears about it again, which is what they want if someone has
+// just fixed it. The alternative, re-reporting a broken file forever, is a nag
+// the user often cannot end: the file may be in a repository they do not own.
+//
+// The exception is a hit with no hash at all, which is a file that could not be
+// read rather than one that could not be parsed. Those keep being offered,
+// because the cause is usually transient.
 func (s *Store) UnseenHits(hits []models.ScanHit) []models.ScanHit {
 	seen := loadSeen()
 	out := make([]models.ScanHit, 0, len(hits))
