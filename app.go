@@ -149,8 +149,8 @@ func (a *App) UpdateProject(projectID, name, workingDir, labelBgColor, labelTxCo
 	return a.cfg.UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor)
 }
 
-func (a *App) ExportProject(projectID, format string) (string, error) {
-	return a.cfg.ExportProject(a.getCtx(), projectID, format)
+func (a *App) ExportProject(projectID string) (string, error) {
+	return a.cfg.ExportProject(a.getCtx(), projectID)
 }
 
 func (a *App) ExportProjects() (string, error) {

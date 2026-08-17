@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +14,28 @@ import (
 	"yv/internal/atomicfile"
 	"yv/internal/models"
 )
+
+// ConfigFileName is the name a project's committed config must have for the
+// folder scanner to find it. yv.yml is accepted as an alternative spelling.
+const (
+	ConfigFileName    = "yv.yaml"
+	ConfigFileNameAlt = "yv.yml"
+)
+
+// yamlFilter is the save-dialog filter. Export is YAML and nothing else: two
+// interchangeable formats means two ways to spell the same file and a format
+// argument threaded through the API for no benefit anyone can see.
+var yamlFilter = wailsRuntime.FileFilter{
+	DisplayName: "YAML (*.yaml;*.yml)",
+	Pattern:     "*.yaml;*.yml",
+}
+
+// importFilter still admits .json, because JSON is valid YAML and so files
+// exported by an older build cost nothing to keep reading.
+var importFilter = wailsRuntime.FileFilter{
+	DisplayName: "yv config (*.yaml;*.yml;*.json)",
+	Pattern:     "*.yaml;*.yml;*.json",
+}
 
 // Store is a file-backed persistence layer. All state lives on disk; the mutex
 // exists only to serialise the read-modify-write cycles.
@@ -104,8 +125,12 @@ func (s *Store) UpdateProject(projectID, name, workingDir, labelBgColor, labelTx
 	return "error: project not found"
 }
 
-// ExportProject opens a save dialog and writes a single project to a file.
-func (s *Store) ExportProject(ctx context.Context, projectID, format string) (string, error) {
+// ExportProject opens a save dialog and writes a single project as YAML.
+//
+// The default filename is yv.yaml rather than the project's name because the
+// point of exporting one project is to drop it into that project's repository,
+// where the scanner will find it.
+func (s *Store) ExportProject(ctx context.Context, projectID string) (string, error) {
 	var p *models.Project
 	for _, proj := range s.LoadProjects() {
 		if proj.ID == projectID {
@@ -117,17 +142,10 @@ func (s *Store) ExportProject(ctx context.Context, projectID, format string) (st
 		return "", fmt.Errorf("project not found")
 	}
 
-	ext := ".json"
-	if format == "yaml" {
-		ext = ".yaml"
-	}
-
 	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "Export Project",
-		DefaultFilename: p.Name + ext,
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: strings.ToUpper(format) + " (*" + ext + ")", Pattern: "*" + ext},
-		},
+		DefaultFilename: ConfigFileName,
+		Filters:         []wailsRuntime.FileFilter{yamlFilter},
 	})
 	if err != nil {
 		return "", err
@@ -136,12 +154,7 @@ func (s *Store) ExportProject(ctx context.Context, projectID, format string) (st
 		return "", nil
 	}
 
-	var out []byte
-	if format == "yaml" {
-		out, err = yaml.Marshal(p)
-	} else {
-		out, err = json.MarshalIndent(p, "", "  ")
-	}
+	out, err := toYAML(p)
 	if err != nil {
 		return "", err
 	}
@@ -152,11 +165,8 @@ func (s *Store) ExportProject(ctx context.Context, projectID, format string) (st
 func (s *Store) ExportProjects(ctx context.Context) (string, error) {
 	path, err := wailsRuntime.SaveFileDialog(ctx, wailsRuntime.SaveDialogOptions{
 		Title:           "Export Projects",
-		DefaultFilename: "yv-projects.json",
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "JSON (*.json)", Pattern: "*.json"},
-			{DisplayName: "YAML (*.yaml)", Pattern: "*.yaml"},
-		},
+		DefaultFilename: "yv-projects.yaml",
+		Filters:         []wailsRuntime.FileFilter{yamlFilter},
 	})
 	if err != nil {
 		return "", err
@@ -165,8 +175,7 @@ func (s *Store) ExportProjects(ctx context.Context) (string, error) {
 		return "", nil
 	}
 
-	ext := strings.ToLower(filepath.Ext(path))
-	out, err := marshalProjects(s.LoadProjects(), ext)
+	out, err := marshalProjects(s.LoadProjects())
 	if err != nil {
 		return "", err
 	}
@@ -176,10 +185,8 @@ func (s *Store) ExportProjects(ctx context.Context) (string, error) {
 // ImportProjects opens an open dialog, reads the chosen file, and merges new projects (by ID) into the config.
 func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 	path, err := wailsRuntime.OpenFileDialog(ctx, wailsRuntime.OpenDialogOptions{
-		Title: "Import Projects",
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "JSON / YAML (*.json;*.yaml;*.yml)", Pattern: "*.json;*.yaml;*.yml"},
-		},
+		Title:   "Import Projects",
+		Filters: []wailsRuntime.FileFilter{importFilter},
 	})
 	if err != nil {
 		return "", err
@@ -193,8 +200,7 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	ext := strings.ToLower(filepath.Ext(path))
-	incoming, err := unmarshalProjects(data, ext)
+	incoming, err := unmarshalProjects(data)
 	if err != nil {
 		return "", fmt.Errorf("parse: %w", err)
 	}
@@ -249,10 +255,8 @@ func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, erro
 // Existing projects are never modified.
 func (s *Store) ImportProject(ctx context.Context) (string, error) {
 	path, err := wailsRuntime.OpenFileDialog(ctx, wailsRuntime.OpenDialogOptions{
-		Title: "Import Project",
-		Filters: []wailsRuntime.FileFilter{
-			{DisplayName: "JSON / YAML (*.json;*.yaml;*.yml)", Pattern: "*.json;*.yaml;*.yml"},
-		},
+		Title:   "Import Project",
+		Filters: []wailsRuntime.FileFilter{importFilter},
 	})
 	if err != nil {
 		return "", err
@@ -266,8 +270,7 @@ func (s *Store) ImportProject(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	ext := strings.ToLower(filepath.Ext(path))
-	p, err := unmarshalOneProject(data, ext)
+	p, err := unmarshalOneProject(data)
 	if err != nil {
 		return "", fmt.Errorf("parse: %w", err)
 	}
@@ -315,43 +318,65 @@ func writeProjects(path string, projects []models.Project) error {
 	return atomicfile.Write(path, data, 0o644)
 }
 
-func marshalProjects(projects []models.Project, ext string) ([]byte, error) {
-	if ext == ".yaml" || ext == ".yml" {
-		return yaml.Marshal(projects)
+// toYAML encodes v as YAML with the keys the json struct tags name.
+//
+// yaml.v3 ignores json tags and lowercases the Go field name instead, so
+// marshalling a Project directly emits "workingdir" and "precommands". That was
+// tolerable while YAML was one of two backup formats; it is not, now that
+// yv.yaml is a file people write by hand and commit. Routing through JSON keeps
+// one set of field names for the whole app rather than a second set of yaml
+// tags to forget to add.
+func toYAML(v any) ([]byte, error) {
+	j, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
 	}
-	return json.MarshalIndent(projects, "", "  ")
+	// JSON is valid YAML, and yaml.v3 decodes mappings as map[string]any, so
+	// this survives the round trip unchanged.
+	var tree any
+	if err := yaml.Unmarshal(j, &tree); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(tree)
 }
 
-func unmarshalProjects(data []byte, ext string) ([]models.Project, error) {
-	var projects []models.Project
-	if ext == ".yaml" || ext == ".yml" {
-		err := yaml.Unmarshal(data, &projects)
-		return projects, err
+// fromYAML decodes YAML into out through the same JSON round trip.
+//
+// This is also what keeps files written by older builds readable: their keys
+// are lowercased ("workingdir"), and encoding/json matches object keys to
+// struct fields ignoring case, preferring an exact match. Decoding into the
+// struct with yaml.v3 directly would match exactly and silently drop them.
+func fromYAML(data []byte, out any) error {
+	var tree any
+	if err := yaml.Unmarshal(data, &tree); err != nil {
+		return err
 	}
-	err := json.Unmarshal(data, &projects)
+	j, err := json.Marshal(tree)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(j, out)
+}
+
+func marshalProjects(projects []models.Project) ([]byte, error) {
+	return toYAML(projects)
+}
+
+func unmarshalProjects(data []byte) ([]models.Project, error) {
+	var projects []models.Project
+	err := fromYAML(data, &projects)
 	return projects, err
 }
 
-// unmarshalOneProject parses a single Project from JSON or YAML.
-// Accepts either a single object or an array (takes the first element).
-func unmarshalOneProject(data []byte, ext string) (models.Project, error) {
-	if ext == ".yaml" || ext == ".yml" {
-		var p models.Project
-		if err := yaml.Unmarshal(data, &p); err == nil && p.ID != "" {
-			return p, nil
-		}
-		var ps []models.Project
-		if err := yaml.Unmarshal(data, &ps); err == nil && len(ps) > 0 {
-			return ps[0], nil
-		}
-		return models.Project{}, fmt.Errorf("no project found in file")
-	}
+// unmarshalOneProject parses a single Project, accepting either a lone object
+// or a list (taking the first entry).
+func unmarshalOneProject(data []byte) (models.Project, error) {
 	var p models.Project
-	if err := json.Unmarshal(data, &p); err == nil && p.ID != "" {
+	if err := fromYAML(data, &p); err == nil && p.ID != "" {
 		return p, nil
 	}
 	var ps []models.Project
-	if err := json.Unmarshal(data, &ps); err == nil && len(ps) > 0 {
+	if err := fromYAML(data, &ps); err == nil && len(ps) > 0 {
 		return ps[0], nil
 	}
 	return models.Project{}, fmt.Errorf("no project found in file")

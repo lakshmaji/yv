@@ -286,6 +286,13 @@
       letter-spacing: .6px;
       color: var(--muted);
     }
+
+    .project-settings-export-hint {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 4px 0 8px;
+    }
     .project-settings-export-btns {
       display: flex;
       gap: 8px;
