@@ -258,3 +258,107 @@ func validateScanned(p *models.Project, dir string) (int, error) {
 	}
 	return dropped, nil
 }
+
+// ApplyScanned imports the config files at the given paths, replacing any
+// project that already has the same id.
+//
+// Replace, not merge: the point of committing a yv.yaml is that pulling a
+// teammate's change updates your commands, and a merge would keep a command
+// they deleted forever.
+//
+// The files are re-read rather than taking the parsed hits from the caller,
+// because the review dialog can sit open for a while and the disk is the truth.
+// Deliberately separate from ImportProjectsFromSlice, which skips rather than
+// overwrites: that one is also where projects arriving from a peer land, and a
+// device on the network must never be able to replace a project.
+func (s *Store) ApplyScanned(paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "Nothing selected", nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	configP, err := configPath()
+	if err != nil {
+		return "", err
+	}
+
+	projects := loadProjects()
+	index := make(map[string]int, len(projects))
+	for i, p := range projects {
+		index[p.ID] = i
+	}
+
+	var (
+		added, replaced int
+		failed          []string
+	)
+
+	for _, path := range paths {
+		p, err := readProjectFile(path)
+		if err != nil {
+			failed = append(failed, filepath.Base(filepath.Dir(path))+": "+err.Error())
+			continue
+		}
+
+		if i, ok := index[p.ID]; ok {
+			projects[i] = p
+			replaced++
+		} else {
+			index[p.ID] = len(projects)
+			projects = append(projects, p)
+			added++
+		}
+	}
+
+	if added+replaced > 0 {
+		if err := writeProjects(configP, projects); err != nil {
+			return "", err
+		}
+	}
+
+	return importSummary(added, replaced, failed), nil
+}
+
+// readProjectFile reads and validates one config file from disk.
+func readProjectFile(path string) (models.Project, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return models.Project{}, err
+	}
+	if info.Size() > maxYAMLSize {
+		return models.Project{}, fmt.Errorf("file is larger than the %d KB limit", maxYAMLSize/1024)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return models.Project{}, err
+	}
+	p, err := unmarshalOneProject(data)
+	if err != nil {
+		return models.Project{}, fmt.Errorf("cannot parse: %w", err)
+	}
+	if _, err := validateScanned(&p, filepath.Dir(path)); err != nil {
+		return models.Project{}, err
+	}
+	return p, nil
+}
+
+func importSummary(added, replaced int, failed []string) string {
+	var parts []string
+	if added > 0 {
+		parts = append(parts, fmt.Sprintf("added %d", added))
+	}
+	if replaced > 0 {
+		parts = append(parts, fmt.Sprintf("replaced %d", replaced))
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "imported nothing")
+	}
+	msg := "Imported: " + strings.Join(parts, ", ")
+	if len(failed) > 0 {
+		msg += fmt.Sprintf(" — %d failed: %s", len(failed), strings.Join(failed, "; "))
+	}
+	return msg
+}
