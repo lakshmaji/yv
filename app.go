@@ -87,6 +87,7 @@ func (a *App) startup(ctx context.Context) {
 	go func() { _ = a.metrics.Prune(time.Now()) }()
 	// Clears anything an interrupted update left behind, then checks quietly.
 	a.startUpdateWatch(ctx)
+	a.startScanMonitor(ctx)
 }
 
 // closeMetrics flushes the partial metrics bucket and releases the day files.
