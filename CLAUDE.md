@@ -46,7 +46,6 @@ What follows from being a specification rather than an app format:
 | [RELEASING.md](./RELEASING.md) | Release pipeline, signing keys, artifact table, troubleshooting |
 | [FEATURES.md](./FEATURES.md) | User-facing behaviour |
 | [docs/environments.md](./docs/environments.md) | Environment variable syntax and precedence |
-| [docs/history.md](./docs/history.md) | How each feature came to be, and the reasoning behind it |
 
 **Do not restate any of that here.** Below is orientation plus the things that
 are not obvious from the code and would otherwise be re-broken.

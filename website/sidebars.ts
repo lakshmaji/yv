@@ -12,12 +12,6 @@ const sidebars: SidebarsConfig = {
       items: ['docs/yv-yaml', 'docs/environments'],
     },
     {type: 'category', label: 'Releasing', items: ['RELEASING']},
-    {
-      type: 'category',
-      label: 'Archive',
-      collapsed: true,
-      items: ['docs/history'],
-    },
   ],
 };
 

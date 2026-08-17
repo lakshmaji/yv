@@ -208,12 +208,3 @@ The Go side has no linter config beyond `gofmt`; the Makefile's `fmt` target cov
 4. Open a PR against `main`.
 
 A CI check (`changeset status`) will fail if the PR has no changeset file. That is intentional — it keeps the changelog and version in sync with every merge.
-
----
-
-## Further reading
-
-[docs/history.md](./docs/history.md) records how each feature was built and why
-it works the way it does — useful when a piece of the codebase looks stranger
-than it needs to. It is history, not a description of the current tree; this
-file is the one that stays current.

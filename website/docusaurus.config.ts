@@ -44,7 +44,6 @@ const config: Config = {
             'RELEASING.md',
             'docs/yv-yaml.md',
             'docs/environments.md',
-            'docs/history.md',
           ],
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/lakshmaji/yv/edit/main/',
