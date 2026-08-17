@@ -7,7 +7,7 @@
 [![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
 [![SolidJS](https://img.shields.io/badge/Frontend-SolidJS-%232C4F7C?logo=solid&logoColor=white)](https://www.solidjs.com/)
 
-**A command runner for developers who work across many projects.**
+**yv — a specification for the commands a project runs, and the app that runs them.**
 
 ![Projects and commands](./.github/assets/projects.png)
 
