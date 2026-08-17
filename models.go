@@ -17,6 +17,10 @@ type (
 	Environment   = models.Environment
 	ProjectEnvs   = models.ProjectEnvs
 
+	ScanHit      = models.ScanHit
+	ScanResult   = models.ScanResult
+	ImportRecord = models.ImportRecord
+
 	Settings           = models.Settings
 	MetricsQuery       = models.MetricsQuery
 	MetricsPoint       = models.MetricsPoint
