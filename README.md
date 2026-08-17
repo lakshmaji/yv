@@ -97,6 +97,8 @@ On Linux, only the **AppImage** self-updates. The `.deb` installs to root-owned 
 
 ## Learn more
 
+📖 **[Documentation](https://lakshmaji.github.io/yv)**
+
 - **[Features & screenshots](./FEATURES.md)** — what the app looks like and what each part does
 - **[Development setup](./DEVELOPMENT.md)** — how to build and run locally
 - **[Environments guide](./docs/environments.md)** — per-project variables and secrets
