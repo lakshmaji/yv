@@ -306,7 +306,7 @@ func (n *Node) gate(s network.Stream, in *inbound, precheck func(models.ShareOff
 	case accepted = <-decision:
 		answered = true
 	case <-time.After(n.decisionWait):
-	case <-n.ctx.Done():
+	case <-n.context().Done():
 		return offerBroken
 	}
 
@@ -427,7 +427,7 @@ func (n *Node) handleConnect(s network.Stream, remote peer.ID, offer models.Shar
 	case accepted = <-req.decision:
 		answered = true
 	case <-time.After(n.decisionWait):
-	case <-n.ctx.Done():
+	case <-n.context().Done():
 		return false
 	}
 

@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"unicode"
 
+	"yv/internal/atomicfile"
 	"yv/internal/audio"
 	"yv/internal/models"
 )
@@ -176,7 +177,7 @@ func (s *Store) write(cur models.Settings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, raw, 0o600)
+	return atomicfile.Write(path, raw, 0o600)
 }
 
 func storePath() (string, error) {

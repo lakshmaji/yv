@@ -50,8 +50,11 @@ test: test-go test-frontend
 
 # ./... rather than ./internal/... so the root package's tests run too — the
 # Wails-bound facade has logic worth covering (share payload construction).
+# -race because config.Store and settings.Store serialise read-modify-write
+# cycles by hand; a dropped lock there silently loses a user's projects and
+# nothing else in the suite would notice.
 test-go:
-	go test ./... -v
+	go test ./... -race -v
 
 test-frontend:
 	cd frontend && bun run test

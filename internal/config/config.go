@@ -8,18 +8,38 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
+	"yv/internal/atomicfile"
 	"yv/internal/models"
 )
 
-// Store is a stateless persistence layer. All state lives on disk.
-type Store struct{}
+// Store is a file-backed persistence layer. All state lives on disk; the mutex
+// exists only to serialise the read-modify-write cycles.
+//
+// Every mutating method here is load -> mutate -> write. Two of those
+// interleaving means one silently discards the other's changes, and there are
+// now several writers: the frontend saves on every command edit, an inbound
+// peer share merges projects, and a folder scan rewrites the file wholesale.
+// The lock is never held across a file dialog — a modal open for a minute must
+// not block the app.
+type Store struct {
+	mu sync.Mutex
+}
 
 func NewStore() *Store { return &Store{} }
 
-func (s *Store) LoadProjects() []models.Project {
+// LoadProjects reads the stored projects.
+//
+// Deliberately takes no lock: writeProjects renames a fully-written file into
+// place, so a reader observes either the previous file or the next one and can
+// never see a torn write. Taking the lock here would only make an ordinary read
+// wait behind an unrelated save.
+func (s *Store) LoadProjects() []models.Project { return loadProjects() }
+
+func loadProjects() []models.Project {
 	path, err := configPath()
 	if err != nil {
 		log.Printf("[LoadProjects] %v", err)
@@ -46,6 +66,9 @@ func (s *Store) LoadProjects() []models.Project {
 }
 
 func (s *Store) SaveProjects(projects []models.Project) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	path, err := configPath()
 	if err != nil {
 		return "error: " + err.Error()
@@ -57,14 +80,25 @@ func (s *Store) SaveProjects(projects []models.Project) string {
 }
 
 func (s *Store) UpdateProject(projectID, name, workingDir, labelBgColor, labelTxColor string) string {
-	projects := s.LoadProjects()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	path, err := configPath()
+	if err != nil {
+		return "error: " + err.Error()
+	}
+
+	projects := loadProjects()
 	for i, p := range projects {
 		if p.ID == projectID {
 			projects[i].Name = name
 			projects[i].WorkingDir = workingDir
 			projects[i].LabelBgColor = labelBgColor
 			projects[i].LabelTxColor = labelTxColor
-			return s.SaveProjects(projects)
+			if err := writeProjects(path, projects); err != nil {
+				return "error: " + err.Error()
+			}
+			return "ok"
 		}
 	}
 	return "error: project not found"
@@ -176,7 +210,10 @@ func (s *Store) ImportProjects(ctx context.Context) (string, error) {
 // projects arriving over the network from another device — one implementation
 // for both paths, so a change to the merge rule cannot apply to only one of them.
 func (s *Store) ImportProjectsFromSlice(incoming []models.Project) (string, error) {
-	existing := s.LoadProjects()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing := loadProjects()
 	seen := make(map[string]bool, len(existing))
 	for _, p := range existing {
 		seen[p.ID] = true
@@ -235,7 +272,12 @@ func (s *Store) ImportProject(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("parse: %w", err)
 	}
 
-	existing := s.LoadProjects()
+	// The lock is taken here, not around the dialog: a file picker sitting open
+	// must not block every other write in the app.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing := loadProjects()
 	for _, e := range existing {
 		if e.ID == p.ID {
 			return fmt.Sprintf("Skipped: project %q already exists", p.Name), nil
@@ -270,7 +312,7 @@ func writeProjects(path string, projects []models.Project) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return atomicfile.Write(path, data, 0o644)
 }
 
 func marshalProjects(projects []models.Project, ext string) ([]byte, error) {
