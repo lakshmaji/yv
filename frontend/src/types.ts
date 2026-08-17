@@ -104,6 +104,8 @@ export interface ScanHit {
   project: Project;
   /** A stored project already has this id, so importing replaces it. */
   exists: boolean;
+  /** This exact file has already been reviewed — nothing has changed on disk. */
+  unchanged?: boolean;
   existingCommands?: number;
   /** Why this file cannot be imported. Set means the row is not selectable. */
   error?: string;

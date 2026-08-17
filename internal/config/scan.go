@@ -97,6 +97,10 @@ func (s *Store) ScanForConfigs(ctx context.Context, root string) models.ScanResu
 	for _, p := range loadProjects() {
 		existing[p.ID] = len(p.Commands)
 	}
+	// Recorded hashes answer "has this actually changed since I last looked",
+	// which is the difference between a list worth reading and eighteen rows
+	// that all look like they need a decision.
+	seen := loadSeen()
 
 	rootDepth := strings.Count(filepath.Clean(root), string(os.PathSeparator))
 
@@ -138,7 +142,7 @@ func (s *Store) ScanForConfigs(ctx context.Context, root string) models.ScanResu
 			return fs.SkipAll
 		}
 
-		res.Hits = append(res.Hits, readHit(path, d, existing))
+		res.Hits = append(res.Hits, readHit(path, d, existing, seen))
 		return nil
 	})
 
@@ -157,7 +161,7 @@ func (s *Store) ScanForConfigs(ctx context.Context, root string) models.ScanResu
 // readHit reads and validates one config file. It never returns an error: a
 // file that cannot be used becomes a hit carrying the reason, so the dialog can
 // show it greyed out rather than leaving a gap the user cannot account for.
-func readHit(path string, d fs.DirEntry, existing map[string]int) models.ScanHit {
+func readHit(path string, d fs.DirEntry, existing map[string]int, seen map[string]string) models.ScanHit {
 	hit := models.ScanHit{Path: path, Dir: filepath.Dir(path)}
 
 	// Checked before opening, so an enormous file costs no read.
@@ -168,6 +172,7 @@ func readHit(path string, d fs.DirEntry, existing map[string]int) models.ScanHit
 		// marked as answered and would be re-offered on every scan forever;
 		// keying on the size means it comes back if it is ever rewritten.
 		hit.Hash = fmt.Sprintf("oversize-%d", info.Size())
+		hit.Unchanged = seen[path] == hit.Hash
 		return hit
 	}
 
@@ -178,6 +183,7 @@ func readHit(path string, d fs.DirEntry, existing map[string]int) models.ScanHit
 	}
 	sum := sha256.Sum256(data)
 	hit.Hash = hex.EncodeToString(sum[:])
+	hit.Unchanged = seen[path] == hit.Hash
 
 	p, err := unmarshalOneProject(data)
 	if err != nil {

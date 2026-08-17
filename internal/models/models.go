@@ -58,6 +58,13 @@ type ScanHit struct {
 	// "12 -> 14 commands". Zero unless Exists.
 	ExistingCommands int `json:"existingCommands,omitempty"`
 
+	// Unchanged reports that this exact file has already been reviewed — its
+	// recorded hash matches what is on disk now. It is the answer to "is there
+	// really a change here", which a name and a command count cannot give:
+	// re-importing an identical file is work with no effect, and a list that
+	// cannot say so asks the user to diff it by eye.
+	Unchanged bool `json:"unchanged,omitempty"`
+
 	// Error explains why this file cannot be imported. A bad file is listed
 	// with its reason rather than dropped: silence is the one thing that gives
 	// the author no way to find a typo.

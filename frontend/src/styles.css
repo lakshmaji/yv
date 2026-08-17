@@ -4485,6 +4485,13 @@
     .scan-badge.new     { color: var(--green);  border-color: #3fb95055; background: #3fb95015; }
     .scan-badge.replace { color: var(--yellow); border-color: #d2992255; background: #d2992215; }
     .scan-badge.err     { color: var(--red);    border-color: #f8514955; background: #f8514915; }
+    .scan-badge.same    { color: var(--muted);  border-color: var(--border); }
+
+    /* Dimmed rather than hidden: a config that is present and up to date is
+       exactly what someone scrolling for a missing project needs to see. */
+    .scan-hit.unchanged { opacity: .55; }
+    .scan-hit.unchanged:hover { opacity: .85; }
+    .scan-count-quiet { color: var(--muted); }
 
     .scan-expand {
       background: none;

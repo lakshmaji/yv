@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js';
 import {
   appSettings, scanHits, setScanHits, scanModalOpen, setScanModalOpen, setProjects,
 } from '../../store';
@@ -21,9 +21,24 @@ function usable(hit: ScanHit): boolean {
 function defaultSelection(hits: ScanHit[]): Set<string> {
   const sel = new Set<string>();
   for (const h of hits) {
-    if (usable(h) && !h.exists) sel.add(h.path);
+    if (usable(h) && !h.exists && !h.unchanged) sel.add(h.path);
   }
   return sel;
+}
+
+/** A row is worth a decision only if it is importable and has actually moved. */
+function actionable(hit: ScanHit): boolean {
+  return usable(hit) && !hit.unchanged;
+}
+
+/**
+ * Rows needing a decision first, then the ones already dealt with, then the
+ * broken ones. Sorting beats hiding: a config that is present and up to date is
+ * exactly what someone scrolling for a missing project needs to see.
+ */
+function ordered(hits: ScanHit[]): ScanHit[] {
+  const rank = (h: ScanHit) => (h.error ? 2 : h.unchanged ? 1 : 0);
+  return [...hits].sort((a, b) => rank(a) - rank(b));
 }
 
 export default function ScanModal() {
@@ -41,13 +56,17 @@ export default function ScanModal() {
   // found, which is a different situation from the user going looking.
   const [prompted, setPrompted] = createSignal(false);
 
-  createEffect(() => {
-    if (!scanModalOpen()) return;
+  // `on` rather than a bare effect: the body reads scanHits(), and
+  // importSelected clears it — so a plain effect would re-enter here the moment
+  // an import finished, fire a fresh scan, and repaint the list the user had
+  // just dealt with. Only the open/closed transition should set this up.
+  createEffect(on(scanModalOpen, (open) => {
+    if (!open) return;
 
     const pending = scanHits();
     const dir = appSettings().scanDir || '';
     setRoot(dir);
-    setHits(pending);
+    setHits(ordered(pending));
     setSelected(defaultSelection(pending));
     setExpanded(new Set<string>());
     setPrompted(pending.length > 0);
@@ -60,7 +79,7 @@ export default function ScanModal() {
     // exists to show results, so making the user press Rescan to see any is a
     // step with no decision in it.
     if (!pending.length && dir) void rescan(dir);
-  });
+  }));
 
   async function refreshHistory() {
     try {
@@ -82,8 +101,9 @@ export default function ScanModal() {
     setNotice('');
     try {
       const res = await go.ScanForConfigs(dir);
-      setHits(res.hits || []);
-      setSelected(defaultSelection(res.hits || []));
+      const found = ordered(res.hits || []);
+      setHits(found);
+      setSelected(defaultSelection(found));
       setPrompted(false);
       if (res.truncated) setError(res.truncated);
       else if (!res.hits?.length) setNotice(`No yv.yaml files under ${dir}.`);
@@ -114,9 +134,13 @@ export default function ScanModal() {
   }
 
   const selectable = createMemo(() => hits().filter(usable));
+  // What is actually worth the user's attention, which is what the counts and
+  // Select all speak to. Everything else is shown but not offered.
+  const pendingChanges = createMemo(() => hits().filter(actionable));
+  const unchangedCount = createMemo(() => hits().filter((h) => h.unchanged && !h.error).length);
 
   function selectAll() {
-    setSelected(new Set(selectable().map((h) => h.path)));
+    setSelected(new Set(pendingChanges().map((h) => h.path)));
   }
   function selectNone() {
     setSelected(new Set<string>());
@@ -143,9 +167,11 @@ export default function ScanModal() {
       // marks nothing, so an unanswered prompt comes back.
       await go.MarkScanSeen(hits());
       setScanHits([]);
-      await refreshHistory();
 
-      if (!paths.length) close();
+      // Closing is the point: the decision has been made, and leaving the same
+      // list on screen afterwards reads as though nothing happened. The result
+      // is in the sidebar, and Recent imports has the receipt.
+      close();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -188,11 +214,14 @@ export default function ScanModal() {
           <Show when={hits().length > 0}>
             <div class="scan-toolbar">
               <div class="scan-toolbar-actions">
-                <button onClick={selectAll} disabled={!selectable().length}>Select all</button>
+                <button onClick={selectAll} disabled={!pendingChanges().length}>Select all</button>
                 <button onClick={selectNone} disabled={!selected().size}>Select none</button>
               </div>
               <span class="scan-count">
                 {selected().size} of {hits().length} selected
+                <Show when={unchangedCount()}>
+                  <span class="scan-count-quiet"> · {unchangedCount()} unchanged</span>
+                </Show>
               </span>
             </div>
           </Show>
@@ -200,7 +229,7 @@ export default function ScanModal() {
           <div class="scan-list">
             <For each={hits()}>
               {(hit) => (
-                <div class={'scan-hit' + (hit.error ? ' broken' : '')}>
+                <div class={'scan-hit' + (hit.error ? ' broken' : hit.unchanged ? ' unchanged' : '')}>
                   <div class="scan-hit-main">
                     <input
                       type="checkbox"
@@ -217,9 +246,14 @@ export default function ScanModal() {
                           when={!hit.error}
                           fallback={<span class="scan-badge err">cannot import</span>}
                         >
-                          <span class={'scan-badge ' + (hit.exists ? 'replace' : 'new')}>
-                            {hit.exists ? 'replace' : 'new'}
-                          </span>
+                          <Show
+                            when={!hit.unchanged}
+                            fallback={<span class="scan-badge same">unchanged</span>}
+                          >
+                            <span class={'scan-badge ' + (hit.exists ? 'replace' : 'new')}>
+                              {hit.exists ? 'replace' : 'new'}
+                            </span>
+                          </Show>
                           <span class="scan-hit-count">
                             {hit.exists
                               ? `${hit.existingCommands ?? 0} → ${hit.project.commands?.length ?? 0} commands`

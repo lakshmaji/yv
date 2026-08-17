@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"yv/internal/models"
 )
@@ -460,5 +461,74 @@ func TestScanListsUnparseableFilesWithTheirReason(t *testing.T) {
 	}
 	if errs != 2 {
 		t.Errorf("got %d error rows, want 2", errs)
+	}
+}
+
+// The checksum has to reach the list, not just the background job. Without it
+// a rescan after importing shows every row looking exactly as actionable as it
+// did the first time, and the user has no way to tell but to read them.
+func TestScanReportsWhichFilesAreUnchanged(t *testing.T) {
+	isolateHome(t)
+	s := NewStore()
+	root := writeTree(t, map[string]string{
+		"alpha/yv.yaml": cfg("alpha"),
+		"beta/yv.yaml":  cfg("beta"),
+	})
+
+	first := s.ScanForConfigs(context.Background(), root)
+	for _, h := range first.Hits {
+		if h.Unchanged {
+			t.Errorf("%s: reported unchanged before it was ever reviewed", h.Project.ID)
+		}
+	}
+
+	if _, err := s.ApplyScanned([]string{first.Hits[0].Path}); err != nil {
+		t.Fatal(err)
+	}
+	s.MarkSeen(first.Hits)
+
+	// Both were reviewed, so both are unchanged — including the one that was
+	// skipped. "Unchanged" is about the file, not about what was done with it.
+	second := s.ScanForConfigs(context.Background(), root)
+	for _, h := range second.Hits {
+		if !h.Unchanged {
+			t.Errorf("%s: reported as changed when the file is byte-identical", h.Project.ID)
+		}
+	}
+
+	// Editing one file, and only that file, brings it back.
+	edited := cfg("alpha") + "  - id: alpha-c2\n    label: Test\n    command: test\n    group: G\n"
+	if err := os.WriteFile(filepath.Join(root, "alpha", "yv.yaml"), []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	third := s.ScanForConfigs(context.Background(), root)
+	for _, h := range third.Hits {
+		want := h.Project.ID != "alpha"
+		if h.Unchanged != want {
+			t.Errorf("%s: Unchanged = %v, want %v", h.Project.ID, h.Unchanged, want)
+		}
+	}
+}
+
+// Touching a file without altering a byte must not make it look changed. The
+// hash is over the contents for exactly this reason — mtime would flap on every
+// git checkout and branch switch.
+func TestUnchangedIsContentNotTimestamp(t *testing.T) {
+	isolateHome(t)
+	s := NewStore()
+	root := writeTree(t, map[string]string{"alpha/yv.yaml": cfg("alpha")})
+
+	first := s.ScanForConfigs(context.Background(), root)
+	s.MarkSeen(first.Hits)
+
+	path := filepath.Join(root, "alpha", "yv.yaml")
+	future := time.Now().Add(2 * time.Hour)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatal(err)
+	}
+
+	again := s.ScanForConfigs(context.Background(), root)
+	if !again.Hits[0].Unchanged {
+		t.Error("a touched but unmodified file was reported as changed")
 	}
 }
