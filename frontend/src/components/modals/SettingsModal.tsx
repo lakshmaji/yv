@@ -4,7 +4,7 @@ import { go } from '../../wails';
 import { PANELS, togglePanel } from '../../lib/dashboardPanels';
 import { addClips, clipDir, clipLabel, playClip } from '../../lib/audio';
 import { DRONE_VARIANTS, variantById } from '../../lib/drone';
-import { formatBytes } from '../../lib/utils';
+import { formatBytes, shortenPath } from '../../lib/utils';
 import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
 
 // The useful range spans three orders of magnitude and every value in it is
@@ -645,7 +645,7 @@ export default function SettingsModal() {
               </div>
               <span class="settings-row-control settings-scan-control">
                 <span class="settings-scan-path" title={scanDir() || undefined}>
-                  {scanDir() || 'Not set'}
+                  {scanDir() ? shortenPath(scanDir(), 3) : 'Not set'}
                 </span>
                 <button onClick={pickScanDir}>Browse…</button>
                 <Show when={scanDir()}>

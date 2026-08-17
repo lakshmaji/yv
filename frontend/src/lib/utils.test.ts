@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escHtml, lineClass, formatBytes } from './utils';
+import { escHtml, lineClass, formatBytes, shortenPath } from './utils';
 
 // formatBytes became load-bearing with the dashboard (chart tooltips, axis
 // ticks, stat tiles), so it is pinned here.
@@ -53,5 +53,35 @@ describe('lineClass', () => {
 
   it.each(cases)('%s', (_name, input, expected) => {
     expect(lineClass(input)).toBe(expected);
+  });
+});
+
+describe('shortenPath', () => {
+  const cases: [string, number, string][] = [
+    // Short enough to show whole, so it keeps its leading slash.
+    ['/Users/me', 3, '/Users/me'],
+    ['/a/b/c', 3, '/a/b/c'],
+    ['yv.yaml', 3, 'yv.yaml'],
+    ['', 3, ''],
+    // Long paths keep the end, which is the part that identifies them.
+    ['/Users/me/code/storefront/yv.yaml', 3, '…/code/storefront/yv.yaml'],
+    ['/Users/lakshmaji/conductor/workspaces/pos-app/yv.yaml', 3, '…/workspaces/pos-app/yv.yaml'],
+    ['/Users/me/code/storefront/yv.yaml', 2, '…/storefront/yv.yaml'],
+    // A relative path is treated the same way.
+    ['a/b/c/d/e', 2, '…/d/e'],
+    // Repeated and trailing separators must not produce empty segments.
+    ['/a//b///c/d', 2, '…/c/d'],
+  ];
+
+  for (const [input, keep, want] of cases) {
+    it(`${JSON.stringify(input)} keep=${keep} -> ${JSON.stringify(want)}`, () => {
+      expect(shortenPath(input, keep)).toBe(want);
+    });
+  }
+
+  // The whole point of shortening rather than CSS-truncating: no bidi
+  // reordering, so the result never gains a trailing slash it did not have.
+  it('never moves the leading separator to the end', () => {
+    expect(shortenPath('/Users/me/code/app/yv.yaml')).not.toMatch(/\/$/);
   });
 });

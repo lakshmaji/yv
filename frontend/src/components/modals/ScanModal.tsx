@@ -3,6 +3,7 @@ import {
   appSettings, scanHits, setScanHits, scanModalOpen, setScanModalOpen, setProjects,
 } from '../../store';
 import { go } from '../../wails';
+import { shortenPath } from '../../lib/utils';
 import type { ImportRecord, ScanHit } from '../../types';
 
 /** A row is selectable only if the file actually parsed. */
@@ -44,7 +45,8 @@ export default function ScanModal() {
     if (!scanModalOpen()) return;
 
     const pending = scanHits();
-    setRoot(appSettings().scanDir || '');
+    const dir = appSettings().scanDir || '';
+    setRoot(dir);
     setHits(pending);
     setSelected(defaultSelection(pending));
     setExpanded(new Set<string>());
@@ -53,6 +55,11 @@ export default function ScanModal() {
     setError('');
     setShowHistory(false);
     void refreshHistory();
+
+    // Opened by hand with a folder configured: scan straight away. The dialog
+    // exists to show results, so making the user press Rescan to see any is a
+    // step with no decision in it.
+    if (!pending.length && dir) void rescan(dir);
   });
 
   async function refreshHistory() {
@@ -64,8 +71,8 @@ export default function ScanModal() {
     }
   }
 
-  async function rescan() {
-    const dir = root().trim();
+  async function rescan(override?: string) {
+    const dir = (override ?? root()).trim();
     if (!dir) {
       setError('Choose a folder to scan.');
       return;
@@ -91,7 +98,7 @@ export default function ScanModal() {
     const dir = await go.PickFolder();
     if (!dir) return; // cancelled
     setRoot(dir);
-    void rescan();
+    void rescan(dir);
   }
 
   function toggle(path: string) {
@@ -168,9 +175,11 @@ export default function ScanModal() {
           <Show when={!prompted()}>
             <div class="scan-root-row">
               <span class="scan-root-label">Folder</span>
-              <span class="scan-root-path" title={root() || undefined}>{root() || 'Not set'}</span>
+              <span class="scan-root-path" title={root() || undefined}>
+                {root() ? shortenPath(root(), 4) : 'Not set'}
+              </span>
               <button onClick={browse}>Browse…</button>
-              <button onClick={rescan} disabled={scanning() || !root()}>
+              <button onClick={() => rescan()} disabled={scanning() || !root()}>
                 {scanning() ? 'Scanning…' : 'Rescan'}
               </button>
             </div>
@@ -221,7 +230,7 @@ export default function ScanModal() {
                           </Show>
                         </Show>
                       </div>
-                      <div class="scan-hit-path" title={hit.path}>{hit.path}</div>
+                      <div class="scan-hit-path" title={hit.path}>{shortenPath(hit.path)}</div>
                       <Show when={hit.error}>
                         <div class="scan-hit-error">{hit.error}</div>
                       </Show>
@@ -301,7 +310,7 @@ export default function ScanModal() {
                       <span class="scan-history-action">{rec.action}</span>
                       <span class="scan-history-name">{rec.projectName || rec.projectId}</span>
                       <span class="scan-history-path" title={rec.path}>
-                        {rec.path || rec.source}
+                        {rec.path ? shortenPath(rec.path) : rec.source}
                       </span>
                     </div>
                   )}
