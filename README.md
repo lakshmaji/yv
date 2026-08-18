@@ -57,7 +57,7 @@ Download the latest build from **[github.com/lakshmaji/yv/releases](https://gith
 | Platform | Asset |
 |---|---|
 | macOS (Apple Silicon) | `yv-macos-arm64-*.dmg` |
-| Windows (x86_64) | `yv-windows-amd64-*-setup.exe` |
+| Windows (x86_64) | `yv-windows-amd64-*-setup.exe` (installs per-user, self-updating) |
 | Linux (x86_64) | `yv-linux-x86_64-*.AppImage` (self-updating) |
 | Linux (x86_64) | `yv_*.deb` or `yv-linux-amd64-*.tar.gz` |
 

@@ -186,6 +186,14 @@ every machine it reaches — failing loudly beats publishing that.
 | Linux | `.deb` | **no** — use `apt` |
 | Linux | `.tar.gz` | **no** |
 
+Both Windows rows depend on the install directory being writable without
+elevation, which is why the installer is per-user
+(`$LOCALAPPDATA\Programs\yv`, set in `build/windows/installer/project.nsi`).
+Move an installed copy into Program Files by hand and `InstallCheck` reports it
+cannot replace itself there, and the dialog goes back to offering the releases
+page. That is the correct answer rather than a bug — it is also the only reason
+Windows was showing that page before the installer became per-user.
+
 The Windows `.zip` has to be published whether or not anyone downloads it by
 hand: `pickAsset` matches `-windows-amd64-` **and** a `.zip` suffix, and the
 updater unpacks an archive because a running `.exe` cannot be overwritten in
