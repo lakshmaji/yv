@@ -1,23 +1,247 @@
 .footer {
+  position: relative;
+  overflow: hidden;
   background: var(--ifm-background-color);
   padding: 4rem 0 1.6rem;
 }
 
-/*
- * Tight leading so the mark sits close to the rule, but NOT clipped: cutting the
- * baseline off leaves `yv` as two near-identical strokes that read as "w". The
- * descender on the `y` is the whole difference.
- */
-.wordmarkWrap {
-  line-height: 0;
-  margin-bottom: 0.9rem;
+/* Everything readable rides above the watermark. */
+.inner {
+  position: relative;
+  z-index: 1;
 }
 
+/* ---------------------------------------------------------------------------
+ * Blurb + link columns
+ * ------------------------------------------------------------------------- */
+
+/*
+ * One set of tracks for both rows, so the CTA's left edge lands on the `Docs`
+ * column and the buttons above the blurb share its left edge. Two grids with
+ * different fractions was the whole reason nothing lined up.
+ */
+.top,
+.mid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+}
+
+.top {
+  margin-top: 3rem;
+  align-items: start;
+}
+
+.blurb {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.colTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.colLink {
+  color: var(--ifm-color-emphasis-600);
+  transition: color 0.16s ease;
+}
+
+.colLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Social buttons + the call to action
+ * ------------------------------------------------------------------------- */
+
+.mid {
+  align-items: center;
+}
+
+.socialRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+/* Outlined pills, the same control the navbar's Sponsor link already is. */
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 1.1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  color: var(--ifm-color-emphasis-700);
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.social:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/*
+ * One glyph rule, one mask variable — an icon is a class that sets the variable,
+ * not another block of CSS. `currentColor` means the hover above recolours the
+ * glyph for free.
+ */
+.glyph {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  background-color: currentColor;
+  mask: var(--yv-footer-icon) center / contain no-repeat;
+  -webkit-mask: var(--yv-footer-icon) center / contain no-repeat;
+}
+
+.glyphGithub {
+  --yv-footer-icon: var(--yv-github-mask);
+}
+
+.glyphSponsor {
+  --yv-footer-icon: var(--yv-heart-mask);
+}
+
+/* The whole strip is the link; the pill inside it only looks like the button. */
+.cta {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 0.45rem 0.45rem 1rem;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 999px;
+  color: var(--ifm-font-color-base);
+  transition: background-color 0.16s ease;
+}
+
+.cta:hover {
+  background: var(--yv-navbar-active);
+  text-decoration: none;
+}
+
+.ctaIcon {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 7px;
+}
+
+.ctaText {
+  flex: 1;
+  min-width: 0;
+}
+
+.ctaButton {
+  flex: none;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  background: var(--ifm-color-primary);
+  color: var(--yv-on-primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Caps line
+ * ------------------------------------------------------------------------- */
+
+.caps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem 2rem;
+  margin-top: 2.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.made {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Sized in em so the marks track the line they sit on. Both are colour SVGs
+   loaded as images, which also keeps SolidJS's gradient ids out of the page. */
+.madeLogo {
+  height: 1.35em;
+  width: auto;
+}
+
+.capsLink {
+  color: inherit;
+  transition: color 0.16s ease;
+}
+
+.capsLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * The mark
+ * ------------------------------------------------------------------------- */
+
+/*
+ * The mark is the footer's background, not a block in it: pinned to the bottom
+ * edge, clipped by the footer's `overflow`, and out of the layout entirely so
+ * the content decides how tall the footer is.
+ */
+.markRow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Off the floor, not flush with it: the footer clips, and a mark hanging past
+     the edge loses the `y` tail — the only thing telling `yv` apart from a "w".
+     The size is what fits between the footer's padding and its content, so the
+     top of the glyphs is not sheared off either. */
+  bottom: 0.03em;
+  z-index: 0;
+  pointer-events: none;
+  font-size: min(90vw, 660px);
+}
+
+/*
+ * Full bleed: `yv` is two narrow lowercase glyphs, so filling the width takes a
+ * font-size close to the width itself. The cap stops it outgrowing the container
+ * on a wide monitor.
+ *
+ * The leading has to stay big enough to hold the descender: the gradient is
+ * `background-clip: text`, so it only paints inside the box and anything hanging
+ * below is simply not drawn. Cut the tail off the `y` and `yv` becomes two
+ * near-identical strokes that read as "w". The empty ascender band above the
+ * x-height comes off with a negative margin instead — in `em`, so it scales with
+ * the mark.
+ */
 .wordmark {
   display: block;
-  font-size: clamp(7rem, 31vw, 24rem);
+  font-size: 1em;
   font-weight: 800;
-  line-height: 0.92;
+  line-height: 1;
+
+  /* It sits under live text now, so it has to stay a texture and not compete
+     with the links crossing it. */
+  opacity: 0.42;
   letter-spacing: -0.06em;
   text-align: center;
   user-select: none;
@@ -34,9 +258,25 @@
   color: transparent;
 }
 
+/* The greys that read as a whisper on black are barely there on white, and the
+   icon beside the mark is not. One step darker puts them back in balance. */
+[data-theme='light'] .wordmark {
+  background: linear-gradient(
+    180deg,
+    var(--ifm-color-emphasis-600) 15%,
+    var(--ifm-color-emphasis-300) 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bottom bar
+ * ------------------------------------------------------------------------- */
+
 .bar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
   padding-top: 1.4rem;
@@ -44,137 +284,61 @@
   font-size: 0.94rem;
 }
 
-.about {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
 .copy {
   color: var(--ifm-color-emphasis-600);
 }
 
-.made {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  color: var(--ifm-color-emphasis-600);
-}
-
-/* Sized in em so the marks track the line they sit on. Both are colour SVGs
-   loaded as images, which also keeps SolidJS's gradient ids out of the page. */
-.madeLogo {
-  height: 1.15em;
-  width: auto;
-}
-
-.socialRow {
-  display: flex;
-  justify-content: center;
-  gap: 2.4rem;
-  padding-top: 1.2rem;
-}
-
-.social {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: var(--ifm-color-emphasis-700);
-  transition: color 0.16s ease;
-}
-
-.social:hover {
-  color: var(--ifm-color-primary);
-  text-decoration: none;
-}
-
-/*
- * One chip rule, one mask variable — an icon is a class that sets the variable,
- * not another block of pseudo-element CSS.
- */
-.chip {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--ifm-color-emphasis-200);
-  transition: background-color 0.16s ease;
-}
-
-.chip::before {
-  content: '';
-  width: 1.15rem;
-  height: 1.15rem;
-  background-color: var(--yv-icon);
-  transition: background-color 0.16s ease;
-  mask: var(--yv-footer-icon) center / contain no-repeat;
-  -webkit-mask: var(--yv-footer-icon) center / contain no-repeat;
-}
-
-.chipGithub {
-  --yv-footer-icon: var(--yv-github-mask);
-}
-
-.chipSponsor {
-  --yv-footer-icon: var(--yv-heart-mask);
-}
-
-.social:hover .chip {
-  background: var(--yv-navbar-active);
-}
-
-.social:hover .chip::before {
-  background-color: var(--ifm-color-primary);
-}
-
-.links {
-  display: flex;
-  justify-content: center;
-  gap: clamp(1rem, 4vw, 3rem);
-}
-
-.link,
 .licence {
   color: var(--ifm-color-emphasis-700);
   transition: color 0.16s ease;
 }
 
-.link:hover,
 .licence:hover {
   color: var(--ifm-color-primary);
   text-decoration: none;
 }
 
-.licence {
-  justify-self: end;
-}
-
 @media screen and (max-width: 996px) {
-  .bar {
+  .top,
+  .mid {
     grid-template-columns: 1fr;
     justify-items: center;
-    gap: 0.9rem;
     text-align: center;
   }
 
-  .about,
-  .made {
+  .top {
+    margin-top: 2.2rem;
+  }
+
+  .mid {
+    gap: 1.4rem;
+  }
+
+  .blurb {
+    max-width: 44ch;
+  }
+
+  .col {
     align-items: center;
+  }
+
+  .caps,
+  .bar {
+    flex-direction: column;
     justify-content: center;
+    text-align: center;
   }
 
-  .links {
+  /* Below the pill the sentence and the button want their own lines. */
+  .cta {
+    grid-column: auto;
     flex-wrap: wrap;
-    gap: 1rem 1.5rem;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 22px;
   }
 
-  .socialRow {
-    gap: 1.6rem;
-  }
-
-  .licence {
-    justify-self: center;
+  .ctaText {
+    flex: none;
   }
 }
