@@ -11,7 +11,7 @@ import styles from './Hero.module.css';
 export default function Hero(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
-    <BlobHero>
+    <BlobHero fade>
       <AnimatedWordmark text={siteConfig.title} />
       <p className={clsx('hero__subtitle', styles.tagline)}>{siteConfig.tagline}</p>
       <div className={styles.ctas}>

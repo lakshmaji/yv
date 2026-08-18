@@ -1,9 +1,32 @@
+/*
+ * The hero is the sky the planet hangs in, so it is painted as one: a wash of
+ * coloured nebulae over the page background, a field of stars in dark mode, and
+ * a vignette to keep the middle clear for the wordmark.
+ *
+ * The blobs used to be Infima's greyscale tokens, which theme themselves for
+ * free but read as smudges of dirt behind a bright drawing. These carry explicit
+ * colours for both themes instead.
+ */
 .banner {
   padding: 5rem 0 3rem;
   text-align: center;
   position: relative;
   overflow: hidden;
   background: var(--ifm-background-color);
+
+  --neb-1: #7fd8bd;
+  --neb-2: #a9c6f5;
+  --neb-3: #dcc4f2;
+  --neb-opacity: 0.5;
+  --vignette: rgba(120, 140, 170, 0.1);
+}
+
+[data-theme='dark'] .banner {
+  --neb-1: #1a7a66;
+  --neb-2: #1c3f7d;
+  --neb-3: #452a68;
+  --neb-opacity: 0.55;
+  --vignette: rgba(0, 0, 0, 0.55);
 }
 
 @media screen and (max-width: 996px) {
@@ -12,8 +35,6 @@
   }
 }
 
-/* Abstract monochromatic blobs, drawn from Infima's grayscale tokens so they
-   adapt automatically between light and dark mode without hardcoded colors. */
 .blobs {
   position: absolute;
   inset: 0;
@@ -25,35 +46,35 @@
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.5;
+  filter: blur(100px);
+  opacity: var(--neb-opacity);
   animation: blob-drift 26s ease-in-out infinite alternate;
 }
 
 .blob1 {
-  width: 520px;
-  height: 520px;
-  top: -160px;
+  width: 560px;
+  height: 560px;
+  top: -180px;
   left: -140px;
-  background: var(--ifm-color-emphasis-900);
+  background: var(--neb-1);
 }
 
 .blob2 {
-  width: 440px;
-  height: 440px;
-  bottom: -180px;
-  right: -100px;
-  background: var(--ifm-color-emphasis-500);
+  width: 480px;
+  height: 480px;
+  bottom: -200px;
+  right: -120px;
+  background: var(--neb-2);
   animation-duration: 32s;
   animation-delay: -6s;
 }
 
 .blob3 {
-  width: 340px;
-  height: 340px;
-  top: 20%;
-  right: 12%;
-  background: var(--ifm-color-emphasis-700);
+  width: 380px;
+  height: 380px;
+  top: 14%;
+  right: 16%;
+  background: var(--neb-3);
   animation-duration: 20s;
   animation-delay: -12s;
 }
@@ -67,8 +88,68 @@
   }
 }
 
+/*
+ * Stars without a hundred DOM nodes: four tiled radial-gradients, each a single
+ * dot on its own tile. The tile sizes are mutually prime, so the four patterns
+ * only line up again far outside any viewport and the field reads as scattered.
+ */
+.stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background-image:
+    radial-gradient(1.6px 1.6px at 18px 22px, rgba(255, 255, 255, 1), transparent 100%),
+    radial-gradient(1.3px 1.3px at 92px 61px, rgba(255, 255, 255, 0.85), transparent 100%),
+    radial-gradient(1.9px 1.9px at 141px 118px, rgba(214, 240, 255, 0.95), transparent 100%),
+    radial-gradient(1.2px 1.2px at 47px 143px, rgba(255, 255, 255, 0.7), transparent 100%),
+    radial-gradient(1.5px 1.5px at 113px 29px, rgba(255, 238, 214, 0.8), transparent 100%);
+  background-size: 173px 173px, 227px 227px, 311px 311px, 149px 149px, 263px 263px;
+  animation: star-twinkle 7s ease-in-out infinite alternate;
+}
+
+[data-theme='dark'] .stars {
+  opacity: 1;
+}
+
+@keyframes star-twinkle {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * The vignette darkens the bottom edge too, which leaves a visible seam against
+ * the section below. This washes the last stretch back to the page background so
+ * the hero ends without a line across it.
+ */
+.fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 160px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--ifm-background-color));
+}
+
+/* Darkens the corners so the nebulae never compete with the wordmark. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(70% 60% at 50% 42%, transparent 40%, var(--vignette) 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .blob {
+  .blob,
+  .stars {
     animation: none;
   }
 }

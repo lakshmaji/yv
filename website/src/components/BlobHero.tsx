@@ -12,9 +12,12 @@ import styles from './BlobHero.module.css';
  */
 export default function BlobHero({
   className,
+  fade = false,
   children,
 }: {
   className?: string;
+  /** Blend the bottom edge into the page — for a hero with a section under it. */
+  fade?: boolean;
   children: ReactNode;
 }): ReactNode {
   return (
@@ -24,6 +27,9 @@ export default function BlobHero({
         <div className={clsx(styles.blob, styles.blob2)} />
         <div className={clsx(styles.blob, styles.blob3)} />
       </div>
+      <div className={styles.stars} aria-hidden="true" />
+      <div className={styles.vignette} aria-hidden="true" />
+      {fade && <div className={styles.fade} aria-hidden="true" />}
       <div className={clsx('container', styles.content)}>{children}</div>
     </header>
   );
