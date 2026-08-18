@@ -221,6 +221,19 @@ deb: build-linux
 appimage: build-linux
 	@bash build/linux/package-appimage.sh
 
+# Repacks the binary build-linux just produced as a snap. Classic confinement,
+# so nothing here is sandboxed at runtime — see specs/001-snap-store/design.md
+# for why that is required rather than convenient.
+#
+# --use-lxd because the default destructive mode would install core24 build
+# dependencies onto this machine.
+snap: build-linux
+	@command -v snapcraft >/dev/null || { echo "snapcraft is missing — 'sudo snap install snapcraft --classic'"; exit 1; }
+	snapcraft --use-lxd
+	@echo
+	@echo "Built yv-tool_$(VERSION)_amd64.snap"
+	@echo "Install it with: sudo snap install --classic --dangerous ./yv-tool_*.snap"
+
 # Convenience for a local machine: build, package, install. Separate from `deb`
 # because packaging should never require root.
 install-linux: deb

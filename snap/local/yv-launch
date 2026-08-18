@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Launcher for the yv snap.
+#
+# Deliberately almost empty. yv runs the user's project commands in PTYs with
+# the environment it was itself started with, so every variable exported here
+# reaches their `npm run dev` and their `make`. A launcher that helpfully sets
+# up its own runtime is a launcher that silently changes how the user's build
+# behaves.
+#
+# In particular: no LD_LIBRARY_PATH. Avoiding it is the whole point of
+# enable-patchelf in snapcraft.yaml — the binary's RPATH already points at the
+# staged libraries. One pointing into $SNAP would aim the user's node, python
+# and gcc at this snap's libc-era libraries instead of their own.
+#
+# internal/env.StripSnap removes what snapd itself injects (SNAP*) plus the one
+# variable below, so even these do not reach a spawned command.
+
+set -eu
+
+# WebKitGTK spawns a separate WebKitWebProcess executable and will not find the
+# staged copy without this. Its absence is the classic "snap builds fine, window
+# comes up blank" failure.
+WEBKIT_EXEC_PATH="$SNAP/usr/libexec/webkit2gtk-4.1"
+export WEBKIT_EXEC_PATH
+
+exec "$SNAP/bin/yv" "$@"

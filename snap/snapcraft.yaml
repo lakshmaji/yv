@@ -1,0 +1,93 @@
+name: yv-tool
+title: yv
+base: core24
+license: MIT
+summary: Run a project's own dev commands, each in its own terminal
+description: |
+  yv runs the commands a project already has — build, test, lint, dev server —
+  and streams each one into its own terminal pane, so several can run at once
+  without a tab per shell.
+
+  The commands come from a `yv.yaml` file committed to the repository beside the
+  code it builds, the way a Makefile or a package.json scripts block is. A repo
+  carrying one tells every machine that clones it what its commands are.
+
+  Importing a `yv.yaml` never executes anything: it writes configuration, and
+  commands run when you press Run.
+
+# The name is yv-tool rather than yv because two-character names are reserved by
+# the store. `title` is what the Snap Store and GNOME Software display, and the
+# launcher entry comes from build/linux/yv.desktop, so users still see "yv".
+
+# Classic, because yv executes the user's own project tooling: their node from
+# ~/.nvm, their cargo from ~/.cargo, their docker socket, a script committed to
+# their repo. The `home` interface cannot see dot-directories and no interface
+# grants general execution of host binaries, so strict confinement does not
+# merely restrict this app — it makes the same command produce different output
+# than the user's own terminal. See specs/001-snap-store/.
+confinement: classic
+grade: stable
+
+adopt-info: yv
+
+platforms:
+  amd64:
+
+parts:
+  # The binary is not compiled here. CI has already built it once for the .deb,
+  # the tarball and the AppImage; this repacks that same artifact so all four
+  # Linux packages are byte-identical inside. `make build-linux` (or CI untarring
+  # into build/bin) is the precondition.
+  yv:
+    plugin: nil
+    source: build/bin
+    # Classic snaps get no library remapping from snapd, so the RPATH has to be
+    # rewritten to $ORIGIN-relative paths at build time. This works because the
+    # Wails binary is cgo-linked against gtk3 and webkit2gtk — an external link,
+    # standard ELF interpreter. It would not work on a pure-Go static binary.
+    build-attributes:
+      - enable-patchelf
+    override-pull: |
+      craftctl default
+      # One spelling of the version for the whole project: the same wails.json
+      # field the Makefile, package-deb.sh and package-appimage.sh all read.
+      # version_test.go already guards it against package.json.
+      craftctl set version="$(sed -n 's/.*"productVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CRAFT_PROJECT_DIR/wails.json")"
+    override-build: |
+      # Only the binary. build/bin also holds the .deb, the tarball and the
+      # AppImage, and a stage: filter here would also filter out stage-packages.
+      install -Dm755 "$CRAFT_PART_SRC/yv" "$CRAFT_PART_INSTALL/bin/yv"
+    stage-packages:
+      - libgtk-3-0t64
+      - libwebkit2gtk-4.1-0
+      - libjavascriptcoregtk-4.1-0
+      # internal/monitor shells out to `ps` for CPU and RSS sampling. The .deb
+      # depends on procps for the same reason.
+      - procps
+
+  # No source: — reading straight from CRAFT_PROJECT_DIR avoids copying the repo
+  # (frontend/node_modules included) into a part just to pick up three files.
+  desktop:
+    plugin: nil
+    override-build: |
+      install -Dm755 "$CRAFT_PROJECT_DIR/snap/local/yv-launch" \
+        "$CRAFT_PART_INSTALL/bin/yv-launch"
+      # The same desktop entry the .deb and the AppImage install. One file, so
+      # the menu entry is identical however yv was installed.
+      install -Dm644 "$CRAFT_PROJECT_DIR/build/linux/yv.desktop" \
+        "$CRAFT_PART_INSTALL/usr/share/applications/yv.desktop"
+      install -Dm644 "$CRAFT_PROJECT_DIR/build/appicon.png" \
+        "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/512x512/apps/yv.png"
+      # The shared file says `Icon=yv`, which resolves through the icon theme on
+      # a normal install but not reliably from inside a snap. Rewritten here
+      # rather than committing a second desktop file that would drift from the
+      # first. Single quotes: ${SNAP} must reach the file unexpanded.
+      sed -i 's|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/yv.png|' \
+        "$CRAFT_PART_INSTALL/usr/share/applications/yv.desktop"
+
+apps:
+  # The app key must match the snap name. An app called `yv` inside a snap called
+  # `yv-tool` is invoked as `yv-tool.yv`, not `yv-tool`.
+  yv-tool:
+    command: bin/yv-launch
+    desktop: usr/share/applications/yv.desktop

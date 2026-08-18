@@ -64,3 +64,10 @@ yv.exe
 # backstop against an accident, not the reason the key is not committed.
 *-private.pem
 *-public.pem
+
+# Snapcraft build tree and output. snap/ itself holds real source — the recipe
+# and the launcher — so it is not ignored wholesale.
+/parts/
+/stage/
+/prime/
+*.snap
