@@ -5,8 +5,16 @@ Post to **forum.snapcraft.io**, category **store-requests**, from the account th
 
 The store expects a short structured template, not an essay — see
 [Classic confinement for Goose](https://forum.snapcraft.io/t/classic-confinement-for-goose/52725)
-for the shape. Reviewers ask follow-up questions in the thread; the prepared answers below
-are for those replies, **not** for the opening post.
+for the shape. The template comes first, then two short sections answering the questions a
+reviewer would otherwise ask anyway; each avoided round-trip is days of wall-clock time.
+
+Two things are deliberately **not** in the opening post:
+
+- **The "this is not merely difficulty with strict confinement" rebuttal.** That is a *denied*
+  category, and naming it in your own request plants the objection. The substance is folded
+  into the strict-confinement section as one sentence about producing wrong output rather than
+  partial function, without naming it.
+- **Packaging detail.** Reviewers read the linked `snapcraft.yaml`. It stays below the fold.
 
 > **Order of operations:** the `snapcraft:` field must link to a real `snap/snapcraft.yaml`.
 > Land Commit 3 first, then post. Posting with a dead link invites an immediate "where is the
@@ -36,54 +44,49 @@ Classic confinement for yv
 - **reasoning**: yv executes arbitrary host-installed developer tooling on the
   user's behalf — whatever their project's `yv.yaml` specifies. Strict interfaces
   grant only scoped file, socket and process access; none permits general
-  execution of host binaries. In particular the `home` interface excludes
-  dot-directories, where the common version managers (`~/.nvm`, `~/.cargo`,
-  `~/.pyenv`, `~/.sdkman`) install the toolchains these commands invoke.
-```
+  execution of host binaries. Detail below.
 
----
+### Why strict confinement does not cover this
 
-## Prepared answers for reviewer follow-ups
+1. **`home` excludes dot-directories.** That is where `~/.nvm`, `~/.cargo`, `~/.rustup`,
+   `~/.pyenv`, `~/.rbenv`, `~/.sdkman`, `~/.gradle` and `~/.local/share/mise` live, so for a
+   large fraction of developers their `node`, `cargo`, `python` and `java` are invisible and
+   `npm run dev` fails immediately.
+2. **The executable set is unbounded and unknown at packaging time.** A project may invoke
+   `make`, `docker`, `kubectl`, `terraform`, `gradlew`, `bazel`, a shell script committed to
+   the repo, or a tool that did not exist when this snap was built. It is read from the user's
+   `yv.yaml` at runtime, so it cannot be enumerated in a plug list.
+3. **Working trees are not confined to `$HOME`.** Users keep them on `/opt`, `/srv`, secondary
+   drives and network mounts, and yv scans a user-chosen directory for `yv.yaml` files.
+4. **The environment must be the user's, unmodified.** Each command runs in a PTY and the
+   value of the tool is that it behaves exactly as it would in the user's own terminal. A
+   remapped `$HOME` or a snap-provided library path does not merely restrict the command, it
+   makes it produce different output than the same command run by hand.
 
-Do not pre-empt these in the opening post. Use them if asked.
+### What it does not need
 
-### "Why not strict with `home`, `removable-media`, `docker`, `system-backup`?"
-
-Two reasons, in order of weight:
-
-1. `home` deliberately excludes dot-files and dot-directories. That is exactly where `~/.nvm`,
-   `~/.cargo`, `~/.rustup`, `~/.pyenv`, `~/.rbenv`, `~/.sdkman`, `~/.gradle` and
-   `~/.local/share/mise` live, so for a large fraction of developers their `node`, `cargo`,
-   `python` and `java` are invisible and `npm run dev` fails immediately.
-2. The executable set is unbounded and unknown at packaging time. A project may invoke `make`,
-   `docker`, `kubectl`, `terraform`, `gradlew`, `bazel`, a shell script committed to the repo,
-   or a tool that did not exist when the snap was built. It is read from the user's `yv.yaml`
-   at runtime, so it cannot be enumerated in a plug list.
-
-Also: users keep working trees on `/opt`, `/srv`, secondary drives and network mounts, and yv
-scans a user-chosen directory for `yv.yaml` files.
-
-### "Isn't this just difficulty with strict confinement?" (a denied category)
-
-No — the failure is not partial function, it is *wrong* function. yv runs each command in a
-PTY, and the whole value of the tool is that the command behaves exactly as it would in the
-user's own terminal. A remapped `$HOME`, a snap-provided library path or a filtered environment
-produces build output that differs from the same command run by hand. A build tool that
-silently disagrees with the shell is worse than one that is not packaged at all.
-
-### "What does the snap do that needs privilege beyond execution?"
-
-Nothing. Specifically:
-
-- No `snapd-control`; updates are left entirely to snapd's refresh.
+- No `snapd-control`. Updates are left entirely to snapd's refresh.
 - No root, no `sudo`, no `pkexec`.
 - Import never executes. Importing a `yv.yaml` writes configuration only; commands run when
   the user presses Run. There is no setup hook and no post-install script.
 - `yv.yaml` files arrive by `git clone` and are validated rather than trusted — bounded and
   rejected on every axis rather than repaired.
 - Secrets live in a separate 0600 file that no export, share or committed config can carry.
+```
 
-### "Packaging questions"
+---
+
+## Held in reserve
+
+Not in the opening post. Use only if a reviewer raises the matching point.
+
+### If accused of "simply facing difficulty with strict confinement"
+
+The failure is not partial function, it is wrong function — a build tool that silently
+disagrees with the user's shell is worse than one that is not packaged at all. Point 4 above
+already states this; expand it only if challenged, and do not name the denied category first.
+
+### Packaging questions
 
 - `base: core24`, `plugin: dump` over a binary built by the project's own CI.
 - No `LD_LIBRARY_PATH` is exported; library paths are resolved by `enable-patchelf` rpath
