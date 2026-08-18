@@ -5,6 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
 import BlobHero from '@site/src/components/BlobHero';
 import AnimatedWordmark from './AnimatedWordmark';
+import Planet from './planet/Planet';
 import styles from './Hero.module.css';
 
 export default function Hero(): ReactNode {
@@ -21,6 +22,7 @@ export default function Hero(): ReactNode {
           The yv.yaml spec
         </Link>
       </div>
+      <Planet />
     </BlobHero>
   );
 }

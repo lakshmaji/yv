@@ -1,0 +1,262 @@
+/*
+ * The scene carries its own small palette rather than borrowing Infima's
+ * greyscale: a planet needs a sea, and the animals need to be three
+ * recognisable individuals. Every value is declared for both themes here, so
+ * nothing in the drawing has to guess which one it is in.
+ */
+.scene {
+  display: block;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  overflow: visible;
+
+  --sea: #4a8fc4;
+  --sea-deep: #3a76a6;
+  --land: #45b97c;
+  --land-hill: #5cc98c;
+  --tree: #2f8f5c;
+  --cloud: #ffffff;
+  --dino-a: #e0a33f;
+  --dino-a-ink: #a9711d;
+  --dino-b: #46b48c;
+  --dino-b-ink: #1f7d5d;
+  --dino-c: #cf7b74;
+  --dino-c-ink: #97493f;
+}
+
+[data-theme='dark'] .scene {
+  --sea: #2f6c99;
+  --sea-deep: #24557a;
+  --land: #3da770;
+  --land-hill: #4bb87c;
+  --tree: #2a8355;
+  --cloud: #dbe7ef;
+  --dino-a: #d99a35;
+  --dino-a-ink: #8f5f16;
+  --dino-b: #3aa47e;
+  --dino-b-ink: #1a6b4f;
+  --dino-c: #c46f68;
+  --dino-c-ink: #8a4038;
+}
+
+/* ---- the world ---------------------------------------------------------- */
+
+/* Brightest where it meets the rim, fading outward — the other way round paints
+   a dark ring that reads as a drop shadow, not an atmosphere. */
+.atmoIn {
+  stop-color: var(--sea);
+  stop-opacity: 0.5;
+}
+
+.atmoOut {
+  stop-color: var(--sea);
+  stop-opacity: 0;
+}
+
+.shadeIn {
+  stop-color: #06202f;
+  stop-opacity: 0;
+}
+
+.shadeOut {
+  stop-color: #06202f;
+  stop-opacity: 0.34;
+}
+
+.ocean {
+  fill: var(--sea);
+}
+
+.land {
+  fill: var(--land);
+}
+
+.hill {
+  fill: var(--land-hill);
+}
+
+.tree {
+  fill: var(--tree);
+}
+
+.trunk {
+  stroke: var(--tree);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.cloud ellipse {
+  fill: var(--cloud);
+  opacity: 0.85;
+}
+
+.spin {
+  transform-box: view-box;
+  transform-origin: 360px 370px;
+  animation: planet-spin 150s linear infinite;
+}
+
+.drift {
+  transform-box: view-box;
+  transform-origin: 360px 370px;
+  animation: planet-spin 90s linear infinite reverse;
+}
+
+@keyframes planet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- the animals -------------------------------------------------------- */
+
+.dinoA {
+  color: var(--dino-a);
+  --ink: var(--dino-a-ink);
+}
+
+.dinoB {
+  color: var(--dino-b);
+  --ink: var(--dino-b-ink);
+}
+
+.dinoC {
+  color: var(--dino-c);
+  --ink: var(--dino-c-ink);
+}
+
+.dinoBody {
+  fill: currentColor;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+
+.dinoBelly {
+  fill: #fff;
+  opacity: 0.22;
+}
+
+.limbFront,
+.limbBack {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Far-side limbs sit in the body's own shadow tone, which is what makes a flat
+   animal read as having a near side and a far side at all. */
+.limbBack {
+  stroke: var(--ink);
+}
+
+.plate {
+  fill: var(--ink);
+}
+
+.jaw {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.eyeWhite {
+  fill: #fff;
+}
+
+.eyePupil {
+  fill: #1c2b33;
+}
+
+/*
+ * Two hooks the timeline addresses by name. They carry no styling of their own —
+ * each exists so one animated transform has a layer to live on, separate from
+ * the static `standOn` transform its parent already holds.
+ */
+.askerHop,
+.senderHead {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ---- the exchange ------------------------------------------------------- */
+
+.trail {
+  fill: none;
+  stroke: var(--ifm-color-primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 9;
+  opacity: 0;
+}
+
+.bubble {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+}
+
+.bubbleSkin {
+  fill: var(--ifm-background-surface-color);
+  stroke: var(--ifm-color-emphasis-400);
+  stroke-width: 1.5;
+}
+
+.bubbleText {
+  fill: var(--ifm-font-color-base);
+  font-size: 14px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.askBubble,
+.thanksBubble {
+  opacity: 0;
+}
+
+.chip {
+  opacity: 0;
+}
+
+.chipPop {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.chipBox {
+  fill: var(--ifm-color-primary);
+  stroke: var(--ifm-color-primary-darkest);
+  stroke-width: 1.5;
+}
+
+.chipText {
+  fill: #fff;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 14px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* ---- reduced motion ----------------------------------------------------- */
+
+/*
+ * The timeline never starts, so nothing here would ever be revealed. Compose one
+ * still instead: both lines of dialogue up, the link drawn, the command parked
+ * halfway along it. The story still reads, and nothing is left at opacity 0.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .drift {
+    animation: none;
+  }
+
+  .askBubble,
+  .thanksBubble,
+  .chip,
+  .trail {
+    opacity: 1;
+  }
+}
