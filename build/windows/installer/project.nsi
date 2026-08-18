@@ -31,6 +31,28 @@ Unicode true
 ## would read "Personalyv".
 !define UNINST_KEY_NAME "yv"
 
+## yv installs per-user, and that is what makes it able to update itself.
+##
+## internal/updater replaces the running executable in place — it renames it
+## aside and unpacks the release zip over the install directory. InstallCheck
+## (internal/updater/apply.go) proves it can write there by writing there, and a
+## Program Files install fails that test for every account that is not elevated.
+## The dialog then offers the releases page instead of a download, which is the
+## behaviour this pair of defines exists to remove.
+##
+## Both are read by wails_tools.nsh with !ifndef, so they have to be defined
+## *before* the include below and not after it.
+##
+##   REQUEST_EXECUTION_LEVEL  RequestExecutionLevel user; makes
+##                            wails.setShellContext choose the current user's
+##                            Start menu and Desktop rather than all-users, and
+##                            makes wails.webview2runtime also accept a
+##                            per-user WebView2 as already installed.
+##   WAILS_INSTALL_SCOPE      Writes the Add/Remove Programs entry to HKCU, so
+##                            the unelevated uninstaller can delete it again.
+!define REQUEST_EXECUTION_LEVEL "user"
+!define WAILS_INSTALL_SCOPE "user"
+
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -54,10 +76,11 @@ ManifestDPIAware true
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
-# Offered rather than automatic: the installer runs elevated, and launching yv
-# from it would leave the app running as administrator for that first session.
+# The installer no longer elevates, so launching from it hands yv the same
+# ordinary user token it would get from the Start menu. Ticked by default: the
+# reason it used to be offered rather than automatic was that first session
+# running as administrator, and that reason is gone.
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
-!define MUI_FINISHPAGE_RUN_NOTCHECKED
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
@@ -76,9 +99,12 @@ ManifestDPIAware true
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
 
-# The template nests this under ${INFO_COMPANYNAME} — "Program Files\Personal\yv".
+# Programs\ under LOCALAPPDATA is where a Windows per-user install goes, and it
+# is writable by the account that runs yv — see the note above the defines.
+#
+# The template nests this under ${INFO_COMPANYNAME} — "…\Programs\Personal\yv".
 # yv is not a suite, so the company level is a folder with one thing in it.
-InstallDir "$PROGRAMFILES64\${INFO_PRODUCTNAME}"
+InstallDir "$LOCALAPPDATA\Programs\${INFO_PRODUCTNAME}"
 ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
