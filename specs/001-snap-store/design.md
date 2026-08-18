@@ -18,7 +18,7 @@ re-runs `chmod`. macOS is the same story via the `.dmg`.
 
 What the snap adds is **distribution**, not a better updater:
 
-- First install is `snap install yv --classic` instead of finding a release page, picking
+- First install is `snap install yv-tool --classic` instead of finding a release page, picking
   the right asset, downloading it and placing it. It lands in the launcher with its icon.
 - yv becomes findable — Snap Store, GNOME Software, `snap find`. Nothing points at the
   GitHub releases page today unless you already know it exists.
@@ -72,10 +72,17 @@ is what every snapped IDE and terminal emulator uses.
 
 Account actions, not code. They block publishing only; every commit below can land first.
 
-1. `snapcraft register yv`. The name is currently unregistered
-   (`api.snapcraft.io/v2/snaps/info/yv` → `resource-not-found`), but a two-character name may
-   trigger a manual name review — start it early.
-2. `snapcraft export-login --snaps=yv --acls package_access,package_push,package_update,package_release -`
+1. ~~Register the name.~~ **Done — registered as `yv-tool` on 2026-08-18.**
+   `snapcraft register yv` fails with `reserved_name`: the store holds all very short names
+   to prevent squatting, and two-character names are reserved as a matter of course. Rather
+   than petition for a scarce name from a young project, the snap is named **`yv-tool`** with
+   **`title: yv`** in `snapcraft.yaml`. Only the `snap install` line and the terminal command
+   carry the longer name — the store listing shows the title, and the launcher entry comes
+   from `build/linux/yv.desktop` (`Name=yv`), neither of which is affected.
+   Renaming a published snap is not really possible — you would publish under a new name and
+   orphan the old, with existing installs never migrating — so this is settled, not a
+   placeholder.
+2. `snapcraft export-login --snaps=yv-tool --acls package_access,package_push,package_update,package_release -`
    → store as the `SNAPCRAFT_STORE_CREDENTIALS` repo secret. Record its expiry in
    `RELEASING.md`; an expired token fails the release job late and quietly.
 3. File the classic-confinement request in the `store-requests` category on
@@ -173,6 +180,8 @@ All new files; the only existing file touched is `Makefile`, for one added targe
 One part, `plugin: dump`, consuming a binary staged into the build context by CI rather than
 compiling anything.
 
+- `name: yv-tool`, `title: yv` — see Phase 0 for why the name is not `yv`. The `title` is what
+  the Snap Store and GNOME Software display, so users still see "yv".
 - `confinement: classic`, `base: core24`, `grade: stable`, `adopt-info: yv`.
 - Version via `craftctl set version="$(...)"` in `override-pull`, reading the same
   `wails.json` → `info.productVersion` that `Makefile:10` and
@@ -187,7 +196,9 @@ compiling anything.
   `procps` — the same runtime set `build/linux/package-deb.sh` already computes for the `.deb`,
   `procps` included because `internal/monitor` shells out to `ps`.
 - **Do not use the `gnome` extension.** It is incompatible with classic confinement.
-- `apps.yv`: `command: bin/yv-launch`, `desktop: usr/share/applications/yv.desktop`. Reuse
+- `apps.yv-tool`: `command: bin/yv-launch`, `desktop: usr/share/applications/yv.desktop`. The
+  app key **must** match the snap name — an app named `yv` inside a snap named `yv-tool` is
+  invoked as `yv-tool.yv`, not `yv-tool`. Reuse
   `build/linux/yv.desktop` verbatim — it is already shared by the `.deb` and the AppImage, and
   a third spelling of the menu entry is how the icon ends up different depending on how you
   installed.
@@ -239,7 +250,8 @@ asset `pickAsset` can never match would only imply the updater handles snaps.
   `YV_UPDATE_PRIVATE_KEY` and `RELEASE_TOKEN`; the `edge` → `stable` flip noted as a one-word
   change once the forum request lands.
 - **`DEVELOPMENT.md`** — `make snap` beside `make deb` / `make appimage`, and
-  `snap install yv --classic --edge` as the install line.
+  `snap install yv-tool --classic --edge` as the install line, with a one-line note that the
+  snap is named `yv-tool` because `yv` is store-reserved.
 - **`CLAUDE.md`** — under "Not verified": the snap is edge-only until the classic-confinement
   request is approved, and has been built on amd64 only. Under the Linux updater notes, the two
   things most likely to be re-litigated later:
@@ -257,7 +269,7 @@ Local, before any CI run:
 
 1. `make test` (includes `-race`) and `cd frontend && bunx tsc --noEmit`. After **each** commit,
    not just at the end — each has to stand alone.
-2. `snapcraft --use-lxd`, then `sudo snap install --classic --dangerous ./yv_*.snap`.
+2. `snapcraft --use-lxd`, then `sudo snap install --classic --dangerous ./yv-tool_*.snap`.
 3. **Launch from the desktop menu, not a terminal.** A snap launched from a shell inherits
    environment a menu launch does not, and the blank-window WebKit failure only appears on the
    clean path.
@@ -267,14 +279,15 @@ Local, before any CI run:
    and Commit 1, and both fail in ways that look like unrelated user error.
 5. No update dialog on launch. Help → "Check for Updates…" reports the Snap Store message rather
    than opening a download page.
-6. Once a second tag exists: `sudo snap refresh yv --channel=edge` with the app running,
+6. Once a second tag exists: `sudo snap refresh yv-tool --channel=edge` with the app running,
    confirming refresh-app-awareness defers rather than killing live PTYs.
 
 CI, on a real tag:
 
 7. The `.deb`, `.tar.gz`, `.AppImage` and their sidecars are unchanged in shape from the previous
    release — the added job must not have perturbed the build job.
-8. `snap info yv` shows the new revision on `edge`, and the GitHub release carries the `.snap`.
+8. `snap info yv-tool` shows the new revision on `edge`, and the GitHub release carries the
+   `.snap`.
 
 ## Risks
 
