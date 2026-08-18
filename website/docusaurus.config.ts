@@ -96,6 +96,7 @@ const config: Config = {
         },
         {
           href: 'https://github.com/lakshmaji/yv',
+          label: 'GitHub',
           position: 'right',
           className: 'navbar-github',
           'aria-label': 'yv on GitHub',
