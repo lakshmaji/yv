@@ -44,8 +44,89 @@
   font-size: 0.94rem;
 }
 
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .copy {
   color: var(--ifm-color-emphasis-600);
+}
+
+.made {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Sized in em so the marks track the line they sit on. Both are colour SVGs
+   loaded as images, which also keeps SolidJS's gradient ids out of the page. */
+.madeLogo {
+  height: 1.15em;
+  width: auto;
+}
+
+.socialRow {
+  display: flex;
+  justify-content: center;
+  gap: 2.4rem;
+  padding-top: 1.2rem;
+}
+
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ifm-color-emphasis-700);
+  transition: color 0.16s ease;
+}
+
+.social:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/*
+ * One chip rule, one mask variable — an icon is a class that sets the variable,
+ * not another block of pseudo-element CSS.
+ */
+.chip {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ifm-color-emphasis-200);
+  transition: background-color 0.16s ease;
+}
+
+.chip::before {
+  content: '';
+  width: 1.15rem;
+  height: 1.15rem;
+  background-color: var(--yv-icon);
+  transition: background-color 0.16s ease;
+  mask: var(--yv-footer-icon) center / contain no-repeat;
+  -webkit-mask: var(--yv-footer-icon) center / contain no-repeat;
+}
+
+.chipGithub {
+  --yv-footer-icon: var(--yv-github-mask);
+}
+
+.chipSponsor {
+  --yv-footer-icon: var(--yv-heart-mask);
+}
+
+.social:hover .chip {
+  background: var(--yv-navbar-active);
+}
+
+.social:hover .chip::before {
+  background-color: var(--ifm-color-primary);
 }
 
 .links {
@@ -78,9 +159,19 @@
     text-align: center;
   }
 
+  .about,
+  .made {
+    align-items: center;
+    justify-content: center;
+  }
+
   .links {
     flex-wrap: wrap;
     gap: 1rem 1.5rem;
+  }
+
+  .socialRow {
+    gap: 1.6rem;
   }
 
   .licence {

@@ -1,5 +1,6 @@
 import type {ReactNode} from 'react';
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
 import styles from './styles.module.css';
@@ -18,12 +19,29 @@ const LINKS = [
   {label: 'Docs', to: '/docs/FEATURES'},
   {label: 'yv.yaml', to: '/docs/docs/yv-yaml'},
   {label: 'Demo', to: '/demo'},
-  {label: 'GitHub', href: 'https://github.com/lakshmaji/yv'},
-  {label: 'Sponsor', href: 'https://github.com/sponsors/lakshmaji'},
+];
+
+/**
+ * The two links worth a glyph. They keep their labels: the navbar can afford an
+ * icon-only GitHub link because it is one of five things in a bar, but down here
+ * the row is the only thing pointing off-site.
+ */
+const SOCIAL = [
+  {label: 'GitHub', href: 'https://github.com/lakshmaji/yv', chip: styles.chipGithub},
+  {
+    label: 'Sponsor',
+    href: 'https://github.com/sponsors/lakshmaji',
+    chip: styles.chipSponsor,
+  },
 ];
 
 export default function Footer(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
+
+  // The site is served under /yv/, so a bare /img path 404s once deployed.
+  const wails = useBaseUrl('/img/wails.svg');
+  const solid = useBaseUrl('/img/solidjs.svg');
+
   return (
     <footer className={styles.footer}>
       <div className="container">
@@ -34,11 +52,27 @@ export default function Footer(): ReactNode {
         </div>
 
         <div className={styles.bar}>
-          <span className={styles.copy}>© {new Date().getFullYear()} yv</span>
+          <div className={styles.about}>
+            <span className={styles.copy}>© {new Date().getFullYear()} yv</span>
+            <span className={styles.made}>
+              Made with
+              {/* The marks carry the recognition; the link text carries the
+                  name, so the images are decorative. */}
+              <img className={styles.madeLogo} src={wails} alt="" aria-hidden="true" />
+              <Link className={styles.link} href="https://wails.io">
+                Wails
+              </Link>
+              and
+              <img className={styles.madeLogo} src={solid} alt="" aria-hidden="true" />
+              <Link className={styles.link} href="https://solidjs.com">
+                SolidJS
+              </Link>
+            </span>
+          </div>
 
           <nav className={styles.links} aria-label="Footer">
             {LINKS.map((l) => (
-              <Link key={l.label} className={styles.link} to={l.to} href={l.href}>
+              <Link key={l.label} className={styles.link} to={l.to}>
                 {l.label}
               </Link>
             ))}
@@ -51,6 +85,15 @@ export default function Footer(): ReactNode {
             MIT License
           </Link>
         </div>
+
+        <nav className={styles.socialRow} aria-label="Project links">
+          {SOCIAL.map((s) => (
+            <Link key={s.label} className={styles.social} href={s.href}>
+              <span className={`${styles.chip} ${s.chip}`} aria-hidden="true" />
+              {s.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </footer>
   );
