@@ -82,14 +82,19 @@ Account actions, not code. They block publishing only; every commit below can la
    Renaming a published snap is not really possible — you would publish under a new name and
    orphan the old, with existing installs never migrating — so this is settled, not a
    placeholder.
-2. `snapcraft export-login --snaps=yv-tool --acls package_access,package_push,package_update,package_release -`
-   → store as the `SNAPCRAFT_STORE_CREDENTIALS` repo secret. Record its expiry in
-   `RELEASING.md`; an expired token fails the release job late and quietly.
-3. File the classic-confinement request in the `store-requests` category on
+2. ~~Export store credentials.~~ **Done — `SNAPCRAFT_STORE_CREDENTIALS` added 2026-08-18.**
+   Exported with `snapcraft export-login --snaps=yv-tool --acls package_access,package_push,package_update,package_release -`,
+   so the credential is scoped to this one snap and cannot register names or edit metadata.
+   **It expires 2027-08-18** (the one-year default; `snapcraft whoami` reports it). Commit 5
+   must record that date in `RELEASING.md` — an expired token fails the publish step long
+   after anyone remembers adding it, and the failure reads as a store outage rather than an
+   expiry.
+3. **Remaining.** File the classic-confinement request in the `store-requests` category on
    forum.snapcraft.io. yv fits the published allowed category *"tools for configuring
    development workspaces/environments"*; the justification is that it executes the user's
    own project commands against the user's own toolchain, which no combination of interfaces
    expresses. Until it is approved the snap can only reach `edge`.
+   **A ready-to-paste post is drafted at [`classic-confinement-request.md`](./classic-confinement-request.md).**
 
 ---
 
