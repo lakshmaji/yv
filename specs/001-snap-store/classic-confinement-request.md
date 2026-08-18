@@ -16,22 +16,15 @@ Two things are deliberately **not** in the opening post:
   partial function, without naming it.
 - **Packaging detail.** Reviewers read the linked `snapcraft.yaml`. It stays below the fold.
 
-> **Order of operations — do not post yet.**
+> **Before posting:** the `snapcraft:` field points at `snap/snapcraft.yaml` on the
+> `spec/001-snap-store` branch. That file is Commit 3 and is not written yet, so the link 404s
+> until it is pushed. Write Commit 3, push, confirm the URL returns 200, then post — a dead
+> link invites an immediate "where is the recipe" round-trip, which costs days.
 >
-> The body below carries one placeholder, `FILL_IN_SNAPCRAFT_YAML_URL`. It is deliberately not
-> a URL: `snap/snapcraft.yaml` does not exist on **any** branch yet — it is Commit 3, which has
-> not been written — so there is no link that would work today. A dead link in the request
-> invites an immediate "where is the recipe" round-trip, which costs days.
->
-> Sequence:
->
-> 1. Write and merge Commit 3 to `main`.
-> 2. Confirm `https://github.com/lakshmaji/yv/blob/main/snap/snapcraft.yaml` returns 200.
-> 3. Replace the placeholder with that URL and post.
->
-> Use `main`, not this spec branch. A reviewer may open the link weeks later, by which point
-> `spec/001-snap-store` is merged and deleted and the link 404s. If you have a reason to post
-> before merging, pin the commit (`/blob/<sha>/snap/snapcraft.yaml`) — a SHA never disappears.
+> **If `spec/001-snap-store` is later merged and deleted, this link dies and the reviewer sees
+> a 404 weeks into the thread.** Before deleting the branch, edit the forum post to point at
+> `/blob/main/snap/snapcraft.yaml`, or pin the commit (`/blob/<sha>/snap/snapcraft.yaml`) —
+> a SHA survives branch deletion.
 >
 > Everything between the ``` fences is postable text. Nothing else in this file is — do not
 > paste the notes.
@@ -52,7 +45,7 @@ Classic confinement for yv
   build, test, lint, dev server — each streamed into its own terminal pane. The
   commands come from a `yv.yaml` file committed to the user's repository, so the
   set of tools invoked is defined by the user, not by this snap.
-- **snapcraft**: FILL_IN_SNAPCRAFT_YAML_URL
+- **snapcraft**: https://github.com/lakshmaji/yv/blob/spec/001-snap-store/snap/snapcraft.yaml
 - **upstream**: https://github.com/lakshmaji/yv
 - **upstream-relation**: I am the upstream author; the snap recipe lives in the
   application's own repository.
