@@ -1,7 +1,17 @@
 # Classic confinement request — forum post
 
-Post to **forum.snapcraft.io**, category **store-requests**, from the account that owns the
-`yv-tool` registration.
+Post to **forum.snapcraft.io**, in the **`store-requests` → `classic-confinement`**
+subcategory — <https://forum.snapcraft.io/c/store-requests/classic-confinement/26> — from the
+account that owns the `yv-tool` registration.
+
+Not the parent `store-requests` category. It asks people to file in the right subcategory, and
+the sibling subcategories are for different asks: `privileged-interfaces` (26 is confinement,
+27 is interfaces like `snapd-control`), `aliases`, `tracks`, `transfer-ownership`, `guardrail`.
+The [Goose thread](https://forum.snapcraft.io/t/classic-confinement-for-goose/52725) this
+template follows sits in 26.
+
+> If you later want the bare `yv` command rather than `yv-tool`, that is a **separate** request
+> in the `aliases` subcategory (28) — not something to bundle into this one.
 
 The store expects a short structured template, not an essay — see
 [Classic confinement for Goose](https://forum.snapcraft.io/t/classic-confinement-for-goose/52725)
