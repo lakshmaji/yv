@@ -9,7 +9,7 @@ const baseUrl = '/yv/';
 const config: Config = {
   title: 'yv',
   tagline: 'A specification for the commands a project runs, and the app that runs them.',
-  // Rendered from img/logo.svg, so the tab and the navbar carry one mark.
+  // Rendered from img/logo.png, so the tab and the navbar carry one mark.
   favicon: 'img/favicon.png',
 
   future: {
@@ -67,12 +67,14 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      // No `title`: the mark stands on its own in the corner. It is the app
-      // icon's low-poly boar redrawn with fewer, thicker edges — the icon
-      // itself is a fine wireframe over a nebula and dissolves below ~64px.
+      // No `title`: the mark stands on its own in the corner. This is
+      // build/appicon.png cropped to its tile — the app icon itself, used as
+      // asked. It is a fine wireframe over a nebula, so it reads softer at
+      // navbar size than a flat mark would; the source here is 256px so at
+      // least HiDPI screens get something to downscale from.
       logo: {
         alt: 'yv',
-        src: 'img/logo.svg',
+        src: 'img/logo.png',
       },
       items: [
         {

@@ -83,8 +83,12 @@
   }
 }
 
+/* Rounded, because the source is a rounded app-icon tile and a square edge on a
+   pill-shaped bar reads as a mistake. */
 .navbar__logo {
-  height: 2.2rem;
+  height: 2.4rem;
+  border-radius: 9px;
+  overflow: hidden;
   transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
