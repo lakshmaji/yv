@@ -2,6 +2,7 @@ import type {ReactNode} from 'react';
 import {useEffect, useRef} from 'react';
 import clsx from 'clsx';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import Layout from '@theme/Layout';
 import {animate, stagger} from 'animejs';
 
@@ -52,6 +53,22 @@ export default function Home(): ReactNode {
           <p className="hero__subtitle">{siteConfig.tagline}</p>
         </div>
       </header>
+      <main className={styles.showcase}>
+        <div className="container">
+          <div className={styles.stack}>
+            <img
+              src={useBaseUrl('/img/projects.png')}
+              alt="Projects and commands, run with one click"
+              className={clsx(styles.stackImage, styles.stackImage1)}
+            />
+            <img
+              src={useBaseUrl('/img/device-discovery.png')}
+              alt="Nearby devices found over mDNS on the discovery map"
+              className={clsx(styles.stackImage, styles.stackImage2)}
+            />
+          </div>
+        </div>
+      </main>
     </Layout>
   );
 }
