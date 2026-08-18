@@ -2,6 +2,8 @@ import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
+const baseUrl = '/yv/';
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
@@ -16,7 +18,7 @@ const config: Config = {
   },
 
   url: 'https://lakshmaji.github.io',
-  baseUrl: '/yv/',
+  baseUrl,
 
   organizationName: 'lakshmaji',
   projectName: 'yv',
@@ -73,7 +75,15 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
-        {to: '/', label: 'yv', position: 'left'},
+        {
+          to: '/',
+          label: 'yv',
+          position: 'left',
+          // Without this the item is active on every page: Docusaurus marks a
+          // link active when the path starts with its target, and '/' resolves
+          // to the base URL, which prefixes the whole site.
+          activeBaseRegex: `^${baseUrl}?$`,
+        },
         {to: '/docs/FEATURES', label: 'Docs', position: 'left'},
         {to: '/demo', label: 'Demo', position: 'left'},
         {
