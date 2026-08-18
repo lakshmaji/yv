@@ -57,24 +57,34 @@ const config: Config = {
   ],
 
   themeConfig: {
+    // The app icon, which is far too fine-grained to survive in a navbar but
+    // is exactly right at card size.
+    image: 'img/social-card.jpg',
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'yv',
+      // No `title`: the mark stands on its own in the corner. It is generated
+      // from the app's own boar by `bun run scripts/gen-logo.ts`.
+      logo: {
+        alt: 'yv',
+        src: 'img/logo.svg',
+      },
       items: [
-        {to: '/', label: 'Home', position: 'left'},
+        {to: '/', label: 'yv', position: 'left'},
         {to: '/docs/FEATURES', label: 'Docs', position: 'left'},
         {to: '/demo', label: 'Demo', position: 'left'},
         {
           href: 'https://github.com/sponsors/lakshmaji',
           label: 'Sponsor',
           position: 'right',
+          className: 'navbar-sponsor',
         },
         {
           href: 'https://github.com/lakshmaji/yv',
-          label: 'GitHub',
           position: 'right',
+          className: 'navbar-github',
+          'aria-label': 'yv on GitHub',
         },
       ],
     },

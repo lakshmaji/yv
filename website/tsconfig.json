@@ -8,5 +8,8 @@
     "ignoreDeprecations": "6.0",
     "strict": true
   },
-  "exclude": [".docusaurus", "build"]
+  // `scripts` is excluded because it runs under Bun, not in the site build, and
+  // reaches into the Wails frontend's sources — neither of which this config
+  // describes.
+  "exclude": [".docusaurus", "build", "scripts"]
 }
