@@ -1,0 +1,19 @@
+.title {
+  perspective: 600px;
+  font-size: clamp(4rem, 12vw, 7rem);
+  letter-spacing: -0.04em;
+  margin-bottom: 0.5rem;
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+}
+
+/* The letters start invisible so anime.js can fade them in. Without this they
+   would simply never appear when the animation is skipped. */
+@media (prefers-reduced-motion: reduce) {
+  .letter {
+    opacity: 1;
+  }
+}
