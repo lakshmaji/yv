@@ -41,7 +41,7 @@ export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout title={siteConfig.title} description={siteConfig.tagline}>
-      <header className={clsx('hero hero--primary', styles.heroBanner)}>
+      <header className={clsx('hero', styles.heroBanner)}>
         <div className={styles.blobBackground}>
           <div className={clsx(styles.blob, styles.blob1)} />
           <div className={clsx(styles.blob, styles.blob2)} />
