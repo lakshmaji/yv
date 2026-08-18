@@ -16,6 +16,11 @@
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
 
+  /* The gap above the floating pill. The hero reads it too, to hoist itself
+     under the bar — so it lives on :root, not on .navbar. */
+  --yv-navbar-gap: 0.85rem;
+  --yv-navbar-space: calc(var(--ifm-navbar-height) + var(--yv-navbar-gap));
+
   --yv-navbar-bg: rgba(255, 255, 255, 0.72);
   --yv-navbar-hover: rgba(15, 25, 40, 0.06);
   --yv-navbar-active: rgba(46, 133, 85, 0.13);
@@ -56,11 +61,11 @@
  */
 .navbar {
   position: sticky;
-  top: 0.85rem;
+  top: var(--yv-navbar-gap);
   z-index: var(--ifm-z-index-fixed);
   width: calc(100% - 2rem);
   max-width: 1180px;
-  margin: 0.85rem auto 0;
+  margin: var(--yv-navbar-gap) auto 0;
   padding: 0 0.9rem;
   border-radius: 999px;
   border: 1px solid var(--ifm-color-emphasis-200);
@@ -75,10 +80,12 @@
 }
 
 @media screen and (max-width: 996px) {
+  :root {
+    --yv-navbar-gap: 0.5rem;
+  }
+
   .navbar {
     width: calc(100% - 1rem);
-    margin-top: 0.5rem;
-    top: 0.5rem;
     border-radius: 22px;
   }
 }

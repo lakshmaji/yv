@@ -7,8 +7,17 @@
  * free but read as smudges of dirt behind a bright drawing. These carry explicit
  * colours for both themes instead.
  */
+/*
+ * The navbar is a sibling rendered *before* this element, so the sky can only
+ * reach the top of the page by climbing under it: the hero is a flex item of the
+ * theme's `.mainWrapper` (a flex column), so a negative margin hoists it without
+ * collapsing into anything. The bar keeps its z-index and its glass; what was a
+ * black strip behind it is now the same starfield as the rest of the hero. The
+ * padding puts back exactly what the margin took, so nothing above moves.
+ */
 .banner {
-  padding: 5rem 0 3rem;
+  margin-top: calc(-1 * var(--yv-navbar-space));
+  padding: calc(5rem + var(--yv-navbar-space)) 0 3rem;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -31,7 +40,7 @@
 
 @media screen and (max-width: 996px) {
   .banner {
-    padding: 3rem 1.5rem 2rem;
+    padding: calc(3rem + var(--yv-navbar-space)) 1.5rem 2rem;
   }
 }
 
