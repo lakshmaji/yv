@@ -75,7 +75,7 @@
 
 .shadeOut {
   stop-color: #06202f;
-  stop-opacity: 0.34;
+  stop-opacity: 0.42;
 }
 
 .seaLit {
@@ -84,6 +84,16 @@
 
 .seaDeep {
   stop-color: var(--sea-deep);
+}
+
+.rimOff {
+  stop-color: #cfeaff;
+  stop-opacity: 0;
+}
+
+.rimOn {
+  stop-color: #cfeaff;
+  stop-opacity: 0.55;
 }
 
 .specIn {

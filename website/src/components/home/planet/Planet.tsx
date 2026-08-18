@@ -13,6 +13,7 @@ import {
   arcMidpoint,
   buildScene,
   speechAnchor,
+  sphereProject,
   standOn,
 } from './scene';
 import styles from './Planet.module.css';
@@ -130,6 +131,13 @@ export default function Planet(): ReactNode {
           <stop offset="0" className={styles.seaLit} />
           <stop offset="1" className={styles.seaDeep} />
         </radialGradient>
+        {/* Rim light along the shadowed limb: light wrapping round the back of
+            a ball. Painted as a stroke on the disc's own edge so it can only
+            ever be a crescent. */}
+        <linearGradient id="yv-planet-rim" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0.42" className={styles.rimOff} />
+          <stop offset="1" className={styles.rimOn} />
+        </linearGradient>
         <radialGradient id="yv-planet-spec">
           <stop offset="0" className={styles.specIn} />
           <stop offset="1" className={styles.specOut} />
@@ -175,7 +183,7 @@ export default function Planet(): ReactNode {
               cy={c.y}
               rx={c.rx + 5}
               ry={c.ry + 5}
-              transform={`rotate(${c.rot} ${c.x} ${c.y})`}
+              transform={`${sphereProject(c.x, c.y)} rotate(${c.rot} ${c.x} ${c.y})`}
               className={styles.shelf}
             />
           ))}
@@ -187,7 +195,7 @@ export default function Planet(): ReactNode {
               cy={c.y}
               rx={c.rx}
               ry={c.ry}
-              transform={`rotate(${c.rot} ${c.x} ${c.y})`}
+              transform={`${sphereProject(c.x, c.y)} rotate(${c.rot} ${c.x} ${c.y})`}
               className={styles.land}
             />
           ))}
@@ -241,6 +249,15 @@ export default function Planet(): ReactNode {
         cy={PLANET.cy}
         r={PLANET.r}
         fill="url(#yv-planet-shade)"
+        pointerEvents="none"
+      />
+      <circle
+        cx={PLANET.cx}
+        cy={PLANET.cy}
+        r={PLANET.r - 2.5}
+        fill="none"
+        stroke="url(#yv-planet-rim)"
+        strokeWidth={5}
         pointerEvents="none"
       />
       {/* Specular: the wet-ball highlight. Small and soft, or it looks like a

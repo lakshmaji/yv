@@ -88,6 +88,34 @@ export function arcMidpoint(from: number, to: number): {x: number; y: number} {
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * Lay a surface feature on a sphere rather than on a disc.
+ *
+ * Orthographic projection: a patch of ground at distance `d` from the centre of
+ * the visible disc is tilted away from the viewer, so it compresses along the
+ * radial direction by `sqrt(1 - (d/r)^2)` and not at all across it. Squash by
+ * that factor and continents near the limb foreshorten the way they do on a
+ * globe — which is most of what makes a flat circle read as a ball.
+ *
+ * Returned as a transform prefix: rotate the radial direction onto x, scale x
+ * alone, rotate back. The floor stops a lobe right on the limb collapsing to a
+ * line and disappearing.
+ */
+export function sphereProject(x: number, y: number): string {
+  const dx = x - PLANET.cx;
+  const dy = y - PLANET.cy;
+  const d = Math.hypot(dx, dy);
+  const k = Math.max(0.12, Math.sqrt(Math.max(0, 1 - (d / PLANET.r) ** 2)));
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return [
+    `translate(${r1(x)} ${r1(y)})`,
+    `rotate(${r1(deg)})`,
+    `scale(${r1(k)} 1)`,
+    `rotate(${r1(-deg)})`,
+    `translate(${r1(-x)} ${r1(-y)})`,
+  ].join(' ');
+}
+
 export type Species = 'theropod' | 'sauropod' | 'stegosaur';
 
 export interface Actor {
@@ -144,9 +172,9 @@ export function buildScene(seed: number): Scene {
   // Centres are sampled in polar coordinates so they spread across the disc
   // rather than piling into its corners, which a square sample would do. Lobes
   // are allowed past the rim — the clip turns those into coastlines.
-  const continents = Array.from({length: 3 + Math.floor(rng() * 2)}, () => {
+  const continents = Array.from({length: 4 + Math.floor(rng() * 3)}, () => {
     const a = rng() * Math.PI * 2;
-    const d = Math.sqrt(rng()) * PLANET.r * 0.66;
+    const d = Math.sqrt(rng()) * PLANET.r * 0.76;
     const cx = PLANET.cx + Math.cos(a) * d;
     const cy = PLANET.cy + Math.sin(a) * d;
     return Array.from({length: 2 + Math.floor(rng() * 3)}, () => ({
