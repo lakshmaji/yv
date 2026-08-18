@@ -7,7 +7,9 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'yv',
   tagline: 'A specification for the commands a project runs, and the app that runs them.',
-  favicon: 'img/favicon.ico',
+  // The boar, same mark as the navbar. Not the app icon: that is a fine
+  // wireframe over a nebula and at 32px it resolves to a smudge.
+  favicon: 'img/favicon.png',
 
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
