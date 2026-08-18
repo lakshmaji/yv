@@ -125,6 +125,30 @@ export default function Planet(): ReactNode {
           <stop offset="0.4" className={styles.shadeIn} />
           <stop offset="1" className={styles.shadeOut} />
         </radialGradient>
+        {/* Open ocean, lit from the same direction as the shading. */}
+        <radialGradient id="yv-planet-sea" cx="0.35" cy="0.3" r="0.82">
+          <stop offset="0" className={styles.seaLit} />
+          <stop offset="1" className={styles.seaDeep} />
+        </radialGradient>
+        <radialGradient id="yv-planet-spec">
+          <stop offset="0" className={styles.specIn} />
+          <stop offset="1" className={styles.specOut} />
+        </radialGradient>
+        {/* One gradient per colourway: the stops need the tone's own two
+            variables, and a gradient in <defs> cannot read `currentColor` from
+            whichever animal happens to reference it. */}
+        <linearGradient id="yv-dino-a" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.55" className={styles.skinA1} />
+          <stop offset="1" className={styles.skinA2} />
+        </linearGradient>
+        <linearGradient id="yv-dino-b" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.55" className={styles.skinB1} />
+          <stop offset="1" className={styles.skinB2} />
+        </linearGradient>
+        <linearGradient id="yv-dino-c" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.55" className={styles.skinC1} />
+          <stop offset="1" className={styles.skinC2} />
+        </linearGradient>
       </defs>
 
       <circle
@@ -139,6 +163,22 @@ export default function Planet(): ReactNode {
           it without the timeline having to know. */}
       <g className={styles.spin}>
         <g clipPath={`url(#${CLIP_ID})`}>
+          {/* Three passes over the same ellipses: shallows, land, then a
+              highlight inset toward the light. Drawn as whole layers rather than
+              per-continent, so one landmass's shallows never paint over its
+              neighbour's shore. */}
+          {scenery.continents.map((c, i) => (
+            <ellipse
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              cx={c.x}
+              cy={c.y}
+              rx={c.rx + 5}
+              ry={c.ry + 5}
+              transform={`rotate(${c.rot} ${c.x} ${c.y})`}
+              className={styles.shelf}
+            />
+          ))}
           {scenery.continents.map((c, i) => (
             <ellipse
               // eslint-disable-next-line react/no-array-index-key
@@ -174,11 +214,44 @@ export default function Planet(): ReactNode {
         ))}
       </g>
 
+      {/* Ice caps sit outside the spin group: the surface turns, the poles do
+          not move with it.
+
+          Each is a big circle centred beyond the pole, so what the clip leaves
+          behind is a cap with a curved edge. An ellipse centred *on* the pole
+          would be cut into a flat-bottomed lens instead, which reads as a slice
+          taken out of the planet. */}
+      <g clipPath={`url(#${CLIP_ID})`}>
+        <circle
+          cx={PLANET.cx}
+          cy={PLANET.cy - PLANET.r - 108}
+          r={126}
+          className={styles.ice}
+        />
+        <circle
+          cx={PLANET.cx}
+          cy={PLANET.cy + PLANET.r + 112}
+          r={126}
+          className={styles.ice}
+        />
+      </g>
+
       <circle
         cx={PLANET.cx}
         cy={PLANET.cy}
         r={PLANET.r}
         fill="url(#yv-planet-shade)"
+        pointerEvents="none"
+      />
+      {/* Specular: the wet-ball highlight. Small and soft, or it looks like a
+          hole in the planet. */}
+      <ellipse
+        cx={PLANET.cx - PLANET.r * 0.4}
+        cy={PLANET.cy - PLANET.r * 0.44}
+        rx={PLANET.r * 0.38}
+        ry={PLANET.r * 0.26}
+        transform={`rotate(-32 ${PLANET.cx - PLANET.r * 0.4} ${PLANET.cy - PLANET.r * 0.44})`}
+        fill="url(#yv-planet-spec)"
         pointerEvents="none"
       />
 

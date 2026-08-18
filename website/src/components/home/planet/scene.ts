@@ -137,20 +137,26 @@ export function buildScene(seed: number): Scene {
   const others: Species[] = ['sauropod', 'stegosaur', 'theropod'];
   const pick = () => others[Math.floor(rng() * others.length)];
 
-  const continents = Array.from({length: 4 + Math.floor(rng() * 3)}, () => {
-    // Sampled in polar coordinates so the blobs spread across the disc rather
-    // than piling into its corners, which a square sample would do. Some are
-    // allowed past the rim: the clip turns those into coastlines.
+  // Each landmass is a cluster of overlapping lobes, not one ellipse. Single
+  // ellipses at this size read as polka dots; overlapping ones union into a
+  // coastline with bays and headlands.
+  //
+  // Centres are sampled in polar coordinates so they spread across the disc
+  // rather than piling into its corners, which a square sample would do. Lobes
+  // are allowed past the rim — the clip turns those into coastlines.
+  const continents = Array.from({length: 3 + Math.floor(rng() * 2)}, () => {
     const a = rng() * Math.PI * 2;
-    const d = Math.sqrt(rng()) * PLANET.r * 0.78;
-    return {
-      x: PLANET.cx + Math.cos(a) * d,
-      y: PLANET.cy + Math.sin(a) * d,
-      rx: 24 + rng() * 30,
-      ry: 17 + rng() * 20,
+    const d = Math.sqrt(rng()) * PLANET.r * 0.66;
+    const cx = PLANET.cx + Math.cos(a) * d;
+    const cy = PLANET.cy + Math.sin(a) * d;
+    return Array.from({length: 2 + Math.floor(rng() * 3)}, () => ({
+      x: cx + (rng() * 2 - 1) * 26,
+      y: cy + (rng() * 2 - 1) * 22,
+      rx: 17 + rng() * 19,
+      ry: 12 + rng() * 13,
       rot: rng() * 180,
-    };
-  });
+    }));
+  }).flat();
 
   const trees = Array.from({length: 6 + Math.floor(rng() * 4)}, () => ({
     deg: rng() * 360,

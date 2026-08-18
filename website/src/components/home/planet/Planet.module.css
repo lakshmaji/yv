@@ -11,32 +11,46 @@
   margin: 0 auto;
   overflow: visible;
 
+  --sea-lit: #6cabd9;
   --sea: #4a8fc4;
-  --sea-deep: #3a76a6;
+  --sea-deep: #2d6c9c;
+  --shallow: #7fcbdd;
   --land: #45b97c;
+  --land-lit: #63d193;
   --land-hill: #5cc98c;
   --tree: #2f8f5c;
+  --ice: #eef6fb;
   --cloud: #ffffff;
   --dino-a: #e0a33f;
+  --dino-a-mid: #c98c2e;
   --dino-a-ink: #a9711d;
   --dino-b: #46b48c;
+  --dino-b-mid: #2f9b74;
   --dino-b-ink: #1f7d5d;
   --dino-c: #cf7b74;
+  --dino-c-mid: #b7625c;
   --dino-c-ink: #97493f;
 }
 
 [data-theme='dark'] .scene {
+  --sea-lit: #3f85b4;
   --sea: #2f6c99;
-  --sea-deep: #24557a;
+  --sea-deep: #1c4d72;
+  --shallow: #4a9ab4;
   --land: #3da770;
+  --land-lit: #4fbd83;
   --land-hill: #4bb87c;
   --tree: #2a8355;
+  --ice: #d7e6f0;
   --cloud: #dbe7ef;
   --dino-a: #d99a35;
+  --dino-a-mid: #bd8226;
   --dino-a-ink: #8f5f16;
   --dino-b: #3aa47e;
+  --dino-b-mid: #2b8b68;
   --dino-b-ink: #1a6b4f;
   --dino-c: #c46f68;
+  --dino-c-mid: #a85951;
   --dino-c-ink: #8a4038;
 }
 
@@ -64,12 +78,41 @@
   stop-opacity: 0.34;
 }
 
+.seaLit {
+  stop-color: var(--sea-lit);
+}
+
+.seaDeep {
+  stop-color: var(--sea-deep);
+}
+
+.specIn {
+  stop-color: #ffffff;
+  stop-opacity: 0.34;
+}
+
+.specOut {
+  stop-color: #ffffff;
+  stop-opacity: 0;
+}
+
 .ocean {
-  fill: var(--sea);
+  fill: url(#yv-planet-sea);
+}
+
+/* Shallow water round every coast. A flat green blob on flat blue is the single
+   biggest reason a drawn planet looks like a sticker. */
+.shelf {
+  fill: var(--shallow);
 }
 
 .land {
   fill: var(--land);
+}
+
+.ice {
+  fill: var(--ice);
+  opacity: 0.82;
 }
 
 .hill {
@@ -113,28 +156,69 @@
 
 .dinoA {
   color: var(--dino-a);
+  --mid: var(--dino-a-mid);
   --ink: var(--dino-a-ink);
+  --skin: url(#yv-dino-a);
 }
 
 .dinoB {
   color: var(--dino-b);
+  --mid: var(--dino-b-mid);
   --ink: var(--dino-b-ink);
+  --skin: url(#yv-dino-b);
 }
 
 .dinoC {
   color: var(--dino-c);
+  --mid: var(--dino-c-mid);
   --ink: var(--dino-c-ink);
+  --skin: url(#yv-dino-c);
 }
 
+.skinA1 {
+  stop-color: var(--dino-a);
+}
+.skinA2 {
+  stop-color: var(--dino-a-ink);
+}
+.skinB1 {
+  stop-color: var(--dino-b);
+}
+.skinB2 {
+  stop-color: var(--dino-b-ink);
+}
+.skinC1 {
+  stop-color: var(--dino-c);
+}
+.skinC2 {
+  stop-color: var(--dino-c-ink);
+}
+
+/*
+ * No outline on any of these.
+ *
+ * The animals are composed from overlapping primitives, so an outline per shape
+ * draws a seam everywhere two of them meet — across the muzzle, around the neck,
+ * through the hips — and the result reads as a pile of lumps rather than one
+ * animal. Filled and unstroked, the same primitives union into a single clean
+ * silhouette. Depth comes from the shading layer below instead.
+ */
 .dinoBody {
-  fill: currentColor;
-  stroke: var(--ink);
-  stroke-width: 1.6;
+  fill: var(--skin);
 }
 
-.dinoBelly {
-  fill: #fff;
-  opacity: 0.22;
+/*
+ * The tail sits behind the body. Same colour as the body it would vanish into
+ * one undifferentiated blob; full shadow tone and it reads as a separate dark
+ * object stuck on. A mid tone is the plane change that says "behind".
+ */
+.dinoTail {
+  fill: var(--mid);
+}
+
+/* Plates and the far-side limbs, in the animal's own shadow tone. */
+.dinoFar {
+  fill: var(--ink);
 }
 
 .limbFront,
@@ -151,14 +235,9 @@
   stroke: var(--ink);
 }
 
-.plate {
-  fill: var(--ink);
-}
 
 .eyeWhite {
   fill: #fff;
-  stroke: var(--ink);
-  stroke-width: 1.2;
 }
 
 .eyePupil {
