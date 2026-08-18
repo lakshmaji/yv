@@ -101,10 +101,14 @@ yv/
 │   ├── runner/          — PTY execution (ExecuteCommand, StopCommand, SendInput)
 │   ├── config/          — persistence (LoadProjects, SaveProjects, Export/Import)
 │   ├── monitor/         — resource stats polling (CPU, memory)
+│   ├── metrics/         — append-only JSONL samples, retention
 │   ├── env/             — environment variable store (0600, never in exports)
+│   ├── audio/           — user's own sound clips, read for the discovery view
 │   ├── share/           — peer discovery (mDNS + libp2p), connect-by-code, transfer
 │   ├── updater/         — update check, download, verify, apply per platform
-│   └── settings/        — settings store, validation, normalization
+│   ├── updatesign/      — signature format for update verification
+│   ├── settings/        — settings store, validation, normalization
+│   └── atomicfile/      — write-beside-fsync-rename; every config write goes through it
 └── frontend/
     ├── index.html
     └── src/

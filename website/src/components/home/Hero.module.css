@@ -1,0 +1,14 @@
+.tagline {
+  max-width: 44ch;
+  margin: 0 auto 2rem;
+  font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+  color: var(--ifm-color-emphasis-700);
+}
+
+.ctas {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}

@@ -1,0 +1,285 @@
+.title {
+  position: relative;
+  isolation: isolate;
+  perspective: 600px;
+  font-size: clamp(4rem, 12vw, 7rem);
+  letter-spacing: -0.04em;
+  margin-bottom: 0.5rem;
+  /* Bright things in dark places cast light. This is the whole reason the mark
+     reads as neon rather than as white text. */
+  filter: drop-shadow(0 1px 4px rgba(27, 199, 251, 0.35));
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+}
+
+/* The letters start invisible so anime.js can fade them in. Without this they
+   would simply never appear when the animation is skipped. */
+@media (prefers-reduced-motion: reduce) {
+  .letter {
+    opacity: 1;
+  }
+}
+
+/*
+ * Cyberpunk glitch, after the letters have finished dealing themselves in.
+ *
+ * The shape of it is Matt Gross's walkthrough (codepen.io/mattgrosswork/pen/
+ * VwprebG): two offset colour layers drawn from `data-text`, each running the
+ * same slice path as the real text but on its own clock for movement and ink,
+ * so a handful of short animations read as far more than four.
+ *
+ * The rules that matter: the mark is legible most of the time — every
+ * animation spends ~90% of its cycle at `none`/`0` and only snaps into a slice
+ * for a moment — and the layers are behind the text, never over it.
+ */
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.glitch::before {
+  color: #e0287d;
+  animation:
+    slices 5s step-end infinite,
+    flicker 5s step-end infinite,
+    ink 8s step-end infinite,
+    drift 10s step-end infinite;
+}
+
+.glitch::after {
+  color: #1bc7fb;
+  animation:
+    slices 5s step-end infinite,
+    flicker 5s step-end infinite,
+    ink 7s step-end infinite,
+    drift 8s step-end infinite;
+}
+
+/* The real text is cut by the same paths at the same instants, which is what
+   ties the loose colour layers to it instead of leaving them floating. */
+.glitch .letter {
+  animation: slices 5s step-end infinite;
+}
+
+/* Deliberately arbitrary shapes — generated once from a seeded random walk, not
+   hand-tuned. Legibility comes from the `none` frames, not from the polygons. */
+@keyframes slices {
+  0% {
+    clip-path: polygon(
+      0% 2%,
+      72% 2%,
+      72% 19%,
+      7% 19%,
+      7% 93%,
+      16% 93%,
+      16% 95%,
+      52% 95%,
+      52% 7%,
+      74% 7%,
+      74% 64%,
+      0% 64%
+    );
+  }
+
+  5% {
+    clip-path: polygon(
+      0% 20%,
+      9% 20%,
+      9% 35%,
+      33% 35%,
+      33% 44%,
+      38% 44%,
+      38% 86%,
+      30% 86%,
+      30% 71%,
+      99% 71%,
+      99% 43%,
+      0% 43%
+    );
+  }
+
+  30% {
+    clip-path: polygon(
+      0% 10%,
+      39% 10%,
+      39% 72%,
+      43% 72%,
+      43% 26%,
+      11% 26%,
+      11% 95%,
+      38% 95%,
+      38% 85%,
+      42% 85%,
+      42% 80%,
+      0% 80%
+    );
+  }
+
+  45% {
+    clip-path: polygon(
+      0% 7%,
+      96% 7%,
+      96% 6%,
+      24% 6%,
+      24% 58%,
+      50% 58%,
+      50% 33%,
+      54% 33%,
+      54% 44%,
+      82% 44%,
+      82% 27%,
+      0% 27%
+    );
+  }
+
+  76% {
+    clip-path: polygon(
+      0% 23%,
+      63% 23%,
+      63% 65%,
+      94% 65%,
+      94% 19%,
+      9% 19%,
+      9% 29%,
+      97% 29%,
+      97% 16%,
+      32% 16%,
+      32% 25%,
+      0% 25%
+    );
+  }
+
+  90% {
+    clip-path: polygon(
+      0% 8%,
+      22% 8%,
+      22% 19%,
+      84% 19%,
+      84% 52%,
+      93% 52%,
+      93% 84%,
+      75% 84%,
+      75% 68%,
+      6% 68%,
+      6% 62%,
+      0% 62%
+    );
+  }
+
+  1%,
+  7%,
+  33%,
+  47%,
+  78%,
+  93% {
+    clip-path: none;
+  }
+}
+
+/* Paired frame-for-frame with `slices`: the layers exist only while the text is
+   cut, so nothing is visibly doubled the rest of the time. */
+@keyframes flicker {
+  0% {
+    opacity: 0.15;
+  }
+
+  5% {
+    opacity: 0.7;
+  }
+
+  30% {
+    opacity: 0.4;
+  }
+
+  45% {
+    opacity: 0.6;
+  }
+
+  76% {
+    opacity: 0.4;
+  }
+
+  90% {
+    opacity: 0.8;
+  }
+
+  1%,
+  7%,
+  33%,
+  47%,
+  78%,
+  93% {
+    opacity: 0;
+  }
+}
+
+@keyframes ink {
+  0% {
+    font-weight: 300;
+    filter: blur(3px);
+  }
+
+  20% {
+    font-weight: 600;
+    filter: blur(0);
+  }
+
+  50% {
+    font-weight: 400;
+    filter: blur(2px);
+  }
+
+  60% {
+    font-weight: 800;
+    filter: blur(0);
+  }
+
+  90% {
+    font-weight: 500;
+    filter: blur(5px);
+  }
+}
+
+/* Off the slice clock on purpose — the layers land somewhere new each time they
+   appear, which is most of what sells it. */
+@keyframes drift {
+  0% {
+    transform: translate(-0.06em, 0);
+  }
+
+  15% {
+    transform: translate(0.04em, 0.02em);
+  }
+
+  60% {
+    transform: translate(-0.03em, 0.01em);
+  }
+
+  75% {
+    transform: translate(0.07em, -0.02em);
+  }
+
+  100% {
+    transform: translate(0.02em, 0.02em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glitch::before,
+  .glitch::after {
+    display: none;
+  }
+
+  .glitch .letter {
+    animation: none;
+  }
+}

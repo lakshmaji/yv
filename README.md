@@ -7,7 +7,7 @@
 [![Built with Wails](https://img.shields.io/badge/Built%20with-Wails%20v2-%23B91C1C?logo=go&logoColor=white)](https://wails.io/)
 [![SolidJS](https://img.shields.io/badge/Frontend-SolidJS-%232C4F7C?logo=solid&logoColor=white)](https://www.solidjs.com/)
 
-**A command runner for developers who work across many projects.**
+**yv — a specification for the commands a project runs, and the app that runs them.**
 
 ![Projects and commands](./.github/assets/projects.png)
 
@@ -41,7 +41,7 @@ yv is a **playbook for your shell commands**. Instead of typing them, you click 
 ## What it does
 
 - **Click to run** — each project holds a list of shell commands. One click runs any of them, with live output streaming into an inline terminal.
-- **Shareable config** — export a project as JSON or YAML and commit it alongside your code. Teammates import it and get the same runbook immediately.
+- **Shareable config** — export a project as a [`yv.yaml`](./docs/yv-yaml.md) and commit it alongside your code. Teammates import it and get the same runbook immediately.
 - **Environments** — hook in named variable sets (`local`, `staging`, `prod`) per project. Secrets stay on your machine and never appear in exported config.
 - **Peer-to-peer sharing** — send a project config or files directly to another device on the same network. No cloud, no account.
 - **Auto-updates** — yv updates itself silently on macOS, Windows, and Linux (AppImage). No manual downloads after the first one.
@@ -96,6 +96,8 @@ On Linux, only the **AppImage** self-updates. The `.deb` installs to root-owned 
 ---
 
 ## Learn more
+
+📖 **[Documentation](https://lakshmaji.github.io/yv)**
 
 - **[Features & screenshots](./FEATURES.md)** — what the app looks like and what each part does
 - **[Development setup](./DEVELOPMENT.md)** — how to build and run locally

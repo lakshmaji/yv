@@ -1,0 +1,401 @@
+/*
+ * The scene carries its own small palette rather than borrowing Infima's
+ * greyscale: a planet needs a sea, and the animals need to be three
+ * recognisable individuals. Every value is declared for both themes here, so
+ * nothing in the drawing has to guess which one it is in.
+ */
+.scene {
+  display: block;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  overflow: visible;
+
+  --sea-lit: #4fbcd8;
+  --sea: #279ec0;
+  --sea-deep: #16607f;
+  --shallow: #7fe3dd;
+  --land: #38c46a;
+  --land-lit: #7ce85f;
+  --land-hill: #63dc72;
+  --tree-lit: #74c94e;
+  --tree: #2f9c4e;
+  --tree-back: #1a6b3c;
+  --atmo: #5ff0c0;
+  --cloud: #ffffff;
+  --dino-a: #e0a33f;
+  --dino-a-mid: #c98c2e;
+  --dino-a-ink: #a9711d;
+  --dino-b: #46b48c;
+  --dino-b-mid: #2f9b74;
+  --dino-b-ink: #1f7d5d;
+  --dino-c: #cf7b74;
+  --dino-c-mid: #b7625c;
+  --dino-c-ink: #97493f;
+}
+
+[data-theme='dark'] .scene {
+  --sea-lit: #2f9dc4;
+  --sea: #1d7396;
+  --sea-deep: #0f4d68;
+  --shallow: #3fc0bb;
+  --land: #2fae5e;
+  --land-lit: #63d152;
+  --land-hill: #52c463;
+  --tree-lit: #5fae45;
+  --tree: #268c46;
+  --tree-back: #145a33;
+  --atmo: #3fd6a8;
+  --cloud: #dbe7ef;
+  --dino-a: #d99a35;
+  --dino-a-mid: #bd8226;
+  --dino-a-ink: #8f5f16;
+  --dino-b: #3aa47e;
+  --dino-b-mid: #2b8b68;
+  --dino-b-ink: #1a6b4f;
+  --dino-c: #c46f68;
+  --dino-c-mid: #a85951;
+  --dino-c-ink: #8a4038;
+}
+
+/* ---- the world ---------------------------------------------------------- */
+
+/* Brightest where it meets the rim, fading outward — the other way round paints
+   a dark ring that reads as a drop shadow, not an atmosphere. */
+.atmoIn {
+  stop-color: var(--atmo);
+  stop-opacity: 0.55;
+}
+
+.atmoOut {
+  stop-color: var(--atmo);
+  stop-opacity: 0;
+}
+
+.shadeIn {
+  stop-color: #06202f;
+  stop-opacity: 0;
+}
+
+.shadeOut {
+  stop-color: #06202f;
+  stop-opacity: 0.42;
+}
+
+.seaLit {
+  stop-color: var(--sea-lit);
+}
+
+.seaDeep {
+  stop-color: var(--sea-deep);
+}
+
+.rimOff {
+  stop-color: #cfeaff;
+  stop-opacity: 0;
+}
+
+.rimOn {
+  stop-color: #cfeaff;
+  stop-opacity: 0.55;
+}
+
+.specIn {
+  stop-color: #ffffff;
+  stop-opacity: 0.34;
+}
+
+.specOut {
+  stop-color: #ffffff;
+  stop-opacity: 0;
+}
+
+.ocean {
+  fill: url(#yv-planet-sea);
+}
+
+/* Shallow water round every coast. A flat green blob on flat blue is the single
+   biggest reason a drawn planet looks like a sticker. */
+.shelf {
+  fill: var(--shallow);
+}
+
+/* A gradient rather than a flat fill: every continent catches the same light as
+   the sphere, which is what stops a green blob reading as a sticker on glass. */
+.land {
+  fill: url(#yv-planet-land);
+}
+
+.landLit {
+  stop-color: var(--land-lit);
+}
+
+.landDeep {
+  stop-color: var(--land);
+}
+
+.treeLit {
+  stop-color: var(--tree-lit);
+}
+
+.treeDeep {
+  stop-color: var(--tree);
+}
+
+.hill {
+  fill: var(--land-hill);
+}
+
+.trunk {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/*
+ * Tone belongs to the ring, not to the shape: every trunk and every canopy blob
+ * in a layer takes the same colour, so the two rings stay one far side and one
+ * near side however many puffs a tree happens to have.
+ */
+.treesFront circle {
+  fill: url(#yv-tree);
+}
+
+.treesFront .trunk {
+  stroke: var(--tree);
+}
+
+/* Flat, not gradient-lit — the far ring is a silhouette seen against the glow,
+   and shading it only muddies the edge of the disc. */
+.treesBack circle,
+.treesBack .trunk {
+  fill: var(--tree-back);
+  stroke: var(--tree-back);
+}
+
+/* Faint on purpose. Cloud heavy enough to read as cloud is also heavy enough to
+   grey out the sea and flatten the sphere back into a disc. */
+.clouds ellipse {
+  fill: var(--cloud);
+  opacity: 0.28;
+}
+
+.spin {
+  transform-box: view-box;
+  transform-origin: 360px 340px;
+  animation: planet-spin 150s linear infinite;
+}
+
+.drift {
+  transform-box: view-box;
+  transform-origin: 360px 340px;
+  animation: planet-spin 90s linear infinite reverse;
+}
+
+@keyframes planet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- the animals -------------------------------------------------------- */
+
+.dinoA {
+  color: var(--dino-a);
+  --mid: var(--dino-a-mid);
+  --ink: var(--dino-a-ink);
+  --skin: url(#yv-dino-a);
+}
+
+.dinoB {
+  color: var(--dino-b);
+  --mid: var(--dino-b-mid);
+  --ink: var(--dino-b-ink);
+  --skin: url(#yv-dino-b);
+}
+
+.dinoC {
+  color: var(--dino-c);
+  --mid: var(--dino-c-mid);
+  --ink: var(--dino-c-ink);
+  --skin: url(#yv-dino-c);
+}
+
+.skinA1 {
+  stop-color: var(--dino-a);
+}
+.skinA2 {
+  stop-color: var(--dino-a-ink);
+}
+.skinB1 {
+  stop-color: var(--dino-b);
+}
+.skinB2 {
+  stop-color: var(--dino-b-ink);
+}
+.skinC1 {
+  stop-color: var(--dino-c);
+}
+.skinC2 {
+  stop-color: var(--dino-c-ink);
+}
+
+/*
+ * No outline on any of these.
+ *
+ * The animals are composed from overlapping primitives, so an outline per shape
+ * draws a seam everywhere two of them meet — across the muzzle, around the neck,
+ * through the hips — and the result reads as a pile of lumps rather than one
+ * animal. Filled and unstroked, the same primitives union into a single clean
+ * silhouette. Depth comes from the shading layer below instead.
+ */
+.dinoBody {
+  fill: var(--skin);
+}
+
+/*
+ * The tail sits behind the body. Same colour as the body it would vanish into
+ * one undifferentiated blob; full shadow tone and it reads as a separate dark
+ * object stuck on. A mid tone is the plane change that says "behind".
+ */
+.dinoTail {
+  fill: var(--mid);
+}
+
+/* Plates and the far-side limbs, in the animal's own shadow tone. */
+.dinoFar {
+  fill: var(--ink);
+}
+
+.limbFront,
+.limbBack {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Far-side limbs sit in the body's own shadow tone, which is what makes a flat
+   animal read as having a near side and a far side at all. */
+.limbBack {
+  stroke: var(--ink);
+}
+
+
+.eyeWhite {
+  fill: #fff;
+}
+
+.eyePupil {
+  fill: #1c2b33;
+}
+
+.eyeGlint {
+  fill: #fff;
+}
+
+.smile {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.cheek {
+  fill: #ff6b7f;
+  opacity: 0.5;
+}
+
+.nostril {
+  fill: var(--ink);
+}
+
+/*
+ * Two hooks the timeline addresses by name. They carry no styling of their own —
+ * each exists so one animated transform has a layer to live on, separate from
+ * the static `standOn` transform its parent already holds.
+ */
+.askerHop,
+.senderHead {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ---- the exchange ------------------------------------------------------- */
+
+/*
+ * The command's flight path. Never painted — it exists only as geometry for
+ * anime's createMotionPath, which needs a real <path> in the document to sample.
+ */
+.trail {
+  fill: none;
+  stroke: none;
+}
+
+.bubble {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+}
+
+.bubbleSkin {
+  fill: var(--ifm-background-surface-color);
+  stroke: var(--ifm-color-emphasis-400);
+  stroke-width: 1.5;
+}
+
+.bubbleText {
+  fill: var(--ifm-font-color-base);
+  font-size: 14px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.askBubble,
+.thanksBubble {
+  opacity: 0;
+}
+
+.chip {
+  opacity: 0;
+}
+
+.chipPop {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.chipBox {
+  fill: var(--ifm-color-primary);
+  stroke: var(--ifm-color-primary-darkest);
+  stroke-width: 1.5;
+}
+
+.chipText {
+  fill: #fff;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 14px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* ---- reduced motion ----------------------------------------------------- */
+
+/*
+ * The timeline never starts, so nothing here would ever be revealed. Compose one
+ * still instead: both lines of dialogue up and the command parked halfway across.
+ * The story still reads, and nothing is left at opacity 0.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .drift {
+    animation: none;
+  }
+
+  .askBubble,
+  .thanksBubble,
+  .chip {
+    opacity: 1;
+  }
+}

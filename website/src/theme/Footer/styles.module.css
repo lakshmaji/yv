@@ -1,0 +1,323 @@
+.footer {
+  background: var(--ifm-background-color);
+  padding: 4rem 0 1.6rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Blurb + link columns
+ * ------------------------------------------------------------------------- */
+
+/*
+ * One set of tracks for both rows, so the CTA's left edge lands on the `Docs`
+ * column and the buttons above the blurb share its left edge. Two grids with
+ * different fractions was the whole reason nothing lined up.
+ */
+.top,
+.mid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+}
+
+.top {
+  align-items: start;
+}
+
+.blurb {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.colTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.colLink {
+  color: var(--ifm-color-emphasis-600);
+  transition: color 0.16s ease;
+}
+
+.colLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Social buttons + the call to action
+ * ------------------------------------------------------------------------- */
+
+.mid {
+  align-items: center;
+  margin-bottom: 3rem;
+}
+
+.socialRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+/* Outlined pills, the same control the navbar's Sponsor link already is. */
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 1.1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  color: var(--ifm-color-emphasis-700);
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.social:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/*
+ * One glyph rule, one mask variable — an icon is a class that sets the variable,
+ * not another block of CSS. `currentColor` means the hover above recolours the
+ * glyph for free.
+ */
+.glyph {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  background-color: currentColor;
+  mask: var(--yv-footer-icon) center / contain no-repeat;
+  -webkit-mask: var(--yv-footer-icon) center / contain no-repeat;
+}
+
+.glyphGithub {
+  --yv-footer-icon: var(--yv-github-mask);
+}
+
+.glyphSponsor {
+  --yv-footer-icon: var(--yv-heart-mask);
+}
+
+/* The whole strip is the link; the pill inside it only looks like the button. */
+.cta {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 0.45rem 0.45rem 1rem;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 999px;
+  color: var(--ifm-font-color-base);
+  transition: background-color 0.16s ease;
+}
+
+.cta:hover {
+  background: var(--yv-navbar-active);
+  text-decoration: none;
+}
+
+.ctaIcon {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 7px;
+}
+
+.ctaText {
+  flex: 1;
+  min-width: 0;
+}
+
+.ctaButton {
+  flex: none;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  background: var(--ifm-color-primary);
+  color: var(--yv-on-primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Caps line
+ * ------------------------------------------------------------------------- */
+
+.caps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem 2rem;
+  margin-top: 2.6rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.made {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Sized in em so the marks track the line they sit on. Both are colour SVGs
+   loaded as images, which also keeps SolidJS's gradient ids out of the page. */
+.madeLogo {
+  height: 1.35em;
+  width: auto;
+}
+
+.capsLink {
+  color: inherit;
+  transition: color 0.16s ease;
+}
+
+.capsLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * The mark
+ * ------------------------------------------------------------------------- */
+
+/*
+ * The mark's own negative top margin is in its `em`, which is hundreds of pixels
+ * — so the gap above it has to be too, or it climbs over the row above on a wide
+ * screen and floats on a narrow one. Same font-size here, same scale.
+ */
+.markRow {
+  font-size: min(79vw, 1030px);
+  margin: 0.02em 0 2.5rem;
+}
+
+/*
+ * Full bleed: `yv` is two narrow lowercase glyphs, so filling the width takes a
+ * font-size close to the width itself. The cap stops it outgrowing the container
+ * on a wide monitor.
+ *
+ * The leading has to stay big enough to hold the descender: the gradient is
+ * `background-clip: text`, so it only paints inside the box and anything hanging
+ * below is simply not drawn. Cut the tail off the `y` and `yv` becomes two
+ * near-identical strokes that read as "w". The empty ascender band above the
+ * x-height is taken off by the negative `top` on the row instead.
+ */
+.wordmark {
+  display: block;
+  font-size: 1em;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: -0.3em;
+  letter-spacing: -0.06em;
+  text-align: center;
+  user-select: none;
+
+  /* Fades out toward the rule, so the mark sits under the line rather than
+     colliding with it. */
+  background: linear-gradient(
+    180deg,
+    var(--ifm-color-emphasis-500) 15%,
+    var(--ifm-color-emphasis-200) 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The greys that read as a whisper on black are barely there on white, and the
+   icon beside the mark is not. One step darker puts them back in balance. */
+[data-theme='light'] .wordmark {
+  background: linear-gradient(
+    180deg,
+    var(--ifm-color-emphasis-600) 15%,
+    var(--ifm-color-emphasis-300) 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bottom bar
+ * ------------------------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.94rem;
+}
+
+.copy {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.licence {
+  color: var(--ifm-color-emphasis-700);
+  transition: color 0.16s ease;
+}
+
+.licence:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+@media screen and (max-width: 996px) {
+  .top,
+  .mid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .markRow {
+    margin-bottom: 1.6rem;
+  }
+
+  .mid {
+    gap: 1.4rem;
+  }
+
+  .blurb {
+    max-width: 44ch;
+  }
+
+  .col {
+    align-items: center;
+  }
+
+  .caps,
+  .bar {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Below the pill the sentence and the button want their own lines. */
+  .cta {
+    grid-column: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .ctaText {
+    flex: none;
+  }
+}

@@ -1,6 +1,6 @@
 # Environments (per-project variables & secrets)
 
-[← back to the README](../README.md)
+[← back to the README](https://github.com/lakshmaji/yv/blob/main/README.md)
 
 Each project can have any number of named environments — `local`, `staging`, `prod` — and
 each holds a list of `KEY` / `value` pairs. Exactly one environment is **active** per

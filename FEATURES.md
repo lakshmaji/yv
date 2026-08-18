@@ -24,7 +24,7 @@ Connections last 15 minutes, extended automatically while a transfer is in progr
 
 ### Send project config
 
-Once connected, send one project or your entire config as JSON or YAML. The other device gets a prompt and accepts it. Their commands are immediately ready to run.
+Once connected, send one project or your entire config. The other device gets a prompt and accepts it. Their commands are immediately ready to run.
 
 ![Share projects](./.github/assets/share-projects.png)
 
@@ -110,7 +110,7 @@ Each command can have:
 
 ## Export and import
 
-Export any project (or all of them) as JSON or YAML. Commit it to your repo. Your teammates import it and get the same commands and non-secret settings — one click to run.
+Export any project as a [`yv.yaml`](./docs/yv-yaml.md) and commit it to your repo. Your teammates import it — by hand, or automatically when yv scans their projects folder — and get the same commands and non-secret settings, one click to run. Importing a config replaces the project with the same `id`, so their list stays current as yours changes.
 
 Environments are always excluded from exports, so a config you share carries no secrets.
 
