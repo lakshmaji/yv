@@ -90,27 +90,6 @@ const config: Config = {
         },
       ],
     },
-    footer: {
-      style: 'dark',
-      links: [
-        {
-          title: 'Docs',
-          items: [
-            {label: 'Features', to: '/docs/FEATURES'},
-            {label: 'Development setup', to: '/docs/DEVELOPMENT'},
-            {label: 'yv.yaml format', to: '/docs/docs/yv-yaml'},
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {label: 'GitHub', href: 'https://github.com/lakshmaji/yv'},
-            {label: 'Sponsor', href: 'https://github.com/sponsors/lakshmaji'},
-          ],
-        },
-      ],
-      copyright: `Copyright © ${new Date().getFullYear()} yv. Built with Docusaurus.`,
-    },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,

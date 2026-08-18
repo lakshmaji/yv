@@ -1,0 +1,89 @@
+.footer {
+  background: var(--ifm-background-color);
+  padding: 4rem 0 1.6rem;
+}
+
+/*
+ * Tight leading so the mark sits close to the rule, but NOT clipped: cutting the
+ * baseline off leaves `yv` as two near-identical strokes that read as "w". The
+ * descender on the `y` is the whole difference.
+ */
+.wordmarkWrap {
+  line-height: 0;
+  margin-bottom: 0.9rem;
+}
+
+.wordmark {
+  display: block;
+  font-size: clamp(7rem, 31vw, 24rem);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+  text-align: center;
+  user-select: none;
+
+  /* Fades out toward the rule, so the mark sits under the line rather than
+     colliding with it. */
+  background: linear-gradient(
+    180deg,
+    var(--ifm-color-emphasis-500) 15%,
+    var(--ifm-color-emphasis-200) 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.94rem;
+}
+
+.copy {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.links {
+  display: flex;
+  justify-content: center;
+  gap: clamp(1rem, 4vw, 3rem);
+}
+
+.link,
+.licence {
+  color: var(--ifm-color-emphasis-700);
+  transition: color 0.16s ease;
+}
+
+.link:hover,
+.licence:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.licence {
+  justify-self: end;
+}
+
+@media screen and (max-width: 996px) {
+  .bar {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0.9rem;
+    text-align: center;
+  }
+
+  .links {
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+  }
+
+  .licence {
+    justify-self: center;
+  }
+}
