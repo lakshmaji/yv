@@ -17,11 +17,11 @@ Two things are deliberately **not** in the opening post:
 - **Packaging detail.** Reviewers read the linked `snapcraft.yaml`. It stays below the fold.
 
 > **Before posting:** the `snapcraft:` field points at `snap/snapcraft.yaml` on the
-> `spec/001-snap-store` branch. That file is Commit 3 and is not written yet, so the link 404s
+> `feat/snapstore` branch. That file is Commit 3 and is not written yet, so the link 404s
 > until it is pushed. Write Commit 3, push, confirm the URL returns 200, then post — a dead
 > link invites an immediate "where is the recipe" round-trip, which costs days.
 >
-> **If `spec/001-snap-store` is later merged and deleted, this link dies and the reviewer sees
+> **If `feat/snapstore` is later merged and deleted, this link dies and the reviewer sees
 > a 404 weeks into the thread.** Before deleting the branch, edit the forum post to point at
 > `/blob/main/snap/snapcraft.yaml`, or pin the commit (`/blob/<sha>/snap/snapcraft.yaml`) —
 > a SHA survives branch deletion.
@@ -45,7 +45,7 @@ Classic confinement for yv
   build, test, lint, dev server — each streamed into its own terminal pane. The
   commands come from a `yv.yaml` file committed to the user's repository, so the
   set of tools invoked is defined by the user, not by this snap.
-- **snapcraft**: https://github.com/lakshmaji/yv/blob/spec/001-snap-store/snap/snapcraft.yaml
+- **snapcraft**: https://github.com/lakshmaji/yv/blob/feat/snapstore/snap/snapcraft.yaml
 - **upstream**: https://github.com/lakshmaji/yv
 - **upstream-relation**: I am the upstream author; the snap recipe lives in the
   application's own repository.
