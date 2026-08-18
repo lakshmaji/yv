@@ -9,8 +9,7 @@ const baseUrl = '/yv/';
 const config: Config = {
   title: 'yv',
   tagline: 'A specification for the commands a project runs, and the app that runs them.',
-  // The boar, same mark as the navbar. Not the app icon: that is a fine
-  // wireframe over a nebula and at 32px it resolves to a smudge.
+  // Rendered from img/logo.svg, so the tab and the navbar carry one mark.
   favicon: 'img/favicon.png',
 
   future: {
@@ -68,8 +67,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      // No `title`: the mark stands on its own in the corner. It is generated
-      // from the app's own boar by `bun run scripts/gen-logo.ts`.
+      // No `title`: the mark stands on its own in the corner. It is the app
+      // icon's low-poly boar redrawn with fewer, thicker edges — the icon
+      // itself is a fine wireframe over a nebula and dissolves below ~64px.
       logo: {
         alt: 'yv',
         src: 'img/logo.svg',
