@@ -93,13 +93,13 @@
 
 .spin {
   transform-box: view-box;
-  transform-origin: 360px 370px;
+  transform-origin: 360px 340px;
   animation: planet-spin 150s linear infinite;
 }
 
 .drift {
   transform-box: view-box;
-  transform-origin: 360px 370px;
+  transform-origin: 360px 340px;
   animation: planet-spin 90s linear infinite reverse;
 }
 
@@ -155,19 +155,34 @@
   fill: var(--ink);
 }
 
-.jaw {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
-
 .eyeWhite {
   fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 1.2;
 }
 
 .eyePupil {
   fill: #1c2b33;
+}
+
+.eyeGlint {
+  fill: #fff;
+}
+
+.smile {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.cheek {
+  fill: #ff6b7f;
+  opacity: 0.5;
+}
+
+.nostril {
+  fill: var(--ink);
 }
 
 /*
@@ -183,13 +198,13 @@
 
 /* ---- the exchange ------------------------------------------------------- */
 
+/*
+ * The command's flight path. Never painted — it exists only as geometry for
+ * anime's createMotionPath, which needs a real <path> in the document to sample.
+ */
 .trail {
   fill: none;
-  stroke: var(--ifm-color-primary);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-dasharray: 2 9;
-  opacity: 0;
+  stroke: none;
 }
 
 .bubble {
@@ -244,8 +259,8 @@
 
 /*
  * The timeline never starts, so nothing here would ever be revealed. Compose one
- * still instead: both lines of dialogue up, the link drawn, the command parked
- * halfway along it. The story still reads, and nothing is left at opacity 0.
+ * still instead: both lines of dialogue up and the command parked halfway across.
+ * The story still reads, and nothing is left at opacity 0.
  */
 @media (prefers-reduced-motion: reduce) {
   .spin,
@@ -255,8 +270,7 @@
 
   .askBubble,
   .thanksBubble,
-  .chip,
-  .trail {
+  .chip {
     opacity: 1;
   }
 }

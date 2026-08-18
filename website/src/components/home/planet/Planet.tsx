@@ -65,41 +65,36 @@ export default function Planet(): ReactNode {
       return;
     }
 
-    const drawable = svg.createDrawable(line);
     const motion = svg.createMotionPath(line);
 
     const tl = createTimeline({loop: true, defaults: {ease: 'outQuad'}});
     tl
       // Frame 0 — reset, so the loop starts from the same state every cycle.
-      .add(drawable, {draw: '0 0', duration: 1}, 0)
-      .add(line, {opacity: 1, duration: 1}, 0)
       .add(pop, {scale: 1, opacity: 1, duration: 1}, 0)
       // Frame 1 — the question.
       .add(ask, {opacity: [0, 1], scale: [0.3, 1], duration: 420, ease: 'outBack'}, 250)
       // Frame 2 — the sender hears it and nods.
       .add(head, {rotate: [0, -16, 0], duration: 760}, 1500)
       .add(ask, {opacity: 0, scale: 0.7, duration: 300}, 1850)
-      // Frame 3 — the link draws itself, then the command travels along it.
-      .add(drawable, {draw: ['0 0', '0 1'], duration: 700, ease: 'inOutQuad'}, 2050)
-      .add(chip, {opacity: [0, 1], duration: 200}, 2300)
+      // Frame 3 — the command flies across, along a path that is never painted.
+      .add(chip, {opacity: [0, 1], duration: 220}, 2150)
       .add(
         chip,
         {
           translateX: motion.translateX,
           translateY: motion.translateY,
-          duration: 1500,
+          duration: 1600,
           ease: 'inOutSine',
         },
-        2300,
+        2150,
       )
       // Frame 4 — it lands, and the asker hops.
-      .add(pop, {scale: [1, 1.3, 0.2], opacity: [1, 1, 0], duration: 440}, 3800)
-      .add(hop, {translateY: [0, -10, 0], duration: 640, ease: 'outElastic'}, 3900)
-      .add(drawable, {draw: '1 1', duration: 600, ease: 'inOutQuad'}, 3950)
-      .add(chip, {opacity: 0, duration: 1}, 4260)
+      .add(pop, {scale: [1, 1.3, 0.2], opacity: [1, 1, 0], duration: 440}, 3750)
+      .add(hop, {translateY: [0, -10, 0], duration: 640, ease: 'outElastic'}, 3850)
+      .add(chip, {opacity: 0, duration: 1}, 4210)
       // Frame 5 — thanks.
-      .add(thanks, {opacity: [0, 1], scale: [0.3, 1], duration: 420, ease: 'outBack'}, 4300)
-      .add(thanks, {opacity: 0, scale: 0.7, duration: 380}, 6300);
+      .add(thanks, {opacity: [0, 1], scale: [0.3, 1], duration: 420, ease: 'outBack'}, 4250)
+      .add(thanks, {opacity: 0, scale: 0.7, duration: 380}, 6250);
 
     return () => {
       tl.revert();
@@ -168,9 +163,13 @@ export default function Planet(): ReactNode {
         ))}
         {scenery.trees.map((t, i) => (
           // eslint-disable-next-line react/no-array-index-key
+          // Round canopies, not conifers: at this size a triangle reads as an
+          // arrowhead pointing off the planet.
           <g key={i} transform={standOn(t.deg, t.scale)}>
-            <path d="M 0 1 L 0 -7" className={styles.trunk} />
-            <path d="M 0 -3 L -7 -3 L 0 -20 L 7 -3 Z" className={styles.tree} />
+            <path d="M 0 1 L 0 -9" className={styles.trunk} />
+            <circle cx={0} cy={-14} r={8} className={styles.tree} />
+            <circle cx={-5} cy={-9} r={5.5} className={styles.tree} />
+            <circle cx={5} cy={-9} r={5.5} className={styles.tree} />
           </g>
         ))}
       </g>

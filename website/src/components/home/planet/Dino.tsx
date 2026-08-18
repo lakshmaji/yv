@@ -16,10 +16,14 @@ const TONES: Record<Tone, string> = {
  * One dinosaur, drawn facing right with its feet on y=0 so `standOn` can drop it
  * straight onto the rim.
  *
- * Built from primitives rather than a single silhouette path: an ellipse body
- * and round-capped strokes for limbs, neck and tail. Flat art reads fine that
- * way and each part stays independently tweakable, which matters here because
- * the only way to check this drawing is to look at it.
+ * Deliberately chibi: an oversized head on a small round body, one big eye, a
+ * short smile, stubby legs. Anatomically-proportioned dinosaurs at this size
+ * read as lizards — the head has to be roughly a third of the animal before it
+ * reads as friendly.
+ *
+ * Built from primitives rather than a single silhouette path, so each part stays
+ * independently tweakable. That matters here because the only way to check this
+ * drawing is to look at it.
  *
  * The head is its own group with its origin at the neck joint, so a nod is one
  * rotation about the right point. Anything the timeline animates gets its own
@@ -36,6 +40,7 @@ export default function Dino({
   headClassName?: string;
 }): ReactNode {
   const parts = ART[species];
+  const {head} = parts;
   return (
     <g className={TONES[tone]}>
       <path d={parts.tail} className={styles.limbBack} strokeWidth={parts.tailWidth} />
@@ -56,65 +61,55 @@ export default function Dino({
       />
       <ellipse
         cx={parts.body.cx + 3}
-        cy={parts.body.cy + parts.body.ry * 0.4}
-        rx={parts.body.rx * 0.62}
-        ry={parts.body.ry * 0.44}
+        cy={parts.body.cy + parts.body.ry * 0.36}
+        rx={parts.body.rx * 0.6}
+        ry={parts.body.ry * 0.46}
         className={styles.dinoBelly}
       />
       {parts.legsFront.map((d, i) => (
         // eslint-disable-next-line react/no-array-index-key
         <path key={i} d={d} className={styles.limbFront} strokeWidth={parts.legWidth} />
       ))}
-      {parts.feet.map((d, i) => (
-        // eslint-disable-next-line react/no-array-index-key
-        <path key={i} d={d} className={styles.limbFront} strokeWidth={5.5} />
-      ))}
-      {parts.arm && <path d={parts.arm} className={styles.limbFront} strokeWidth={4} />}
+      {parts.arm && <path d={parts.arm} className={styles.limbFront} strokeWidth={5} />}
 
       <g transform={`translate(${parts.neck.x} ${parts.neck.y})`}>
         <g className={headClassName}>
-          <path
-            d={parts.head.neck}
-            className={styles.limbFront}
-            strokeWidth={parts.head.neckWidth}
+          <path d={head.neck} className={styles.limbFront} strokeWidth={head.neckWidth} />
+          <ellipse
+            cx={head.skull.cx}
+            cy={head.skull.cy}
+            rx={head.skull.rx}
+            ry={head.skull.ry}
+            className={styles.dinoBody}
           />
-          {parts.head.skull.kind === 'path' ? (
-            <path d={parts.head.skull.d} className={styles.dinoBody} />
-          ) : (
-            <ellipse
-              cx={parts.head.skull.cx}
-              cy={parts.head.skull.cy}
-              rx={parts.head.skull.rx}
-              ry={parts.head.skull.ry}
-              transform={`rotate(${parts.head.skull.rot} ${parts.head.skull.cx} ${parts.head.skull.cy})`}
-              className={styles.dinoBody}
-            />
-          )}
-          {parts.head.snout && (
-            <circle
-              cx={parts.head.snout.cx}
-              cy={parts.head.snout.cy}
-              r={parts.head.snout.r}
-              className={styles.dinoBody}
-            />
-          )}
-          {parts.head.jaw && <path d={parts.head.jaw} className={styles.jaw} />}
-          <circle cx={parts.head.eye.x} cy={parts.head.eye.y} r={3.2} className={styles.eyeWhite} />
+          <ellipse
+            cx={head.snout.cx}
+            cy={head.snout.cy}
+            rx={head.snout.rx}
+            ry={head.snout.ry}
+            className={styles.dinoBody}
+          />
+          <circle cx={head.cheek.cx} cy={head.cheek.cy} r={head.cheek.r} className={styles.cheek} />
+          <path d={head.smile} className={styles.smile} />
+          <circle cx={head.nostril.x} cy={head.nostril.y} r={1.3} className={styles.nostril} />
+          <circle cx={head.eye.x} cy={head.eye.y} r={head.eye.r} className={styles.eyeWhite} />
           <circle
-            cx={parts.head.eye.x + 0.9}
-            cy={parts.head.eye.y - 0.3}
-            r={1.5}
+            cx={head.eye.x + head.eye.r * 0.28}
+            cy={head.eye.y + head.eye.r * 0.08}
+            r={head.eye.r * 0.54}
             className={styles.eyePupil}
+          />
+          <circle
+            cx={head.eye.x + head.eye.r * 0.62}
+            cy={head.eye.y - head.eye.r * 0.42}
+            r={head.eye.r * 0.22}
+            className={styles.eyeGlint}
           />
         </g>
       </g>
     </g>
   );
 }
-
-type Skull =
-  | {kind: 'path'; d: string}
-  | {kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number; rot: number};
 
 interface Art {
   tail: string;
@@ -123,7 +118,6 @@ interface Art {
   legsBack: string[];
   legsFront: string[];
   legWidth: number;
-  feet: string[];
   arm?: string;
   body: {cx: number; cy: number; rx: number; ry: number};
   /** Where the head group hangs, and therefore what a nod pivots around. */
@@ -131,80 +125,84 @@ interface Art {
   head: {
     neck: string;
     neckWidth: number;
-    skull: Skull;
-    snout?: {cx: number; cy: number; r: number};
-    jaw?: string;
-    eye: {x: number; y: number};
+    /** The cranium, and a second blob for the muzzle — round, never pointed. */
+    skull: {cx: number; cy: number; rx: number; ry: number};
+    snout: {cx: number; cy: number; rx: number; ry: number};
+    smile: string;
+    cheek: {cx: number; cy: number; r: number};
+    nostril: {x: number; y: number};
+    eye: {x: number; y: number; r: number};
   };
 }
 
 /** Head-group contents are relative to `neck`, everything else to the feet. */
 const ART: Record<Species, Art> = {
-  // Heavy head, heavy tail, two legs under the hips. Without the weight at both
-  // ends a two-legged animal this size just reads as a rabbit.
+  // The head has to clear the body, or the two round shapes merge into one blob
+  // and the animal reads as a teddy bear. Hence a smaller skull sitting higher
+  // than cuteness alone would ask for.
   theropod: {
-    tail: 'M -14 -32 Q -40 -32 -60 -16',
+    tail: 'M -12 -25 Q -32 -22 -45 -9',
     tailWidth: 13,
-    legsBack: ['M -4 -26 L -11 -14 L -3 -3'],
-    legsFront: ['M 9 -26 L 3 -13 L 12 -3'],
-    legWidth: 11,
-    feet: ['M -6 -3 L 6 -3', 'M 9 -3 L 21 -3'],
-    arm: 'M 16 -34 L 23 -29 L 21 -24',
-    body: {cx: -2, cy: -31, rx: 22, ry: 15.5},
-    neck: {x: 11, y: -40},
+    legsBack: ['M -6 -18 L -7 -6', 'M -11 -5 L -2 -5'],
+    legsFront: ['M 7 -18 L 6 -6', 'M 1 -5 L 11 -5'],
+    legWidth: 12,
+    arm: 'M 13 -26 L 19 -23',
+    body: {cx: -1, cy: -24, rx: 18, ry: 15},
+    neck: {x: 9, y: -41},
     head: {
-      neck: 'M -2 3 L 2 -6',
+      neck: 'M -2 5 L 0 -1',
       neckWidth: 14,
-      // A wedge that tapers to a snout, not an oval. The oval version read as a
-      // rabbit from across the page.
-      skull: {
-        kind: 'path',
-        d: 'M -3 -13 Q 9 -25 24 -22 L 45 -15 Q 52 -11 45 -6 L 19 -1 Q 1 1 -3 -13 Z',
-      },
-      jaw: 'M 17 -5 L 46 -9',
-      eye: {x: 26, y: -14},
+      skull: {cx: 3, cy: -12, rx: 15, ry: 13},
+      // Juts well past the skull, or it reads as a lump on a bear's head
+      // rather than a muzzle.
+      snout: {cx: 22, cy: -4, rx: 11, ry: 8.5},
+      smile: 'M 18 2 Q 23 5 28 1',
+      cheek: {cx: 2, cy: -4, r: 3.6},
+      nostril: {x: 31, y: -6},
+      eye: {x: 6, y: -14, r: 5.2},
     },
   },
   sauropod: {
-    tail: 'M -18 -32 Q -44 -40 -64 -30',
+    tail: 'M -16 -24 Q -36 -28 -50 -20',
     tailWidth: 10,
-    legsBack: ['M -13 -20 L -14 -3', 'M 9 -21 L 10 -3'],
-    legsFront: ['M -4 -19 L -5 -3', 'M 17 -20 L 18 -3'],
-    legWidth: 11,
-    feet: ['M -10 -3 L 1 -3', 'M 12 -3 L 23 -3'],
-    body: {cx: 0, cy: -31, rx: 26, ry: 18},
-    neck: {x: 14, y: -41},
+    legsBack: ['M -12 -15 L -13 -4', 'M 7 -16 L 8 -4'],
+    legsFront: ['M -2 -14 L -3 -4', 'M 15 -15 L 16 -4'],
+    legWidth: 12,
+    body: {cx: 0, cy: -23, rx: 22, ry: 17},
+    neck: {x: 12, y: -32},
     head: {
-      neck: 'M 0 2 Q 14 -12 20 -32',
-      neckWidth: 12,
-      skull: {kind: 'ellipse', cx: 23, cy: -37, rx: 10, ry: 7, rot: -22},
-      snout: {cx: 30, cy: -40, r: 4.6},
-      eye: {x: 23, y: -39},
+      neck: 'M 0 2 Q 10 -10 14 -24',
+      neckWidth: 14,
+      skull: {cx: 16, cy: -30, rx: 11.5, ry: 10},
+      snout: {cx: 25, cy: -27, rx: 6.5, ry: 5.5},
+      smile: 'M 21 -24 Q 25 -21 28 -24',
+      cheek: {cx: 13, cy: -25, r: 3.2},
+      nostril: {x: 29, y: -29},
+      eye: {x: 17, y: -32, r: 4.8},
     },
   },
-  // Plates as rounded fins rather than spikes — sharp triangles at this scale
-  // turned the whole animal into a hedgehog.
   stegosaur: {
-    tail: 'M -18 -30 Q -40 -35 -56 -46',
-    tailWidth: 9,
+    tail: 'M -16 -24 Q -34 -27 -45 -34',
+    tailWidth: 10,
     plates: [
-      'M -20 -38 Q -18 -55 -9 -39 Z',
-      'M -10 -41 Q -5 -61 3 -41 Z',
-      'M 3 -41 Q 9 -58 16 -40 Z',
-      'M 15 -37 Q 20 -50 25 -36 Z',
+      'M -18 -34 Q -15 -48 -7 -35 Z',
+      'M -8 -37 Q -3 -52 5 -37 Z',
+      'M 4 -36 Q 10 -49 16 -35 Z',
     ],
-    legsBack: ['M -12 -18 L -13 -3', 'M 8 -18 L 9 -3'],
-    legsFront: ['M -4 -17 L -5 -3', 'M 15 -18 L 16 -3'],
-    legWidth: 10,
-    feet: ['M -10 -3 L 0 -3', 'M 11 -3 L 21 -3'],
-    body: {cx: 0, cy: -29, rx: 24, ry: 16},
-    neck: {x: 18, y: -35},
+    legsBack: ['M -11 -14 L -12 -4', 'M 7 -14 L 8 -4'],
+    legsFront: ['M -2 -13 L -3 -4', 'M 14 -14 L 15 -4'],
+    legWidth: 11,
+    body: {cx: 0, cy: -22, rx: 21, ry: 16},
+    neck: {x: 15, y: -26},
     head: {
-      neck: 'M 0 3 L 6 -4',
-      neckWidth: 10,
-      skull: {kind: 'ellipse', cx: 14, cy: -7, rx: 10, ry: 6.5, rot: -12},
-      snout: {cx: 22, cy: -7, r: 4},
-      eye: {x: 15, y: -9},
+      neck: 'M 0 2 L 4 -2',
+      neckWidth: 12,
+      skull: {cx: 12, cy: -8, rx: 11.5, ry: 10},
+      snout: {cx: 21, cy: -5, rx: 6.5, ry: 5.5},
+      smile: 'M 17 -2 Q 21 1 24 -2',
+      cheek: {cx: 9, cy: -3, r: 3.2},
+      nostril: {x: 25, y: -7},
+      eye: {x: 13, y: -10, r: 4.8},
     },
   },
 };

@@ -5,11 +5,11 @@
 // Planet.tsx is a projection of data and the timeline has stable coordinates to
 // animate against.
 
-export const VIEW = {w: 720, h: 580} as const;
-export const PLANET = {cx: 360, cy: 370, r: 150} as const;
+export const VIEW = {w: 720, h: 540} as const;
+export const PLANET = {cx: 360, cy: 340, r: 150} as const;
 
 /** How far above the surface a dinosaur's head sits, in user units. */
-const HEAD_HEIGHT = 62;
+const HEAD_HEIGHT = 72;
 
 export const DIALOG = {
   question: 'how do I run the server?',
@@ -71,7 +71,7 @@ export function speechAnchor(deg: number, scale: number): {x: number; y: number}
 export function arcBetween(from: number, to: number): string {
   const a = rimPoint(from, PLANET.r + 88);
   const b = rimPoint(to, PLANET.r + 88);
-  const c = rimPoint((from + to) / 2, PLANET.r + 205);
+  const c = rimPoint((from + to) / 2, PLANET.r + 170);
   return `M ${r1(a.x)} ${r1(a.y)} Q ${r1(c.x)} ${r1(c.y)} ${r1(b.x)} ${r1(b.y)}`;
 }
 
@@ -79,7 +79,7 @@ export function arcBetween(from: number, to: number): string {
 export function arcMidpoint(from: number, to: number): {x: number; y: number} {
   const a = rimPoint(from, PLANET.r + 88);
   const b = rimPoint(to, PLANET.r + 88);
-  const c = rimPoint((from + to) / 2, PLANET.r + 205);
+  const c = rimPoint((from + to) / 2, PLANET.r + 170);
   return {
     x: 0.25 * a.x + 0.5 * c.x + 0.25 * b.x,
     y: 0.25 * a.y + 0.5 * c.y + 0.25 * b.y,
