@@ -11,15 +11,17 @@
   margin: 0 auto;
   overflow: visible;
 
-  --sea-lit: #6cabd9;
-  --sea: #4a8fc4;
-  --sea-deep: #2d6c9c;
-  --shallow: #7fcbdd;
-  --land: #45b97c;
-  --land-lit: #63d193;
-  --land-hill: #5cc98c;
-  --tree: #2f8f5c;
-  --ice: #eef6fb;
+  --sea-lit: #4fbcd8;
+  --sea: #279ec0;
+  --sea-deep: #16607f;
+  --shallow: #7fe3dd;
+  --land: #38c46a;
+  --land-lit: #7ce85f;
+  --land-hill: #63dc72;
+  --tree-lit: #74c94e;
+  --tree: #2f9c4e;
+  --tree-back: #1a6b3c;
+  --atmo: #5ff0c0;
   --cloud: #ffffff;
   --dino-a: #e0a33f;
   --dino-a-mid: #c98c2e;
@@ -33,15 +35,17 @@
 }
 
 [data-theme='dark'] .scene {
-  --sea-lit: #3f85b4;
-  --sea: #2f6c99;
-  --sea-deep: #1c4d72;
-  --shallow: #4a9ab4;
-  --land: #3da770;
-  --land-lit: #4fbd83;
-  --land-hill: #4bb87c;
-  --tree: #2a8355;
-  --ice: #d7e6f0;
+  --sea-lit: #2f9dc4;
+  --sea: #1d7396;
+  --sea-deep: #0f4d68;
+  --shallow: #3fc0bb;
+  --land: #2fae5e;
+  --land-lit: #63d152;
+  --land-hill: #52c463;
+  --tree-lit: #5fae45;
+  --tree: #268c46;
+  --tree-back: #145a33;
+  --atmo: #3fd6a8;
   --cloud: #dbe7ef;
   --dino-a: #d99a35;
   --dino-a-mid: #bd8226;
@@ -59,12 +63,12 @@
 /* Brightest where it meets the rim, fading outward — the other way round paints
    a dark ring that reads as a drop shadow, not an atmosphere. */
 .atmoIn {
-  stop-color: var(--sea);
-  stop-opacity: 0.5;
+  stop-color: var(--atmo);
+  stop-opacity: 0.55;
 }
 
 .atmoOut {
-  stop-color: var(--sea);
+  stop-color: var(--atmo);
   stop-opacity: 0;
 }
 
@@ -116,32 +120,64 @@
   fill: var(--shallow);
 }
 
+/* A gradient rather than a flat fill: every continent catches the same light as
+   the sphere, which is what stops a green blob reading as a sticker on glass. */
 .land {
-  fill: var(--land);
+  fill: url(#yv-planet-land);
 }
 
-.ice {
-  fill: var(--ice);
-  opacity: 0.82;
+.landLit {
+  stop-color: var(--land-lit);
+}
+
+.landDeep {
+  stop-color: var(--land);
+}
+
+.treeLit {
+  stop-color: var(--tree-lit);
+}
+
+.treeDeep {
+  stop-color: var(--tree);
 }
 
 .hill {
   fill: var(--land-hill);
 }
 
-.tree {
-  fill: var(--tree);
-}
-
 .trunk {
-  stroke: var(--tree);
-  stroke-width: 2.5;
+  fill: none;
+  stroke-width: 3;
   stroke-linecap: round;
 }
 
-.cloud ellipse {
+/*
+ * Tone belongs to the ring, not to the shape: every trunk and every canopy blob
+ * in a layer takes the same colour, so the two rings stay one far side and one
+ * near side however many puffs a tree happens to have.
+ */
+.treesFront circle {
+  fill: url(#yv-tree);
+}
+
+.treesFront .trunk {
+  stroke: var(--tree);
+}
+
+/* Flat, not gradient-lit — the far ring is a silhouette seen against the glow,
+   and shading it only muddies the edge of the disc. */
+.treesBack circle,
+.treesBack .trunk {
+  fill: var(--tree-back);
+  stroke: var(--tree-back);
+}
+
+/* Faint on purpose. Cloud heavy enough to read as cloud is also heavy enough to
+   grey out the sea and flatten the sphere back into a disc. */
+.clouds ellipse {
   fill: var(--cloud);
-  opacity: 0.85;
+  opacity: 0.28;
 }
 
 .spin {

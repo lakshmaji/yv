@@ -16,9 +16,40 @@ import {
   sphereProject,
   standOn,
 } from './scene';
+import type {Tree} from './scene';
 import styles from './Planet.module.css';
 
 const CLIP_ID = 'yv-planet-clip';
+
+/**
+ * One ring of trees standing on the rim.
+ *
+ * Rendered twice — once behind the disc and once in front — because a fringe
+ * that only ever appears in front of the planet reads as a decal stuck on the
+ * edge. Trees breaking the silhouette above the limb are what make the ring go
+ * round the back. `tone` carries the layer's colour: the far side is flat and
+ * dark, the near side lit.
+ *
+ * Both rings carry `.spin` separately rather than sharing one group, because the
+ * ocean disc has to be painted between them and must not turn — its gradients
+ * are off-centre, and rotating them would swing the light source.
+ */
+function TreeRing({trees, tone}: {trees: Tree[]; tone: string}): ReactNode {
+  return (
+    <g className={`${styles.spin} ${tone}`}>
+      {trees.map((t, i) => (
+        // eslint-disable-next-line react/no-array-index-key
+        <g key={i} transform={standOn(t.deg, t.scale)}>
+          <path d={`M 0 1 L 0 ${-t.trunk}`} className={styles.trunk} />
+          {t.puffs.map((p, j) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <circle key={j} cx={p.x} cy={p.y} r={p.r} />
+          ))}
+        </g>
+      ))}
+    </g>
+  );
+}
 
 /**
  * A small world with dinosaurs on it, one of whom needs a command and gets it.
@@ -138,10 +169,29 @@ export default function Planet(): ReactNode {
           <stop offset="0.42" className={styles.rimOff} />
           <stop offset="1" className={styles.rimOn} />
         </linearGradient>
+        {/* Continents, lit from the same corner as everything else. Vertical
+            rather than radial: the lobes are small enough that a radial stop
+            inside each one would just look like a bullseye. */}
+        <linearGradient id="yv-planet-land" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0" className={styles.landLit} />
+          <stop offset="1" className={styles.landDeep} />
+        </linearGradient>
         <radialGradient id="yv-planet-spec">
           <stop offset="0" className={styles.specIn} />
           <stop offset="1" className={styles.specOut} />
         </radialGradient>
+        {/* Foliage, lit from the same corner as everything else. Same trick as
+            the continents: one gradient for the whole layer, so a canopy is one
+            lit mass rather than a stack of individually-shaded balls. */}
+        <linearGradient id="yv-tree" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0" className={styles.treeLit} />
+          <stop offset="1" className={styles.treeDeep} />
+        </linearGradient>
+        {/* Weather. Blurring hard ellipses is the whole of it — a cloud with an
+            edge is a continent. */}
+        <filter id="yv-cloud-blur" x="-25%" y="-60%" width="150%" height="220%">
+          <feGaussianBlur stdDeviation="5" />
+        </filter>
         {/* One gradient per colourway: the stops need the tone's own two
             variables, and a gradient in <defs> cannot read `currentColor` from
             whichever animal happens to reference it. */}
@@ -165,6 +215,7 @@ export default function Planet(): ReactNode {
         r={PLANET.r + 22}
         fill="url(#yv-planet-atmo)"
       />
+      <TreeRing trees={scenery.backTrees} tone={styles.treesBack} />
       <circle cx={PLANET.cx} cy={PLANET.cy} r={PLANET.r} className={styles.ocean} />
 
       {/* The surface turns slowly under everyone. CSS, so reduced motion stops
@@ -209,39 +260,31 @@ export default function Planet(): ReactNode {
             className={styles.hill}
           />
         ))}
-        {scenery.trees.map((t, i) => (
-          // eslint-disable-next-line react/no-array-index-key
-          // Round canopies, not conifers: at this size a triangle reads as an
-          // arrowhead pointing off the planet.
-          <g key={i} transform={standOn(t.deg, t.scale)}>
-            <path d="M 0 1 L 0 -9" className={styles.trunk} />
-            <circle cx={0} cy={-14} r={8} className={styles.tree} />
-            <circle cx={-5} cy={-9} r={5.5} className={styles.tree} />
-            <circle cx={5} cy={-9} r={5.5} className={styles.tree} />
-          </g>
-        ))}
       </g>
 
-      {/* Ice caps sit outside the spin group: the surface turns, the poles do
-          not move with it.
+      {/* Weather, lying on the surface and turning at its own rate. Clipped on
+          the outside of the blur so the sheets stop dead at the limb; blurring
+          after the clip would smear a soft white halo out over space.
 
-          Each is a big circle centred beyond the pole, so what the clip leaves
-          behind is a cap with a curved edge. An ellipse centred *on* the pole
-          would be cut into a flat-bottomed lens instead, which reads as a slice
-          taken out of the planet. */}
+          The rotation is on an inner group, not on the clipped one: clip-path on
+          a transformed element resolves in a coordinate system it is easy to get
+          wrong, and there is nothing to gain by finding out which. */}
       <g clipPath={`url(#${CLIP_ID})`}>
-        <circle
-          cx={PLANET.cx}
-          cy={PLANET.cy - PLANET.r - 108}
-          r={126}
-          className={styles.ice}
-        />
-        <circle
-          cx={PLANET.cx}
-          cy={PLANET.cy + PLANET.r + 112}
-          r={126}
-          className={styles.ice}
-        />
+        <g className={styles.drift}>
+          <g className={styles.clouds} filter="url(#yv-cloud-blur)">
+            {scenery.clouds.map((c, i) => (
+              <ellipse
+                // eslint-disable-next-line react/no-array-index-key
+                key={i}
+                cx={c.x}
+                cy={c.y}
+                rx={c.rx}
+                ry={c.ry}
+                transform={`${sphereProject(c.x, c.y)} rotate(${c.rot} ${c.x} ${c.y})`}
+              />
+            ))}
+          </g>
+        </g>
       </g>
 
       <circle
@@ -272,18 +315,10 @@ export default function Planet(): ReactNode {
         pointerEvents="none"
       />
 
-      <g className={styles.drift}>
-        {scenery.clouds.map((c, i) => (
-          // eslint-disable-next-line react/no-array-index-key
-          <g key={i} transform={standOn(c.deg)}>
-            <g transform={`translate(0 ${-c.lift})`} className={styles.cloud}>
-              <ellipse cx={0} cy={0} rx={c.w / 2} ry={c.w / 5} />
-              <ellipse cx={-c.w / 5} cy={-c.w / 9} rx={c.w / 4} ry={c.w / 6} />
-              <ellipse cx={c.w / 5} cy={-c.w / 10} rx={c.w / 5} ry={c.w / 7} />
-            </g>
-          </g>
-        ))}
-      </g>
+      {/* The near half of the fringe, painted after the shading so the canopies
+          keep their own light rather than being dimmed by a gradient meant for
+          the disc they are standing in front of. */}
+      <TreeRing trees={scenery.trees} tone={styles.treesFront} />
 
       <g transform={standOn(cast.watcher.deg, cast.watcher.scale, cast.watcher.facing)}>
         <Dino species={cast.watcher.species} tone="c" />
@@ -307,9 +342,11 @@ export default function Planet(): ReactNode {
         <Bubble text={DIALOG.thanks} className={styles.thanksBubble} flip />
       </g>
 
+      {/* 168 wide, not 144: at 14px monospace the command runs to 143 units and
+          was touching both ends of its own pill. */}
       <g className={styles.chip} transform={`translate(${parked.x} ${parked.y})`}>
         <g className={styles.chipPop}>
-          <rect x={-72} y={-14} width={144} height={28} rx={14} className={styles.chipBox} />
+          <rect x={-84} y={-14} width={168} height={28} rx={14} className={styles.chipBox} />
           <text x={0} y={0.5} className={styles.chipText}>
             {DIALOG.command}
           </text>

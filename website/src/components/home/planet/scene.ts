@@ -116,6 +116,57 @@ export function sphereProject(x: number, y: number): string {
   ].join(' ');
 }
 
+/**
+ * One ring of trees around the rim.
+ *
+ * Slots rather than free angles: `rng() * 360` clumps, and a clump on a
+ * silhouette this small leaves a bald quadrant that reads as a bug rather than
+ * as chance. Each tree jitters inside its own slot instead. `phase` offsets the
+ * whole ring by a fraction of a slot, so the layer drawn behind the planet
+ * interleaves with the one in front rather than hiding directly behind it.
+ *
+ * Counts stay low. A tree in every slot closes the gaps and the rim stops being
+ * a horizon with trees on it and becomes a wreath.
+ */
+function treeRing(rng: () => number, count: number, phase: number): Tree[] {
+  const step = 360 / count;
+  return Array.from({length: count}, (_, i) => ({
+    deg: (i + phase) * step + (rng() * 2 - 1) * step * 0.34,
+    scale: 0.62 + rng() * 0.62,
+    ...canopy(rng),
+  }));
+}
+
+/**
+ * A lumpy ball of foliage on a bare trunk.
+ *
+ * One crown blob with satellites ringed around it, squashed vertically so the
+ * result is broader than it is tall. A single circle reads as a lollipop and a
+ * triangle, at this size, as an arrowhead pointing off the planet.
+ */
+function canopy(rng: () => number): Pick<Tree, 'trunk' | 'puffs'> {
+  // Short trunks. A tall bare stem under a round crown reads as a lollipop, and
+  // a rim of them reads as a row of pins stuck into the planet.
+  const trunk = 6 + rng() * 8;
+  const r = 10 + rng() * 5;
+  const n = 5 + Math.floor(rng() * 3);
+  return {
+    trunk,
+    puffs: [
+      {x: 0, y: -(trunk + r * 0.5), r},
+      ...Array.from({length: n}, (_, i) => {
+        const a = ((i + rng() * 0.7) / n) * Math.PI * 2;
+        const d = r * (0.72 + rng() * 0.4);
+        return {
+          x: r1(Math.cos(a) * d),
+          y: r1(-(trunk + r * 0.5) + Math.sin(a) * d * 0.62),
+          r: r1(r * (0.48 + rng() * 0.38)),
+        };
+      }),
+    ],
+  };
+}
+
 export type Species = 'theropod' | 'sauropod' | 'stegosaur';
 
 export interface Actor {
@@ -134,15 +185,27 @@ export interface Cast {
   watcher: Actor;
 }
 
+/** A tree: a trunk on the rim and a cluster of canopy blobs above it. */
+export interface Tree {
+  deg: number;
+  scale: number;
+  /** Trunk height, in tree-local units with the foot at the origin. */
+  trunk: number;
+  /** Canopy blobs, same coordinates, y negative being up. */
+  puffs: {x: number; y: number; r: number}[];
+}
+
 export interface Scenery {
   /** Landmasses, as overlapping ellipses clipped to the disc. */
   continents: {x: number; y: number; rx: number; ry: number; rot: number}[];
-  /** Conifers on the rim, placed the same way the animals are. */
-  trees: {deg: number; scale: number}[];
+  /** Trees on the rim, placed the same way the animals are. */
+  trees: Tree[];
+  /** The same ring again, one slot out of phase, drawn behind the disc. */
+  backTrees: Tree[];
   /** Low rounded hills on the rim. */
   hills: {deg: number; w: number; h: number}[];
-  /** Cloud puffs orbiting just above the surface. */
-  clouds: {deg: number; lift: number; w: number}[];
+  /** Cloud sheets lying on the surface, clipped to the disc. */
+  clouds: {x: number; y: number; rx: number; ry: number; rot: number}[];
 }
 
 export interface Scene {
@@ -172,12 +235,12 @@ export function buildScene(seed: number): Scene {
   // Centres are sampled in polar coordinates so they spread across the disc
   // rather than piling into its corners, which a square sample would do. Lobes
   // are allowed past the rim — the clip turns those into coastlines.
-  const continents = Array.from({length: 4 + Math.floor(rng() * 3)}, () => {
+  const continents = Array.from({length: 5 + Math.floor(rng() * 3)}, () => {
     const a = rng() * Math.PI * 2;
     const d = Math.sqrt(rng()) * PLANET.r * 0.76;
     const cx = PLANET.cx + Math.cos(a) * d;
     const cy = PLANET.cy + Math.sin(a) * d;
-    return Array.from({length: 2 + Math.floor(rng() * 3)}, () => ({
+    return Array.from({length: 3 + Math.floor(rng() * 3)}, () => ({
       x: cx + (rng() * 2 - 1) * 26,
       y: cy + (rng() * 2 - 1) * 22,
       rx: 17 + rng() * 19,
@@ -186,10 +249,8 @@ export function buildScene(seed: number): Scene {
     }));
   }).flat();
 
-  const trees = Array.from({length: 6 + Math.floor(rng() * 4)}, () => ({
-    deg: rng() * 360,
-    scale: 0.6 + rng() * 0.4,
-  }));
+  const trees = treeRing(rng, 11, 0);
+  const backTrees = treeRing(rng, 7, 0.5);
 
   const hills = Array.from({length: 4 + Math.floor(rng() * 3)}, () => ({
     deg: rng() * 360,
@@ -197,11 +258,22 @@ export function buildScene(seed: number): Scene {
     h: 8 + rng() * 7,
   }));
 
-  const clouds = Array.from({length: 4}, (_, i) => ({
-    deg: i * 90 + rng() * 60,
-    lift: 22 + rng() * 22,
-    w: 22 + rng() * 16,
-  }));
+  // Cloud sheets lie on the surface rather than orbiting outside it: puffs in
+  // open space around the rim read as debris, and it is the weather crossing the
+  // disc that says "this is a planet seen from far away".
+  const clouds = Array.from({length: 5 + Math.floor(rng() * 3)}, () => {
+    const a = rng() * Math.PI * 2;
+    const d = Math.sqrt(rng()) * PLANET.r * 0.85;
+    return {
+      x: PLANET.cx + Math.cos(a) * d,
+      y: PLANET.cy + Math.sin(a) * d,
+      // Kept nearly round. Long thin ones survive the blur as streaks, and a
+      // pale streak on a sphere reads as a scratch on the drawing.
+      rx: 20 + rng() * 20,
+      ry: 12 + rng() * 9,
+      rot: rng() * 180,
+    };
+  });
 
   return {
     cast: {
@@ -209,6 +281,6 @@ export function buildScene(seed: number): Scene {
       sender: {species: 'sauropod', deg: spread(52, 7), scale: 1.25, facing: -1},
       watcher: {species: pick(), deg: spread(150, 14), scale: 0.9, facing: -1},
     },
-    scenery: {continents, trees, hills, clouds},
+    scenery: {continents, trees, backTrees, hills, clouds},
   };
 }

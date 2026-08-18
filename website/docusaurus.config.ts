@@ -14,6 +14,10 @@ const config: Config = {
 
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
+    // v4 turns on every `faster` flag, and rspack's persistent cache aborts the
+    // process mid-build ("should have bucket pack metas", write_scope.rs). The
+    // rest of faster — swc, lightningcss, rspack itself — stays on.
+    faster: {rspackPersistentCache: false},
   },
 
   url: 'https://lakshmaji.github.io',

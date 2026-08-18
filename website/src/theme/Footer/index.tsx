@@ -61,13 +61,13 @@ export default function Footer(): ReactNode {
 
   return (
     <footer className={styles.footer}>
-      {/* Decorative watermark behind the whole footer: the site name is already
-          in the copyright line, and a screen reader does not need it twice. */}
-      <div className={styles.markRow} aria-hidden="true">
-        <span className={styles.wordmark}>{siteConfig.title}</span>
-      </div>
+      <div className="container">
+        {/* Decorative: the site name is already in the copyright line, and a
+            screen reader does not need it twice. */}
+        <div className={styles.markRow} aria-hidden="true">
+          <span className={styles.wordmark}>{siteConfig.title}</span>
+        </div>
 
-      <div className={`container ${styles.inner}`}>
         <div className={styles.mid}>
           <nav className={styles.socialRow} aria-label="Project links">
             {SOCIAL.map((s) => (

@@ -1,14 +1,6 @@
 .footer {
-  position: relative;
-  overflow: hidden;
   background: var(--ifm-background-color);
   padding: 4rem 0 1.6rem;
-}
-
-/* Everything readable rides above the watermark. */
-.inner {
-  position: relative;
-  z-index: 1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -28,7 +20,6 @@
 }
 
 .top {
-  margin-top: 3rem;
   align-items: start;
 }
 
@@ -66,6 +57,7 @@
 
 .mid {
   align-items: center;
+  margin-bottom: 3rem;
 }
 
 .socialRow {
@@ -203,22 +195,13 @@
  * ------------------------------------------------------------------------- */
 
 /*
- * The mark is the footer's background, not a block in it: pinned to the bottom
- * edge, clipped by the footer's `overflow`, and out of the layout entirely so
- * the content decides how tall the footer is.
+ * The mark's own negative top margin is in its `em`, which is hundreds of pixels
+ * — so the gap above it has to be too, or it climbs over the row above on a wide
+ * screen and floats on a narrow one. Same font-size here, same scale.
  */
 .markRow {
-  position: absolute;
-  left: 0;
-  right: 0;
-  /* Off the floor, not flush with it: the footer clips, and a mark hanging past
-     the edge loses the `y` tail — the only thing telling `yv` apart from a "w".
-     The size is what fits between the footer's padding and its content, so the
-     top of the glyphs is not sheared off either. */
-  bottom: 0.03em;
-  z-index: 0;
-  pointer-events: none;
-  font-size: min(90vw, 660px);
+  font-size: min(79vw, 1030px);
+  margin: 0.02em 0 2.5rem;
 }
 
 /*
@@ -230,18 +213,14 @@
  * `background-clip: text`, so it only paints inside the box and anything hanging
  * below is simply not drawn. Cut the tail off the `y` and `yv` becomes two
  * near-identical strokes that read as "w". The empty ascender band above the
- * x-height comes off with a negative margin instead — in `em`, so it scales with
- * the mark.
+ * x-height is taken off by the negative `top` on the row instead.
  */
 .wordmark {
   display: block;
   font-size: 1em;
   font-weight: 800;
   line-height: 1;
-
-  /* It sits under live text now, so it has to stay a texture and not compete
-     with the links crossing it. */
-  opacity: 0.42;
+  margin-top: -0.3em;
   letter-spacing: -0.06em;
   text-align: center;
   user-select: none;
@@ -306,8 +285,8 @@
     text-align: center;
   }
 
-  .top {
-    margin-top: 2.2rem;
+  .markRow {
+    margin-bottom: 1.6rem;
   }
 
   .mid {
