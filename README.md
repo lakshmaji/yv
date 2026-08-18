@@ -57,8 +57,9 @@ Project data stays on your machine by default. Peer sharing sends selected data 
 ### **[⬇ Download yv →](https://lakshmaji.github.io/yv/downloads)**
 
 The download page resolves the current release for you — the `.dmg` for macOS,
-the installer for Windows, the self-updating AppImage for Ubuntu — and lists
-every previous version and every other artifact (`.deb`, `.tar.gz`) beside it.
+the installer for Windows (a per-user install, so it can update itself), the
+self-updating AppImage for Ubuntu — and lists every previous version and every
+other artifact (`.deb`, `.tar.gz`) beside it.
 
 ```bash
 # Linux .deb
