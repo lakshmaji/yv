@@ -16,9 +16,14 @@ Two things are deliberately **not** in the opening post:
   partial function, without naming it.
 - **Packaging detail.** Reviewers read the linked `snapcraft.yaml`. It stays below the fold.
 
-> **Order of operations:** the `snapcraft:` field must link to a real `snap/snapcraft.yaml`.
-> Land Commit 3 first, then post. Posting with a dead link invites an immediate "where is the
-> recipe" round-trip.
+> **Order of operations — do not post yet.** The `snapcraft:` field must link to a real
+> `snap/snapcraft.yaml`. That file does not exist on any branch: it is Commit 3, which has not
+> been written. Land Commit 3 on `main`, confirm the raw URL returns 200, then post. A dead
+> link invites an immediate "where is the recipe" round-trip, which costs days.
+>
+> Link to `main`, not to a feature branch — the reviewer may read it weeks later, after the
+> branch is deleted. If you must post before merging, use a commit-pinned URL
+> (`/blob/<sha>/snap/snapcraft.yaml`) rather than a branch name.
 
 ---
 
@@ -37,6 +42,7 @@ Classic confinement for yv
   commands come from a `yv.yaml` file committed to the user's repository, so the
   set of tools invoked is defined by the user, not by this snap.
 - **snapcraft**: https://github.com/lakshmaji/yv/blob/main/snap/snapcraft.yaml
+  ← ⚠️ DOES NOT EXIST YET. See the ordering note above before posting.
 - **upstream**: https://github.com/lakshmaji/yv
 - **upstream-relation**: I am the upstream author; the snap recipe lives in the
   application's own repository.
