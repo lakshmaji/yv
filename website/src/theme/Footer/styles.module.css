@@ -202,6 +202,25 @@
 .markRow {
   font-size: min(79vw, 1030px);
   margin: 0.02em 0 2.5rem;
+
+  /*
+   * `overflow: hidden` is load-bearing, not cosmetic. The wordmark's
+   * `margin-top: -0.3em` below is ~305px at this font-size, and on a first
+   * child it *collapses through* — so it does not move the glyph down inside
+   * the footer, it drags the footer's own top edge that far up the page.
+   * Every short page then has a ~1000px-tall invisible box sitting over its
+   * content: on /downloads with one platform filtered, the box started 6px
+   * above the filter chips and swallowed every click on them and on the
+   * version list. Establishing a formatting context here stops the collapse,
+   * and the only thing clipped is the empty ascender band the negative margin
+   * was there to remove.
+   *
+   * `pointer-events: none` because the mark is `aria-hidden` decoration whose
+   * box is much taller than the glyph in it — scenery over anything
+   * interactive needs this, which this project has now learned three times.
+   */
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /*
