@@ -1,6 +1,15 @@
 # 001 — Publish yv to the Snap Store
 
-**Status:** design, not implemented.
+**Status: PAUSED (2026-08-19).** The classic-confinement request was refused — on notability,
+not technique: classic is "reserved for mature, well-known applications published by mature,
+well-known entities", and yv is too young. Nothing here is wrong; it is early. `yv-tool` stays
+registered and the recipe stays in the tree. Resume when the project has adoption — see
+Phase 0 step 3.
+
+**Do not** substitute a strict snap (it cannot execute host binaries, so it would fail on the
+first command) or a sideloaded classic `.snap` (`--dangerous` installs never auto-refresh,
+which discards the whole point).
+
 **Scope:** packaging and distribution. Adds a fifth Linux artifact; changes no existing one.
 
 ---
@@ -89,12 +98,37 @@ Account actions, not code. They block publishing only; every commit below can la
    must record that date in `RELEASING.md` — an expired token fails the publish step long
    after anyone remembers adding it, and the failure reads as a store outage rather than an
    expiry.
-3. **Remaining.** File the classic-confinement request in the `store-requests` category on
-   forum.snapcraft.io. yv fits the published allowed category *"tools for configuring
-   development workspaces/environments"*; the justification is that it executes the user's
-   own project commands against the user's own toolchain, which no combination of interfaces
-   expresses. Until it is approved the snap can only reach `edge`.
-   **A ready-to-paste post is drafted at [`classic-confinement-request.md`](./classic-confinement-request.md).**
+3. ~~File the classic-confinement request.~~ **Refused 2026-08-19 — on notability, not
+   technique. Snap Store work is paused until the project has adoption.**
+
+   The reviewer's position: classic "is reserved for mature, well-known applications published
+   by mature, well-known entities", and yv does not meet it yet — young repository, few
+   contributors/issues/PRs, no evidence of a user base. They also mapped three of our four
+   technical points onto unsupported categories (dot-files → `personal-files`; unbounded
+   executables → "dependent software only available on host"; trees outside `$HOME` →
+   "developer/user inertia"), and called the fourth — the environment must be the user's,
+   unmodified — "the most relevant reason", while doubting it suffices alone even once the
+   project matures.
+
+   The reply is drafted at [`review-reply.md`](./review-reply.md): accept, do not argue, ask
+   what the maturity bar is.
+
+   **Do not ship a strict snap as a substitute.** A strictly confined snap cannot execute host
+   binaries at all — no `/usr/bin/make`, no `node` under `~/.nvm` — so a strict yv would
+   install cleanly and fail on the first command. That is a broken product, not a limited one,
+   and it is worse for users than not publishing.
+
+   **Do not distribute the classic `.snap` from GitHub releases either**, which the reviewer
+   offered as an alternative. Sideloading needs `--dangerous`, and a `--dangerous` install has
+   no assertions, so snapd never auto-refreshes it — `snap refresh --amend` by hand, forever.
+   That discards the entire reason for packaging a snap; the AppImage already self-updates and
+   needs no such ceremony.
+
+   **On resume:** Commits 1–4 below stay valid and `yv-tool` stays registered. Re-apply with
+   the one argument the reviewer rated highest, backed by real user reports rather than
+   assertion, and challenge the "ship in instead snap" mapping then — that category covers an
+   app's own dependencies, whereas yv's problem is the *user's* toolchain, which cannot be
+   staged by definition.
 
 ---
 
