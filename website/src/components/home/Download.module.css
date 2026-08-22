@@ -1,0 +1,20 @@
+.download {
+  padding: 3.5rem 1rem 1rem;
+  text-align: center;
+}
+
+.version {
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 1.5rem;
+  min-height: 1.5em;
+}
+
+.loading {
+  padding: 0;
+  justify-content: center;
+}
+
+.all {
+  display: inline-block;
+  margin-top: 1.5rem;
+}

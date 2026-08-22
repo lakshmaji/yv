@@ -1,0 +1,105 @@
+.page {
+  padding: 3rem 0 5rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 2.5rem;
+  margin-top: 2rem;
+}
+
+.versions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.versions button {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.versions button:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.selected {
+  background: var(--ifm-color-emphasis-200) !important;
+  font-weight: 600;
+}
+
+.latest {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+}
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.filters button {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.filters .selected {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+}
+
+.assets {
+  width: 100%;
+  display: table;
+}
+
+.assets td {
+  vertical-align: middle;
+  word-break: break-all;
+}
+
+.meta {
+  white-space: nowrap;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.85rem;
+}
+
+/* The version column turns into a scrolling strip rather than stacking, so the
+   asset list stays above the fold on a phone. */
+@media screen and (max-width: 996px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .versions {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .versions button {
+    width: auto;
+    white-space: nowrap;
+  }
+}

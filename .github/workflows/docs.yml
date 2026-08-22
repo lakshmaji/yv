@@ -37,6 +37,11 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
         working-directory: website
+      # The asset-name patterns in src/lib/releases.ts are matched against what
+      # build.yml uploads, and a mismatch is silent: the download buttons just
+      # fall back to the releases page.
+      - run: bun run test
+        working-directory: website
       - run: bun run build
         working-directory: website
       - uses: actions/configure-pages@v5

@@ -10,6 +10,7 @@
   },
   // `scripts` is excluded because it runs under Bun, not in the site build, and
   // reaches into the Wails frontend's sources — neither of which this config
-  // describes.
-  "exclude": [".docusaurus", "build", "scripts"]
+  // describes. The tests are excluded for the first of those reasons alone:
+  // they import `bun:test`, whose types are not part of this project.
+  "exclude": [".docusaurus", "build", "scripts", "src/**/*.test.ts"]
 }

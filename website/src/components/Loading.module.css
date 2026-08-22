@@ -1,0 +1,31 @@
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem 0;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.spinner {
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid var(--ifm-color-emphasis-300);
+  border-top-color: var(--ifm-color-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* The ring stops, the label stays — a reader who has asked for no motion still
+   needs to be told the page is waiting on something. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

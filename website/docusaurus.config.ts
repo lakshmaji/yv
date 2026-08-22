@@ -90,6 +90,7 @@ const config: Config = {
           // to the base URL, which prefixes the whole site.
           activeBaseRegex: `^${baseUrl}?$`,
         },
+        {to: '/downloads', label: 'Download', position: 'left'},
         {to: '/docs/FEATURES', label: 'Docs', position: 'left'},
         {to: '/demo', label: 'Demo', position: 'left'},
         {

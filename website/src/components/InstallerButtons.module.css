@@ -1,0 +1,35 @@
+.row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Infima's button is a single line of text; these carry a filename underneath,
+   so the label stacks and the fixed line-height has to go. */
+.row a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  line-height: 1.3;
+  /* A width, not a min-width: a flex item sizes to its content, and the
+     content is a filename with no spaces in it. Left to grow, the three
+     buttons together are wider than the viewport and the whole page picks up a
+     horizontal scrollbar. Fixed, the `break-all` below wraps instead. */
+  width: 18rem;
+  max-width: 100%;
+  /* Infima's .button sets `white-space: nowrap`, which beats the wrapping set
+     on the filename below — without this it runs straight out of the button. */
+  white-space: normal;
+  padding-block: 0.9rem;
+}
+
+.file {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.8;
+  /* `anywhere` rather than `break-all`: the filename is full of hyphens, so
+     there are natural break points to prefer, and break-all ignores them and
+     splits "11.4 MB" down the middle of the number. */
+  overflow-wrap: anywhere;
+}

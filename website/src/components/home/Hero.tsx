@@ -21,6 +21,9 @@ export default function Hero(): ReactNode {
         <Link className="button button--secondary button--lg" to="/docs/docs/yv-yaml">
           The yv.yaml spec
         </Link>
+        <Link className="button button--secondary button--lg" to="/downloads">
+          Downloads
+        </Link>
       </div>
       <Planet />
     </BlobHero>
