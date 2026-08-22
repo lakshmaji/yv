@@ -90,12 +90,13 @@ const config: Config = {
           // to the base URL, which prefixes the whole site.
           activeBaseRegex: `^${baseUrl}?$`,
         },
-        {to: '/downloads', label: 'Download', position: 'left'},
         {to: '/docs/FEATURES', label: 'Docs', position: 'left'},
         {to: '/demo', label: 'Demo', position: 'left'},
+        // Keeps the `navbar-sponsor` class, which is the bar's filled-button
+        // style and nothing sponsor-specific — the glyph lives in the footer.
         {
-          href: 'https://github.com/sponsors/lakshmaji',
-          label: 'Sponsor',
+          to: '/downloads',
+          label: 'Downloads',
           position: 'right',
           className: 'navbar-sponsor',
         },
