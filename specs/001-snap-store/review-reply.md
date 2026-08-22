@@ -10,19 +10,16 @@ will want when we re-apply to the same people.
 ---
 
 ```
-Thanks for the detailed review, and for being clear about the reasoning — that's
-a fair call and I accept it. The project is young and I'm not going to argue the
-maturity point.
+Thanks for the review, and for laying out the reasoning clearly.
 
-I'll park the classic request for now, keep distributing the .deb, tarball and
-AppImage from GitHub releases, and come back once there's real adoption behind
-the project.
+Understood on the maturity criteria. I'll park the classic request, keep
+distributing the .deb, tarball and AppImage from GitHub releases, and come back
+when the project has more adoption behind it.
 
-One question, so I don't spend reviewer time twice: is there a rough bar for
-"mature and well-known" that I can aim at — downloads, time published, active
-contributors, something else? Entirely fair if the answer is "you'll know it when
-you see it", but if there's a concrete signal you look for, I'd rather target
-that than guess.
+One question so I can aim at the right target: is there a rough bar you look for
+here — downloads, time published, active contributors, something else? Happy to
+be told it's a judgement call, but if there's a concrete signal I'd rather work
+toward it than guess.
 
 Thanks again for the quick turnaround.
 ```
