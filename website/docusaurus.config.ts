@@ -90,7 +90,7 @@ const config: Config = {
           // to the base URL, which prefixes the whole site.
           activeBaseRegex: `^${baseUrl}?$`,
         },
-        {to: '/docs/FEATURES', label: 'Docs', position: 'left'},
+        {to: '/docs/FEATURES', label: 'Documentation', position: 'left'},
         {to: '/demo', label: 'Demo', position: 'left'},
         // Keeps the `navbar-sponsor` class, which is the bar's filled-button
         // style and nothing sponsor-specific — the glyph lives in the footer.
