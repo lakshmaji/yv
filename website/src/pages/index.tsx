@@ -3,6 +3,7 @@ import Layout from '@theme/Layout';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 
 import Hero from '@site/src/components/home/Hero';
+import Download from '@site/src/components/home/Download';
 import Features from '@site/src/components/home/Features';
 import Format from '@site/src/components/home/Format';
 import Showcase from '@site/src/components/home/Showcase';
@@ -21,6 +22,7 @@ export default function Home(): ReactNode {
       wrapperClassName="yv-home">
       <Hero />
       <main>
+        <Download />
         <Features />
         <Showcase />
         <Format />

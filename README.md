@@ -1,6 +1,8 @@
 # yv
 
 [![Build](https://github.com/lakshmaji/yv/actions/workflows/build.yml/badge.svg)](https://github.com/lakshmaji/yv/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/lakshmaji/yv?label=latest&color=brightgreen)](https://lakshmaji.github.io/yv/downloads)
+[![Downloads](https://img.shields.io/github/downloads/lakshmaji/yv/total)](https://lakshmaji.github.io/yv/downloads)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/lakshmaji)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
@@ -52,14 +54,11 @@ Project data stays on your machine by default. Peer sharing sends selected data 
 
 ## Install
 
-Download the latest build from **[github.com/lakshmaji/yv/releases](https://github.com/lakshmaji/yv/releases)**:
+### **[⬇ Download yv →](https://lakshmaji.github.io/yv/downloads)**
 
-| Platform | Asset |
-|---|---|
-| macOS (Apple Silicon) | `yv-macos-arm64-*.dmg` |
-| Windows (x86_64) | `yv-windows-amd64-*-setup.exe` |
-| Linux (x86_64) | `yv-linux-x86_64-*.AppImage` (self-updating) |
-| Linux (x86_64) | `yv_*.deb` or `yv-linux-amd64-*.tar.gz` |
+The download page resolves the current release for you — the `.dmg` for macOS,
+the installer for Windows, the self-updating AppImage for Ubuntu — and lists
+every previous version and every other artifact (`.deb`, `.tar.gz`) beside it.
 
 ```bash
 # Linux .deb
