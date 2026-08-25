@@ -6,7 +6,7 @@ import {
   setEditingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
   spotlightOpen, setSpotlightOpen,
-  editingCmd, editingShortcut, settingsProjectId, envModalOpen,
+  editingCmd, editingShortcut, settingsProjectId, envModalOpen, previewingCmd,
   maximizedCmd, setMaximizedCmd, filteredCommands,
   shortcutsModalOpen, setShortcutsModalOpen,
   aboutModalOpen, setAboutModalOpen,
@@ -27,6 +27,7 @@ import Spotlight from './components/Spotlight';
 import Splash from './components/Splash';
 import EnvironmentsModal from './components/modals/EnvironmentsModal';
 import EditCommandModal from './components/modals/EditCommandModal';
+import DescriptionPreviewModal from './components/modals/DescriptionPreviewModal';
 import ShortcutModal from './components/modals/ShortcutModal';
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal';
 import KeyboardShortcutsModal from './components/modals/KeyboardShortcutsModal';
@@ -137,7 +138,7 @@ export default function App() {
   // whether it should un-maximize a terminal or close a modal, and the
   // background scan, deciding whether it may open its dialog unprompted.
   const anyModalOpen = () =>
-    !!(editingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
+    !!(editingCmd() || previewingCmd() || editingShortcut() || settingsProjectId() || envModalOpen() ||
       settingsModalOpen() || shortcutsModalOpen() || aboutModalOpen() ||
       updateModalOpen() || scanModalOpen());
 
@@ -352,6 +353,7 @@ export default function App() {
       </Switch>
       <StatusBar />
       <EditCommandModal />
+      <DescriptionPreviewModal />
       <ShortcutModal />
       <ProjectSettingsModal />
       <EnvironmentsModal />

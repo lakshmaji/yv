@@ -1113,6 +1113,18 @@
     }
     .edit-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+    .preview-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 4px 7px;
+      font-size: 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .preview-btn:hover { border-color: var(--accent); color: var(--accent); }
+
     /* ── Edit command modal ───────────────────────────────── */
     .modal-overlay {
       position: fixed;
@@ -1287,6 +1299,30 @@
       justify-content: flex-end;
       border-top: 1px solid var(--border);
       padding-top: 10px;
+    }
+
+    /* ── Description preview modal ────────────────────────── */
+    .description-preview-box {
+      width: 560px;
+    }
+
+    .description-preview-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .description-preview-body h1,
+    .description-preview-body h2,
+    .description-preview-body h3 { font-size: 14px; margin: 0 0 8px; color: var(--accent); }
+    .description-preview-body p { margin: 0 0 10px; }
+    .description-preview-body ul,
+    .description-preview-body ol { margin: 0 0 10px; padding-left: 20px; }
+    .description-preview-body a { color: var(--accent); }
+    .description-preview-body code {
+      font-family: var(--mono);
+      background: var(--card);
+      padding: 1px 5px;
+      border-radius: 3px;
     }
 
     /* ── About modal ──────────────────────────────────────── */
