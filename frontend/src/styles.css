@@ -1302,11 +1302,33 @@
     }
 
     /* ── Description preview modal ────────────────────────── */
+    /* Fills the app window rather than the default 480px .modal-box:
+       descriptions run up to 20,000 characters, and a bounded box either
+       clips or grows a scrollbar inside a scrollbar. The body scrolls on its
+       own so the title and Close button stay pinned top/bottom. */
     .description-preview-box {
-      width: 560px;
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      border-radius: 0;
+    }
+    /* Title and footer share the body's reading-width column so the Close
+       button sits under the text instead of stranded at the window edge. */
+    .description-preview-box > .modal-title,
+    .description-preview-box > .modal-footer {
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
     }
 
     .description-preview-body {
+      flex: 1;
+      overflow-y: auto;
+      /* Full-width box, but text stays a readable line length. */
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
       font-size: 13px;
       line-height: 1.6;
       color: var(--text);
