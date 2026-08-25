@@ -34,6 +34,7 @@ const (
 	maxGroupsPerProject   = 50
 	maxLabelLen           = 200
 	maxCommandLen         = 8 << 10
+	maxDescriptionLen     = 20_000
 )
 
 // validID is what a project id may contain. The id becomes a map key and part
@@ -258,6 +259,10 @@ func validateScanned(p *models.Project, dir string) (int, error) {
 		}
 		if len(c.Command) > maxCommandLen {
 			return 0, fmt.Errorf("command %q is longer than %d characters", c.ID, maxCommandLen)
+		}
+		c.Description = strings.TrimSpace(c.Description)
+		if len(c.Description) > maxDescriptionLen {
+			return 0, fmt.Errorf("command %q has a description longer than %d characters", c.ID, maxDescriptionLen)
 		}
 		seen[c.ID] = true
 		kept = append(kept, c)

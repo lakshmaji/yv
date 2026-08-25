@@ -74,6 +74,9 @@ func TestDocumentedExampleParses(t *testing.T) {
 	if len(it.PostCommands) != 1 || it.PostCommands[0].Timeout != 60 {
 		t.Errorf("postCommands: got %+v", it.PostCommands)
 	}
+	if !strings.Contains(it.Description, "direnv first") {
+		t.Errorf("description: got %q", it.Description)
+	}
 }
 
 // The example must also survive being written back out, since that is what

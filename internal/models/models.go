@@ -32,6 +32,9 @@ type CommandConfig struct {
 	Interactive  bool          `json:"interactive,omitempty"`
 	PreCommands  []string      `json:"preCommands,omitempty"`
 	PostCommands []PostCommand `json:"postCommands,omitempty"`
+	// Description is free-text markdown, documentation only: never interpolated
+	// into Command, never executed. Rendered at display time in the frontend.
+	Description string `json:"description,omitempty"`
 }
 
 // --- folder scanning ---
