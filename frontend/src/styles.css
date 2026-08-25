@@ -1313,22 +1313,9 @@
       max-height: 100vh;
       border-radius: 0;
     }
-    /* Title and footer share the body's reading-width column so the Close
-       button sits under the text instead of stranded at the window edge. */
-    .description-preview-box > .modal-title,
-    .description-preview-box > .modal-footer {
-      max-width: 720px;
-      width: 100%;
-      margin: 0 auto;
-    }
-
     .description-preview-body {
       flex: 1;
       overflow-y: auto;
-      /* Full-width box, but text stays a readable line length. */
-      max-width: 720px;
-      width: 100%;
-      margin: 0 auto;
       font-size: 13px;
       line-height: 1.6;
       color: var(--text);
