@@ -3,7 +3,7 @@ import {
   projects, setProjects,
   selectedId, setSelectedId, setSelectedGroup,
   sidebarWidth, groupsWidth, sidebarCollapsed, setSidebarCollapsed, groupsCollapsed,
-  setEditingCmd, setEditingShortcut, setSettingsProjectId,
+  setEditingCmd, setPreviewingCmd, setEditingShortcut, setSettingsProjectId,
   updateCmdState, setSearchQuery, setEnvModalOpen, loadProjectEnvs,
   spotlightOpen, setSpotlightOpen,
   editingCmd, editingShortcut, settingsProjectId, envModalOpen, previewingCmd,
@@ -170,6 +170,7 @@ export default function App() {
         return;
       }
       setEditingCmd(null);
+      setPreviewingCmd(null);
       setEditingShortcut(null);
       setSettingsProjectId(null);
       setEnvModalOpen(false);
