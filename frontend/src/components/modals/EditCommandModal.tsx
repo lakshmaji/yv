@@ -1,14 +1,25 @@
 import { Show, Index, createSignal, createEffect } from 'solid-js';
 import { projects, setProjects, selectedProject, selectedId, editingCmd, setEditingCmd } from '../../store';
 import { go } from '../../wails';
+import { applyMarkdownOp, type MarkdownOp } from '../../lib/markdownEditor';
 import type { CommandConfig, PostCommand } from '../../types';
+
+const TOOLBAR_OPS: Array<{ op: MarkdownOp; label: string; title: string }> = [
+  { op: 'bold', label: 'B', title: 'Bold' },
+  { op: 'italic', label: 'I', title: 'Italic' },
+  { op: 'link', label: '🔗', title: 'Link' },
+  { op: 'list', label: '•', title: 'List' },
+  { op: 'code', label: '</>', title: 'Code' },
+];
 
 export default function EditCommandModal() {
   const [label, setLabel] = createSignal('');
   const [group, setGroup] = createSignal('');
   const [command, setCommand] = createSignal('');
   const [workingDir, setWorkingDir] = createSignal('');
+  const [description, setDescription] = createSignal('');
   const [interactive, setInteractive] = createSignal(false);
+  let descriptionRef: HTMLTextAreaElement | undefined;
   const [preHooks, setPreHooks] = createSignal<string[]>([]);
   const [postHooks, setPostHooks] = createSignal<{ command: string; timeout: string }[]>([]);
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
@@ -27,6 +38,7 @@ export default function EditCommandModal() {
       setGroup(c.group || '');
       setCommand(c.command || '');
       setWorkingDir(c.workingDir || '');
+      setDescription(c.description || '');
       setInteractive(c.interactive || false);
       setPreHooks(c.preCommands ? [...c.preCommands] : []);
       setPostHooks(
@@ -63,6 +75,7 @@ export default function EditCommandModal() {
       group: group().trim(),
       command: co,
       workingDir: workingDir().trim(),
+      description: description().trim(),
       interactive: interactive(),
       preCommands: preHooks().filter(h => h.trim()),
       postCommands: postHooks()
@@ -125,6 +138,15 @@ export default function EditCommandModal() {
     setPostHooks(prev => prev.filter((_, i) => i !== idx));
   }
 
+  function handleToolbarOp(op: MarkdownOp) {
+    const el = descriptionRef;
+    if (!el) return;
+    const result = applyMarkdownOp(description(), el.selectionStart, el.selectionEnd, op);
+    setDescription(result.text);
+    el.focus();
+    el.setSelectionRange(result.start, result.end);
+  }
+
   return (
     <Show when={editingCmd()}>
       <div class="modal-overlay" onClick={handleOverlayClick}>
@@ -147,6 +169,26 @@ export default function EditCommandModal() {
             />
             <button class="add-cmd-dir-pick" type="button" onClick={handleBrowse}>Browse</button>
           </div>
+
+          <div class="description-section">
+            <div class="description-toolbar">
+              <Index each={TOOLBAR_OPS}>
+                {(item) => (
+                  <button type="button" title={item().title} onClick={() => handleToolbarOp(item().op)}>
+                    {item().label}
+                  </button>
+                )}
+              </Index>
+            </div>
+            <textarea
+              ref={descriptionRef}
+              class="description-input"
+              placeholder="Notes about this command, as markdown (optional)…"
+              value={description()}
+              onInput={e => setDescription(e.currentTarget.value)}
+            />
+          </div>
+
           <label class="interactive-toggle">
             <input
               type="checkbox"
