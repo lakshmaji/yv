@@ -75,7 +75,7 @@ commands:
       Loads `.envrc` before the suite runs, or the API client points at
       nothing and every test fails on connection refused.
 
-      See [environments.md](../environments.md) for the precedence rules.
+      See [environments.md](https://github.com/lakshmaji/yv/blob/main/docs/environments.md) for the precedence rules.
     preCommands:
       - direnv exec . true
     postCommands:
