@@ -1173,6 +1173,28 @@
     #new-project-form input.input-error,
     #add-group-form input.input-error { border-color: #e05252; box-shadow: 0 0 0 2px rgba(224,82,82,0.25); }
 
+    /* Fills the app window, same treatment as .description-preview-box:
+       markdown is easier to write with room to see it. The description
+       section grows to fill the extra height (every other field keeps its
+       natural size); if hooks push the form past the window height,
+       .modal-box's existing overflow-y: auto scrolls the whole form, same
+       fallback every other modal already has. */
+    .edit-command-box {
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      border-radius: 0;
+    }
+    .edit-command-box .description-section {
+      flex: 1;
+      min-height: 0;
+    }
+    .edit-command-box .description-input {
+      flex: 1;
+      min-height: 150px;
+    }
+
     .description-section {
       display: flex;
       flex-direction: column;

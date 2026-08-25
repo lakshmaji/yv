@@ -150,7 +150,7 @@ export default function EditCommandModal() {
   return (
     <Show when={editingCmd()}>
       <div class="modal-overlay" onClick={handleOverlayClick}>
-        <div class="modal-box">
+        <div class="modal-box edit-command-box">
           <div class="modal-title">Edit Command</div>
           <input placeholder="Label" value={label()} onInput={e => setLabel(e.currentTarget.value)} />
           <input placeholder="Group" value={group()} onInput={e => setGroup(e.currentTarget.value)} />
