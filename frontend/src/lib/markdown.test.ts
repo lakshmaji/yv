@@ -31,6 +31,18 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('onerror');
   });
 
+  it('strips a style tag', () => {
+    const html = renderMarkdown('<style>body{display:none}</style>text');
+    expect(html).not.toContain('<style');
+  });
+
+  it('strips a style attribute', () => {
+    // position: fixed inside the rendered description can paint over the
+    // whole app window, not just the modal it's nested in.
+    const html = renderMarkdown('<div style="position:fixed;inset:0">hijack</div>');
+    expect(html).not.toContain('style=');
+  });
+
   it('handles an empty description', () => {
     expect(renderMarkdown('')).toBe('');
   });

@@ -8,5 +8,12 @@ import DOMPurify from 'dompurify';
  * can't be forgotten at a second call site.
  */
 export function renderMarkdown(md: string): string {
-  return DOMPurify.sanitize(marked.parse(md, { async: false }));
+  return DOMPurify.sanitize(marked.parse(md, { async: false }), {
+    // The rendered result goes straight into innerHTML in the main app
+    // window, not a sandboxed iframe — a `style` attribute survives
+    // DOMPurify's defaults and `position: fixed` escapes the modal box, so a
+    // hand-written or cloned description could paint over the whole window.
+    FORBID_TAGS: ['style'],
+    FORBID_ATTR: ['style'],
+  });
 }
