@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, createEffect } from 'solid-js';
 import { selectedProject, previewingCmd, setPreviewingCmd } from '../../store';
 import { renderMarkdown } from '../../lib/markdown';
 
@@ -13,6 +13,14 @@ export default function DescriptionPreviewModal() {
   function close() {
     setPreviewingCmd(null);
   }
+
+  // Switching the selected project, or a config reload that drops this
+  // command, leaves previewingCmd pointing at nothing — cmd() goes null and
+  // <Show> hides the modal, but without this the id (and anyModalOpen())
+  // would stay stuck until something else happened to clear it.
+  createEffect(() => {
+    if (previewingCmd() && !cmd()) setPreviewingCmd(null);
+  });
 
   function handleOverlayClick(e: MouseEvent) {
     if (e.target === e.currentTarget) close();
