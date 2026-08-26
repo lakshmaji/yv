@@ -1,5 +1,28 @@
 # yv
 
+## 0.4.0
+
+### Minor Changes
+
+- [#20](https://github.com/lakshmaji/yv/pull/20) [`6b1481d`](https://github.com/lakshmaji/yv/commit/6b1481d64279b2f27ef9c018624a6bbe2306b412) Thanks [@lakshmaji](https://github.com/lakshmaji)! - Add an optional markdown description to commands, editable in the edit modal and readable from a preview icon on the row.
+
+### Patch Changes
+
+- [#18](https://github.com/lakshmaji/yv/pull/18) [`300f632`](https://github.com/lakshmaji/yv/commit/300f632a333ed0e0a3c667e07077d837af11323c) Thanks [@lakshmaji](https://github.com/lakshmaji)! - Windows updates now install themselves.
+
+  The updater could always replace a running `yv.exe` — rename it aside, unpack the
+  release zip over the install directory, relaunch, sweep the leftover on the next
+  launch. It never got to: the installer put yv in Program Files, the app runs
+  unelevated, and so the check that yv can write to its own directory failed. The
+  update dialog reported that honestly and offered the releases page instead, which
+  is the screen every Windows user has been seeing.
+
+  The installer is now per-user — `%LOCALAPPDATA%\Programs\yv`, no UAC prompt, its
+  Add/Remove Programs entry under `HKCU`. That directory is writable by the account
+  that runs yv, so the dialog offers Download and Restart like every other platform.
+
+  Run the new installer once; updates after that are in-app.
+
 ## 0.3.0
 
 ### Minor Changes
