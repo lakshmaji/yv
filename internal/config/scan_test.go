@@ -451,6 +451,13 @@ func TestValidateScannedBounds(t *testing.T) {
 				wantErr: true,
 			},
 			{
+				// "界" is 3 bytes in UTF-8; a byte-length check would reject this
+				// at exactly the limit the docs promise in characters.
+				name: "at the limit is fine for multi-byte characters",
+				desc: strings.Repeat("界", maxDescriptionLen),
+				want: strings.Repeat("界", maxDescriptionLen),
+			},
+			{
 				name: "whitespace-only collapses to empty",
 				desc: "   \n\t  ",
 				want: "",
