@@ -19,6 +19,8 @@ export interface CommandConfig {
   interactive?: boolean;
   preCommands?: string[];
   postCommands?: PostCommand[];
+  /** Free-text markdown notes, documentation only. Rendered at display time. */
+  description?: string;
 }
 
 export interface PostCommand {

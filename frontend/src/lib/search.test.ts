@@ -292,6 +292,44 @@ describe('hook matching', () => {
   });
 });
 
+describe('description matching', () => {
+  const withDescription: Searchable = {
+    label: 'checkout-api-it',
+    command: './scripts/integration.sh',
+    group: 'Test',
+    description: '### Why direnv first\n\nLoads .envrc before the suite runs.',
+  };
+
+  const cases: Array<{ name: string; query: string; want: boolean }> = [
+    { name: 'matches a word in the description', query: 'direnv', want: true },
+    { name: 'matches a word further into the description', query: 'suite', want: true },
+    { name: 'label plus description token', query: 'checkout-api-it direnv', want: true },
+    { name: 'still rejects unrelated tokens', query: 'kubernetes', want: false },
+  ];
+
+  for (const tc of cases) {
+    it(tc.name, () => expect(matchesQuery(withDescription, tc.query)).toBe(tc.want));
+  }
+
+  it('ranks a description match below a label match', () => {
+    const descOnly = scoreCommand({ label: 'A', command: 'x', description: 'deploy notes' }, ['deploy']);
+    const inLabel = scoreCommand({ label: 'Deploy', command: 'x' }, ['deploy']);
+    expect(descOnly).toBeGreaterThan(0);
+    expect(inLabel).toBeGreaterThan(descOnly);
+  });
+
+  it('tolerates a missing description', () => {
+    expect(matchesQuery({ label: 'A', command: 'x' }, 'deploy')).toBe(false);
+  });
+
+  it('finds description matches through global search', () => {
+    const projects = [{ id: 'ca', name: 'Checkout API', commands: [withDescription] }];
+    const got = searchAllProjects(projects, 'direnv');
+    expect(got).toHaveLength(1);
+    expect(got[0].cmd.label).toBe('checkout-api-it');
+  });
+});
+
 describe('hasHooks', () => {
   const cases: Array<{ name: string; cmd: Searchable; want: boolean }> = [
     { name: 'no hook fields', cmd: { label: 'A', command: 'x' }, want: false },

@@ -428,6 +428,67 @@ func TestValidateScannedBounds(t *testing.T) {
 			t.Error("expected a rejection")
 		}
 	})
+	t.Run("description bounds", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			desc    string
+			wantErr bool
+			want    string // expected Description after validation, when wantErr is false
+		}{
+			{
+				name: "under bound is accepted and trimmed",
+				desc: "  docs about the command  ",
+				want: "docs about the command",
+			},
+			{
+				name: "at the limit is fine",
+				desc: strings.Repeat("x", maxDescriptionLen),
+				want: strings.Repeat("x", maxDescriptionLen),
+			},
+			{
+				name:    "over bound is rejected with the command id in the error",
+				desc:    strings.Repeat("x", maxDescriptionLen+1),
+				wantErr: true,
+			},
+			{
+				// "界" is 3 bytes in UTF-8; a byte-length check would reject this
+				// at exactly the limit the docs promise in characters.
+				name: "at the limit is fine for multi-byte characters",
+				desc: strings.Repeat("界", maxDescriptionLen),
+				want: strings.Repeat("界", maxDescriptionLen),
+			},
+			{
+				name: "whitespace-only collapses to empty",
+				desc: "   \n\t  ",
+				want: "",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				p := models.Project{ID: "p", Commands: []models.CommandConfig{
+					{ID: "c1", Command: "make", Description: tt.desc},
+				}}
+				_, err := validateScanned(&p, "/tmp")
+
+				if tt.wantErr {
+					if err == nil {
+						t.Fatal("expected a rejection")
+					}
+					if !strings.Contains(err.Error(), "c1") {
+						t.Errorf("error should name the command id: %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := p.Commands[0].Description; got != tt.want {
+					t.Errorf("description: got %q, want %q", got, tt.want)
+				}
+			})
+		}
+	})
 	t.Run("too many groups", func(t *testing.T) {
 		p := build(1)
 		for i := 0; i <= maxGroupsPerProject; i++ {

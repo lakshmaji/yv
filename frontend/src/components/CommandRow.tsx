@@ -1,6 +1,6 @@
 import { Show, createMemo, createEffect } from 'solid-js';
 import {
-  getCmdState, updateCmdState, setEditingCmd, resourceStats, highlightedCmd,
+  getCmdState, updateCmdState, setEditingCmd, setPreviewingCmd, resourceStats, highlightedCmd,
   maximizedCmd, setMaximizedCmd,
 } from '../store';
 import { go } from '../wails';
@@ -86,6 +86,11 @@ export default function CommandRow(props: CommandRowProps) {
     setEditingCmd(props.cmd.id);
   }
 
+  function handlePreview(e: MouseEvent) {
+    e.stopPropagation();
+    setPreviewingCmd(props.cmd.id);
+  }
+
   const cmdStats = createMemo(() => resourceStats().get(props.cmd.id));
 
   const preCount = () => props.cmd.preCommands?.length || 0;
@@ -132,6 +137,9 @@ export default function CommandRow(props: CommandRowProps) {
           </button>
           <button class="edit-btn" title="Edit command" onClick={handleEdit}>✎</button>
           <button class="dismiss-btn" onClick={handleDismiss}>✕ Dismiss</button>
+          <Show when={props.cmd.description}>
+            <button class="preview-btn" title="Preview description" onClick={handlePreview}>ⓘ</button>
+          </Show>
           <button class="run-btn" onClick={handleRun}>▶ Run</button>
           <button class="stop-btn" onClick={handleStop}>
             <Show when={state().running && state().stopped} fallback={<>■ Stop</>}>

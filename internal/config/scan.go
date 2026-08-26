@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"yv/internal/models"
 )
@@ -34,6 +35,7 @@ const (
 	maxGroupsPerProject   = 50
 	maxLabelLen           = 200
 	maxCommandLen         = 8 << 10
+	maxDescriptionLen     = 20_000
 )
 
 // validID is what a project id may contain. The id becomes a map key and part
@@ -258,6 +260,14 @@ func validateScanned(p *models.Project, dir string) (int, error) {
 		}
 		if len(c.Command) > maxCommandLen {
 			return 0, fmt.Errorf("command %q is longer than %d characters", c.ID, maxCommandLen)
+		}
+		c.Description = strings.TrimSpace(c.Description)
+		// Runes, not bytes: the doc promises 20,000 characters, and label/command
+		// are byte-bounded because their docs promise a byte size (200 chars of
+		// mostly-ASCII label text, "Max 8 KB" for command) — description is
+		// free-text prose, where non-ASCII content is the expected case.
+		if utf8.RuneCountInString(c.Description) > maxDescriptionLen {
+			return 0, fmt.Errorf("command %q has a description longer than %d characters", c.ID, maxDescriptionLen)
 		}
 		seen[c.ID] = true
 		kept = append(kept, c)

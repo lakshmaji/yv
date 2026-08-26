@@ -18,6 +18,8 @@ export interface Searchable {
   preCommands?: string[];
   /** Post-hooks, searched with the same weight as the command body. */
   postCommands?: Array<{ command: string }>;
+  /** Free-text markdown notes, searched with the same weight as the command body. */
+  description?: string;
 }
 
 /** True when the command has any pre- or post-hook configured. */
@@ -49,6 +51,7 @@ export function scoreCommand(cmd: Searchable, tokens: string[]): number {
   const group = (cmd.group || '').toLowerCase();
   const project = (cmd.project || '').toLowerCase();
   const hooks = hookText(cmd);
+  const description = (cmd.description || '').toLowerCase();
 
   let score = 0;
   for (const token of tokens) {
@@ -58,6 +61,7 @@ export function scoreCommand(cmd: Searchable, tokens: string[]): number {
     else if (project.includes(token)) score += 2;
     else if (command.includes(token)) score += 1;
     else if (hooks.includes(token)) score += 1;
+    else if (description.includes(token)) score += 1;
     else return 0; // every token must match something
   }
   return score;

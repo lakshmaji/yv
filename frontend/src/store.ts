@@ -323,6 +323,7 @@ const [resourceStats, setResourceStats] = createSignal<Map<string, ProcessStats>
 
 // Modal state
 const [editingCmd, setEditingCmd] = createSignal<string | null>(null);
+const [previewingCmd, setPreviewingCmd] = createSignal<string | null>(null);
 const [editingShortcut, setEditingShortcut] = createSignal<string | null>(null);
 const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null);
 
@@ -489,6 +490,7 @@ export {
   sidebarCollapsed, setSidebarCollapsed,
   groupsCollapsed, setGroupsCollapsed,
   editingCmd, setEditingCmd,
+  previewingCmd, setPreviewingCmd,
   editingShortcut, setEditingShortcut,
   settingsProjectId, setSettingsProjectId,
   selectedProject, visibleGroups, filteredCommands,

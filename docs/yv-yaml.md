@@ -69,6 +69,13 @@ commands:
     command: ./scripts/integration.sh
     group: Test
     workingDir: /opt/fixtures
+    description: |
+      ### Why direnv first
+
+      Loads `.envrc` before the suite runs, or the API client points at
+      nothing and every test fails on connection refused.
+
+      See [environments.md](https://github.com/lakshmaji/yv/blob/main/docs/environments.md) for the precedence rules.
     preCommands:
       - direnv exec . true
     postCommands:
@@ -106,6 +113,7 @@ shortcuts:
 | `id` | string | **yes** | — | Must be unique within the file. |
 | `command` | string | **yes** | — | The shell command. Max 8 KB. |
 | `label` | string | no | — | Shown on the row. Max 200 characters. |
+| `description` | string | no | — | Free-text notes about the command, rendered as markdown in the preview. Max 20,000 characters. |
 | `group` | string | no | — | Which group tab it appears under. |
 | `workingDir` | string | no | the group or project dir | Overrides both. |
 | `interactive` | bool | no | `false` | Shows a stdin box while the command runs. |
