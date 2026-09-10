@@ -9,6 +9,7 @@ import (
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/logger"
 	"yv/internal/models"
 	"yv/internal/runner"
 )
@@ -37,6 +38,7 @@ func NewMonitor(r *runner.Runner, sink Sink) *Monitor {
 // trivially correct.
 func (m *Monitor) Start(ctx context.Context) {
 	go func() {
+		defer logger.Recover("resource-monitor")
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 		for {

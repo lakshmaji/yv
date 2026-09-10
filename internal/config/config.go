@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v3"
 	"yv/internal/atomicfile"
+	"yv/internal/logger"
 	"yv/internal/models"
 )
 
@@ -63,7 +63,7 @@ func (s *Store) LoadProjects() []models.Project { return loadProjects() }
 func loadProjects() []models.Project {
 	path, err := configPath()
 	if err != nil {
-		log.Printf("[LoadProjects] %v", err)
+		logger.Error("LoadProjects", err)
 		return defaultProjects()
 	}
 
@@ -74,13 +74,13 @@ func loadProjects() []models.Project {
 		return defaults
 	}
 	if err != nil {
-		log.Printf("[LoadProjects] read: %v", err)
+		logger.Error("LoadProjects: read", err)
 		return defaultProjects()
 	}
 
 	var projects []models.Project
 	if err := json.Unmarshal(data, &projects); err != nil {
-		log.Printf("[LoadProjects] parse: %v", err)
+		logger.Error("LoadProjects: parse", err)
 		return defaultProjects()
 	}
 	return projects

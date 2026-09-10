@@ -11,6 +11,7 @@
 // module scope, which would throw the moment a test imported this file.
 
 import { hashText, makeRng } from './landscape/rng';
+import { logWarn } from './logger';
 
 /**
  * Per-session salt for clip assignment.
@@ -89,13 +90,13 @@ async function clipUrl(path: string): Promise<string | null> {
     const { go } = await import('../wails');
     url = await go.GetAudioClip(path);
   } catch (e) {
-    console.warn('[audio] could not load clip', path, e);
+    logWarn('[audio] could not load clip', path, e);
     failed.add(path);
     return null;
   }
   // Go signals failure with the same "error: …" string the save methods use.
   if (!url || url.startsWith('error: ')) {
-    console.warn('[audio]', url || 'empty response', path);
+    logWarn('[audio]', url || 'empty response', path);
     failed.add(path);
     return null;
   }
@@ -128,7 +129,7 @@ export async function playClip(path: string): Promise<HTMLAudioElement | null> {
     el.currentTime = 0;
     await el.play();
   } catch (e) {
-    console.warn('[audio] playback failed', path, e);
+    logWarn('[audio] playback failed', path, e);
     return null;
   }
   return el;

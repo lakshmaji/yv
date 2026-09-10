@@ -8,6 +8,7 @@ import (
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/logger"
 	"yv/internal/models"
 	"yv/internal/updater"
 )
@@ -412,6 +413,7 @@ func (u *appUpdater) end() {
 // clears are precisely the ones an interrupted update could not clear itself.
 func (a *App) startUpdateWatch(ctx context.Context) {
 	go func() {
+		defer logger.Recover("update-watch")
 		a.upd.SweepStale()
 
 		select {

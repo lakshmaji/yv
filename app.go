@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"yv/internal/audio"
 	"yv/internal/config"
 	"yv/internal/env"
+	"yv/internal/logger"
 	"yv/internal/metrics"
 	"yv/internal/models"
 	"yv/internal/monitor"
@@ -84,7 +84,10 @@ func (a *App) startup(ctx context.Context) {
 	a.startFullscreenMonitor(ctx)
 	// Clean up expired metrics on launch, so a long-idle app prunes without
 	// waiting for the first day rollover.
-	go func() { _ = a.metrics.Prune(time.Now()) }()
+	go func() {
+		defer logger.Recover("metrics-prune")
+		_ = a.metrics.Prune(time.Now())
+	}()
 	// Clears anything an interrupted update left behind, then checks quietly.
 	a.startUpdateWatch(ctx)
 	a.startScanMonitor(ctx)
@@ -130,7 +133,7 @@ func (a *App) PickFolder() string {
 		Title: "Select project folder",
 	})
 	if err != nil {
-		log.Printf("[PickFolder] %v", err)
+		logger.Error("PickFolder", err)
 		return ""
 	}
 	return path
@@ -393,7 +396,7 @@ func (a *App) PickFilesToShare() []string {
 		Title: "Choose files to send",
 	})
 	if err != nil {
-		log.Printf("[PickFilesToShare] %v", err)
+		logger.Error("PickFilesToShare", err)
 		return []string{}
 	}
 	if paths == nil {
@@ -422,7 +425,7 @@ func (a *App) ShowReceivedFiles() string {
 	}
 
 	if err := openFolder(dir); err != nil {
-		log.Printf("[ShowReceivedFiles] %v", err)
+		logger.Error("ShowReceivedFiles", err)
 		return "error: " + err.Error()
 	}
 	return "ok"
@@ -582,7 +585,7 @@ func (a *App) PickAudioClips() []string {
 		},
 	})
 	if err != nil {
-		log.Printf("[PickAudioClips] %v", err)
+		logger.Error("PickAudioClips", err)
 		return []string{}
 	}
 	if paths == nil {

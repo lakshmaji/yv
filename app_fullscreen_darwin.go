@@ -7,6 +7,7 @@ import (
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/logger"
 )
 
 // startFullscreenMonitor polls the window state and emits "fullscreen-changed"
@@ -20,6 +21,7 @@ import (
 // reclaim there either: no other platform reserves space for traffic lights.
 func (a *App) startFullscreenMonitor(ctx context.Context) {
 	go func() {
+		defer logger.Recover("fullscreen-monitor")
 		ticker := time.NewTicker(300 * time.Millisecond)
 		defer ticker.Stop()
 		wasFullscreen := false
