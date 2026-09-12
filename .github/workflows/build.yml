@@ -263,7 +263,15 @@ jobs:
       - name: Build app (unsigned)
         shell: bash
         env:
-          LDFLAGS: -X main.version=${{ steps.vars.outputs.semver }}
+          # An unset SENTRY_DSN secret yields an empty -X value and an empty
+          # VITE_SENTRY_DSN, which both logger.Init and the frontend's
+          # initLogger treat as "Sentry disabled" — safe default for forks
+          # and before the secret exists, no separate gate needed.
+          LDFLAGS: -X main.version=${{ steps.vars.outputs.semver }} -X main.sentryDSN=${{ secrets.SENTRY_DSN }}
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           if [[ -n "${{ matrix.tags }}" ]]; then

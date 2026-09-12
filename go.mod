@@ -4,6 +4,7 @@ go 1.25.7
 
 require (
 	github.com/creack/pty v1.1.24
+	github.com/getsentry/sentry-go v0.49.0
 	github.com/libp2p/go-libp2p v0.49.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/wailsapp/wails/v2 v2.13.0

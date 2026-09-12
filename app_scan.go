@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"yv/internal/config"
+	"yv/internal/logger"
 	"yv/internal/models"
 )
 
@@ -43,6 +43,7 @@ func (a *App) startScanMonitor(ctx context.Context) {
 	})
 
 	go func() {
+		defer logger.Recover("scan-monitor")
 		timer := time.NewTimer(scanStartDelay)
 		defer timer.Stop()
 
@@ -101,7 +102,7 @@ func (a *App) runScan(ctx context.Context) {
 
 	res := a.cfg.ScanForConfigs(scanCtx, cur.ScanDir)
 	if res.Truncated != "" {
-		log.Printf("[scan] %s: %s", cur.ScanDir, res.Truncated)
+		logger.Warn("scan truncated", "dir", cur.ScanDir, "reason", res.Truncated)
 	}
 
 	fresh := a.cfg.UnseenHits(res.Hits)

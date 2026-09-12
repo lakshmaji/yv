@@ -5,13 +5,14 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"yv/internal/logger"
 )
 
 //go:embed all:frontend/dist
@@ -27,12 +28,28 @@ var assets embed.FS
 // update itself into a real release.
 var version = "dev"
 
+// sentryDSN is set at link time the same way version is:
+// -ldflags "-X main.sentryDSN=https://...". Empty in any build that did not
+// go through CI, which is what keeps a dev build from reporting to Sentry.
+var sentryDSN = ""
+
 func main() {
+	// Covers a panic in wails.Run's own synchronous setup or a synchronously
+	// invoked Wails callback (OnStartup/OnBeforeClose/OnShutdown) — the one
+	// path none of the goroutine-level logger.Recover calls elsewhere cover.
+	defer logger.Recover("main")
+
+	flush, err := logger.Init(sentryDSN, version)
+	if err != nil {
+		logger.Warn("sentry init failed", "error", err)
+	}
+	defer flush(2 * time.Second)
+
 	app := NewApp(version)
 
 	distFS, err := fs.Sub(assets, "frontend/dist")
 	if err != nil {
-		log.Fatal("frontend/dist embed:", err)
+		logger.Fatal("frontend/dist embed", err)
 	}
 
 	err = wails.Run(&options.App{
@@ -116,6 +133,6 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal("Error:", err)
+		logger.Fatal("wails.Run", err)
 	}
 }

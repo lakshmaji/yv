@@ -8,6 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sentry/browser": "^10.73.0",
     "animejs": "^4.5.0",
     "chart.js": "^4.5.1",
     "dompurify": "^3.4.14",
@@ -15,6 +16,7 @@
     "solid-js": "^1.9.5"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "^5.4.0",
     "jsdom": "^30.0.1",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

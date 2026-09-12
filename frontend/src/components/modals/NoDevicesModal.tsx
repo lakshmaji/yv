@@ -10,6 +10,7 @@ import {
 import { DRONE_VARIANTS, dronePatrol, droneExtent, type DroneVariant } from '../../lib/drone';
 import { go } from '../../wails';
 import DroneGlyph from '../discovery/DroneGlyph';
+import { logWarn } from '../../lib/logger';
 
 /**
  * Shown when a sweep comes back empty and the drone has gone up in smoke.
@@ -74,7 +75,7 @@ export default function NoDevicesModal() {
     try {
       await go.SaveSettings(next);
     } catch (e) {
-      console.warn('[discovery] could not save drone variant', e);
+      logWarn('[discovery] could not save drone variant', e);
     }
   }
 
