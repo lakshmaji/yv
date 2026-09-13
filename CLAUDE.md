@@ -62,6 +62,28 @@ cd frontend && bunx tsc --noEmit
 Every PR needs a changeset (`bunx changeset`) — CI's `changeset` job blocks
 without one, and a PR merged without it releases to nobody, silently.
 
+### Branches and commits
+
+Branches: `<type>/<short-slug>` — `feat/downloads-page-redesign`,
+`fix/windows-updater-path`, `chore/bump-docusaurus`.
+
+Commits: Conventional Commits type, one gitmoji, a short imperative subject,
+then a body that gives the why before the what/how:
+
+```
+feat ✨ short imperative subject
+
+Why: the problem, report, or decision that prompted this change.
+
+What/how: what actually changed, and anything a reviewer needs that isn't
+obvious from the diff.
+```
+
+Types: `feat ✨` `fix 🐛` `docs 📝` `refactor ♻️` `test ✅` `chore 🔧`
+`style 💄` `ci 👷` `revert ⏪` `perf ⚡`. A scope stays optional and sits
+before the emoji (`fix(windows): 🐛 subject`) — use it when it narrows which
+package or area changed.
+
 ## Shape of the system
 
 `app.go` is a facade: every Wails-bound method is a thin wrapper that delegates
