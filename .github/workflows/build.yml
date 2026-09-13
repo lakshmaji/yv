@@ -267,11 +267,14 @@ jobs:
           # VITE_SENTRY_DSN, which both logger.Init and the frontend's
           # initLogger treat as "Sentry disabled" — safe default for forks
           # and before the secret exists, no separate gate needed.
+          #
+          # SENTRY_ORG/SENTRY_PROJECT are slugs, not sensitive, so they're
+          # repo variables; SENTRY_DSN and SENTRY_AUTH_TOKEN stay secrets.
           LDFLAGS: -X main.version=${{ steps.vars.outputs.semver }} -X main.sentryDSN=${{ secrets.SENTRY_DSN }}
           VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           if [[ -n "${{ matrix.tags }}" ]]; then
