@@ -590,9 +590,41 @@ func TestConnTable(t *testing.T) {
 		}
 	})
 
+	t.Run("open session connects with no expiry", func(t *testing.T) {
+		tab := newConnTable()
+		tab.OpenSession(id)
+
+		if !tab.Connected(id, now) {
+			t.Error("not connected right after OpenSession")
+		}
+		if !tab.Connected(id, now.Add(100*ConnTTL)) {
+			t.Error("a session-trusted peer expired")
+		}
+	})
+
+	t.Run("sweep never drops a session-trusted peer", func(t *testing.T) {
+		tab := newConnTable()
+		tab.OpenSession(id)
+		tab.Sweep(now.Add(100 * ConnTTL))
+
+		if !tab.Connected(id, now.Add(100*ConnTTL)) {
+			t.Error("sweep dropped a session-trusted peer")
+		}
+	})
+
 	t.Run("forget closes immediately", func(t *testing.T) {
 		tab := newConnTable()
 		tab.Open(id, now)
+		tab.Forget(id)
+
+		if tab.Connected(id, now) {
+			t.Error("still connected after Forget")
+		}
+	})
+
+	t.Run("forget also drops a session-trusted peer", func(t *testing.T) {
+		tab := newConnTable()
+		tab.OpenSession(id)
 		tab.Forget(id)
 
 		if tab.Connected(id, now) {

@@ -393,6 +393,51 @@ func TestConnectCodeIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+// SharePairingNever is the opt-in that trades the code's guarantee away
+// entirely: any nearby device gets in without the receiver ever being asked.
+func TestPairingPolicyNeverSkipsThePrompt(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", func(models.SharePayload) string { return "ok" })
+	receiver.SetPairingPolicy(models.SharePairingNever)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+
+	// Deliberately wrong: SharePairingNever must not even look at the code.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := sender.RequestConnect(ctx, receiver.host.ID().String(), "WRONGCOD"); err != nil {
+		t.Fatalf("RequestConnect: %v", err)
+	}
+	if !receiver.conns.Connected(sender.host.ID(), time.Now()) {
+		t.Error("SharePairingNever did not open the connection")
+	}
+}
+
+// SharePairingOnce asks the first time, exactly like the default, but a peer
+// that already paired this session does not have to prove it again.
+func TestPairingPolicyOnceAsksOnlyTheFirstTime(t *testing.T) {
+	receiver := newTestNode(t, "Bronte", func(models.SharePayload) string { return "ok" })
+	receiver.SetPairingPolicy(models.SharePairingOnce)
+	sender := newTestNode(t, "Rexy", nil)
+	connect(t, sender, receiver)
+
+	code, _ := GeneratePIN()
+	answerConnect(t, receiver, code)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := sender.RequestConnect(ctx, receiver.host.ID().String(), code); err != nil {
+		t.Fatalf("first RequestConnect: %v", err)
+	}
+
+	// A second attempt with a wrong code still succeeds: nobody is asked, so
+	// nothing was there to get wrong.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel2()
+	if err := sender.RequestConnect(ctx2, receiver.host.ID().String(), "WRONGCOD"); err != nil {
+		t.Fatalf("second RequestConnect: %v", err)
+	}
+}
+
 func TestConnectWithTheWrongCode(t *testing.T) {
 	receiver := newTestNode(t, "Bronte", func(models.SharePayload) string { return "ok" })
 	sender := newTestNode(t, "Rexy", nil)

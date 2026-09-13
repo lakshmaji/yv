@@ -231,7 +231,25 @@ type Settings struct {
 	// never, for the same reason: a feature that starts walking someone's disk
 	// because they upgraded is not one they opted into.
 	ScanInterval int `json:"scanInterval,omitempty"`
+
+	// SharePairingPolicy controls how often a nearby device has to prove a
+	// person authorized it, by typing the code this device reads out. Empty —
+	// the zero value, and so the default — means SharePairingAlways: every
+	// connection is asked, because on a LAN "nearby" only means "on the same
+	// Wi-Fi" and the code is what tells a real person apart from a stranger.
+	// SharePairingOnce remembers a peer for the rest of the running session so
+	// it is asked only the first time; SharePairingNever accepts any nearby
+	// device without asking at all. Both trade away the guarantee the code
+	// exists for, which is why they are opt-in.
+	SharePairingPolicy string `json:"sharePairingPolicy,omitempty"`
 }
+
+// Share pairing policy values. See Settings.SharePairingPolicy.
+const (
+	SharePairingAlways = "always"
+	SharePairingOnce   = "once"
+	SharePairingNever  = "never"
+)
 
 // --- peer sharing ---
 

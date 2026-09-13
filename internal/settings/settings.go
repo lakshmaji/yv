@@ -231,7 +231,20 @@ func Normalize(in models.Settings) models.Settings {
 		// with nothing to do.
 		out.ScanInterval = 0
 	}
+
+	out.SharePairingPolicy = strings.ToLower(strings.TrimSpace(out.SharePairingPolicy))
+	if !sharePairingPolicies[out.SharePairingPolicy] {
+		out.SharePairingPolicy = models.SharePairingAlways
+	}
 	return out
+}
+
+// sharePairingPolicies is the set Validate and Normalize check
+// Settings.SharePairingPolicy against.
+var sharePairingPolicies = map[string]bool{
+	models.SharePairingAlways: true,
+	models.SharePairingOnce:   true,
+	models.SharePairingNever:  true,
 }
 
 // NormalizePanels drops unknown and duplicate panel IDs and returns them in the
@@ -286,6 +299,9 @@ func Validate(in models.Settings) error {
 	}
 	if err := ValidateScanInterval(in.ScanInterval); err != nil {
 		return err
+	}
+	if p := strings.ToLower(strings.TrimSpace(in.SharePairingPolicy)); p != "" && !sharePairingPolicies[p] {
+		return fmt.Errorf("unknown share pairing policy %q", in.SharePairingPolicy)
 	}
 	// The drone's own clips are audio paths like any other, so they answer to the
 	// same extension allowlist as the roars rather than a rule of their own.

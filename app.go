@@ -74,6 +74,10 @@ func NewApp(version string) *App {
 	// stop being "Rexy.local" to the person sitting next to them.
 	a.share.SetLocalName(set.Get().Username)
 	set.OnChange(func(s models.Settings) { a.share.SetLocalName(s.Username) })
+	// Same for how often a nearby device has to prove a person is asking —
+	// changing it in Settings takes effect on the very next connect request.
+	a.share.SetPairingPolicy(set.Get().SharePairingPolicy)
+	set.OnChange(func(s models.Settings) { a.share.SetPairingPolicy(s.SharePairingPolicy) })
 
 	return a
 }

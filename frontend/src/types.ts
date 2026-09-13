@@ -171,7 +171,16 @@ export interface AppSettings {
   scanDir?: string;
   /** How often to rescan, in minutes. 0 means never. */
   scanInterval?: number;
+  /**
+   * How often a nearby device has to prove a person authorized it, by typing
+   * the code this device reads out. Empty — the default — means "always".
+   * See SharePairingPolicy in Go for what "once" and "never" trade away.
+   */
+  sharePairingPolicy?: SharePairingPolicy;
 }
+
+/** Mirrors internal/models.SharePairingAlways/Once/Never. */
+export type SharePairingPolicy = 'always' | 'once' | 'never';
 
 // --- peer sharing ---
 

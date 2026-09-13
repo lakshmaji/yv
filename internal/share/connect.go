@@ -29,10 +29,18 @@ const MaxCodeAttempts = 5
 type connTable struct {
 	mu sync.Mutex
 	m  map[peer.ID]time.Time // peer -> expiry
+
+	// trusted holds peers paired once already this running session, under the
+	// SharePairingOnce policy. It has no expiry and is not swept: unlike m, it
+	// is meant to last as long as the node does. It is cleared with the rest
+	// of the table on teardown regardless, because peer identity is not
+	// persisted across a restart either — remembering past that point would
+	// remember nothing real.
+	trusted map[peer.ID]bool
 }
 
 func newConnTable() *connTable {
-	return &connTable{m: make(map[peer.ID]time.Time)}
+	return &connTable{m: make(map[peer.ID]time.Time), trusted: make(map[peer.ID]bool)}
 }
 
 // Open marks a peer as connected, starting its clock.
@@ -42,11 +50,24 @@ func (t *connTable) Open(id peer.ID, now time.Time) {
 	t.m[id] = now.Add(ConnTTL)
 }
 
+// OpenSession marks a peer as connected for the rest of this running session,
+// with no expiry. This is what the SharePairingOnce policy remembers, so the
+// same peer is not asked for a code again until this node stops.
+func (t *connTable) OpenSession(id peer.ID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.m, id)
+	t.trusted[id] = true
+}
+
 // Connected reports whether a peer may currently offer us a transfer.
 func (t *connTable) Connected(id peer.ID, now time.Time) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if t.trusted[id] {
+		return true
+	}
 	exp, ok := t.m[id]
 	return ok && now.Before(exp)
 }
@@ -62,11 +83,14 @@ func (t *connTable) Touch(id peer.ID, now time.Time) {
 	}
 }
 
-// Forget closes a peer's connection immediately.
+// Forget closes a peer's connection immediately, including a session-trusted
+// one — so a device that was let in earlier under SharePairingOnce has to ask
+// again too.
 func (t *connTable) Forget(id peer.ID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.m, id)
+	delete(t.trusted, id)
 }
 
 // Sweep drops connections that have run out.
