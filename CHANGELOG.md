@@ -1,5 +1,11 @@
 # yv
 
+## 0.5.0
+
+### Minor Changes
+
+- [#21](https://github.com/lakshmaji/yv/pull/21) [`aa8444c`](https://github.com/lakshmaji/yv/commit/aa8444cf6717f8345e0a11073bf9ef31ed1024bd) Thanks [@lakshmaji](https://github.com/lakshmaji)! - Add optional Sentry-backed crash and error reporting, off by default and only enabled in release builds where the DSN secret is configured. Background goroutines and the frontend render tree now recover from panics/crashes instead of taking the whole app down silently.
+
 ## 0.4.0
 
 ### Minor Changes
