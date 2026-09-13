@@ -1,6 +1,15 @@
 import {expect, test} from 'bun:test';
 
-import {fetchReleases, installerFor, osOf, type Release} from './releases';
+import {
+  decodeBuildId,
+  encodeBuildId,
+  fetchReleases,
+  fetchReleasesPage,
+  formatPublished,
+  installerFor,
+  osOf,
+  type Release,
+} from './releases';
 
 // The names build.yml actually uploads, with the version swapped for a made-up
 // one — the point of the fixture is that nothing here depends on which version
@@ -77,4 +86,29 @@ test('fetchReleases folds sidecars away and drops prereleases', async () => {
   expect(rest).toHaveLength(0);
   expect(only.assets.map((a) => a.name)).toEqual(NAMES);
   expect(only.assets[0].sha256Url).toBe(`https://x/yv-macos-arm64-${V}.dmg.sha256`);
+});
+
+test('fetchReleasesPage reads hasMore off the Link header', async () => {
+  const body = JSON.stringify([
+    {tag_name: V, published_at: '2026-01-01T00:00:00Z', draft: false, prerelease: false, assets: []},
+  ]);
+  globalThis.fetch = (async () =>
+    new Response(body, {
+      headers: {Link: '<https://api.github.com/x?page=2>; rel="next"'},
+    })) as typeof fetch;
+  expect((await fetchReleasesPage(1)).hasMore).toBe(true);
+
+  globalThis.fetch = (async () => new Response(body)) as typeof fetch;
+  expect((await fetchReleasesPage(2)).hasMore).toBe(false);
+});
+
+test('encodeBuildId/decodeBuildId round-trip, and reject garbage', () => {
+  const id = encodeBuildId(V, 'windows');
+  expect(decodeBuildId(id)).toEqual({tag: V, os: 'windows'});
+  expect(decodeBuildId(null)).toBeNull();
+  expect(decodeBuildId('not-a-real-token')).toBeNull();
+});
+
+test('formatPublished renders a stable, locale-formatted date', () => {
+  expect(formatPublished('2026-01-01T00:00:00Z')).toContain('2026');
 });

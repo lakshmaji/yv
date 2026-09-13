@@ -2,104 +2,229 @@
   padding: 3rem 0 5rem;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: 12rem 1fr;
-  gap: 2.5rem;
-  margin-top: 2rem;
-}
-
-.versions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.versions button {
-  width: 100%;
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.versions button:hover {
-  background: var(--ifm-color-emphasis-100);
-}
-
-.selected {
-  background: var(--ifm-color-emphasis-200) !important;
-  font-weight: 600;
-}
-
-.latest {
-  margin-left: 0.5rem;
-  font-size: 0.7rem;
+.panelLabel {
+  display: block;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--ifm-color-primary);
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 0.75rem;
+}
+
+.filtersGroup {
+  margin-top: 2.5rem;
 }
 
 .filters {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
 }
 
 .filters button {
-  padding: 0.35rem 0.9rem;
+  padding: 0.4rem 1rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 999px;
   background: none;
   color: inherit;
   font: inherit;
+  font-size: 0.9rem;
   cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.filters button:hover {
+  border-color: var(--ifm-color-emphasis-500);
 }
 
 .filters .selected {
   border-color: var(--ifm-color-primary);
   color: var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+  font-weight: 600;
 }
 
-.assets {
-  width: 100%;
-  display: table;
+.versionsPanel {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--ifm-background-surface-color);
+  margin-top: 1.5rem;
 }
 
-.assets td {
-  vertical-align: middle;
-  word-break: break-all;
+.versions {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.meta {
+.versionRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  /* Tall enough to fit the download button (its own padding pushes it past
+     2.75rem) plus row padding without growing — otherwise rows with a
+     download/share action render taller than "Not built for ..." rows,
+     which visibly stair-steps the list, especially on hover. */
+  min-height: 3.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+}
+
+.versionRow:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.versionLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Fixed, not min-width: a tag's length varies row to row, and min-width let
+     that variation change the column's rendered width, which shifted where
+     the date/size columns started on each row. */
+  width: 9rem;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.versionNumber {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selected {
+  background: var(--ifm-color-emphasis-200) !important;
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+}
+
+.latest {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-200);
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+}
+
+/* Reserves the badge's width on every row — not just the latest one — so the
+   content after the version label lines up the same everywhere. */
+.latestHidden {
+  visibility: hidden;
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.downloadButton:hover {
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-primary);
+}
+
+.released {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.size {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sha256Link {
+  font-variant-numeric: normal;
+}
+
+.unavailable {
   color: var(--ifm-color-emphasis-600);
   font-size: 0.85rem;
 }
 
-/* The version column turns into a scrolling strip rather than stacking, so the
-   asset list stays above the fold on a phone. */
-@media screen and (max-width: 996px) {
-  .layout {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
 
-  .versions {
-    flex-direction: row;
-    overflow-x: auto;
-  }
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--ifm-color-emphasis-600);
+  cursor: pointer;
+}
 
-  .versions button {
-    width: auto;
-    white-space: nowrap;
+.shareButton:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+}
+
+.sentinel {
+  min-height: 1px;
+}
+
+.loadingMore,
+.loadMoreFailed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.loadMoreFailed button {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: none;
+  color: var(--ifm-color-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+}
+
+.loadMoreFailed button:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+/* Rows wrap onto a second line on narrow screens rather than overflowing the
+   panel — the version label stays put and the action group flows under it. */
+@media screen and (max-width: 640px) {
+  .versionRow {
+    padding: 0.75rem;
   }
 }

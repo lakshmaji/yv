@@ -81,12 +81,22 @@ type GhRelease = {
 };
 
 /**
- * fetchReleases returns the published releases, newest first.
- *
- * Drafts and prereleases are dropped, matching what the in-app updater will
- * offer — the download page and the app should never disagree about what the
- * current version is.
+ * Maps a raw GitHub API response body to the published releases. Drafts and
+ * prereleases are dropped, matching what the in-app updater will offer — the
+ * download page and the app should never disagree about what the current
+ * version is.
  */
+function toReleases(body: GhRelease[]): Release[] {
+  return body
+    .filter((r) => !r.draft && !r.prerelease)
+    .map((r) => ({
+      tag: r.tag_name,
+      published: r.published_at,
+      assets: toAssets(r.assets),
+    }));
+}
+
+/** fetchReleases returns the published releases, newest first. */
 export async function fetchReleases(limit = 30): Promise<Release[]> {
   const resp = await fetch(
     `https://api.github.com/repos/${REPO}/releases?per_page=${limit}`,
@@ -95,14 +105,70 @@ export async function fetchReleases(limit = 30): Promise<Release[]> {
   if (!resp.ok) {
     throw new Error(`GitHub returned ${resp.status}`);
   }
-  const body: GhRelease[] = await resp.json();
-  return body
-    .filter((r) => !r.draft && !r.prerelease)
-    .map((r) => ({
-      tag: r.tag_name,
-      published: r.published_at,
-      assets: toAssets(r.assets),
-    }));
+  return toReleases(await resp.json());
+}
+
+export type ReleasesPage = {releases: Release[]; hasMore: boolean};
+
+/** True if a GitHub `Link` response header advertises a `rel="next"` page. */
+function hasNextPage(link: string | null): boolean {
+  return !!link && /<[^>]*>;\s*rel="next"/.test(link);
+}
+
+/** One page of the releases feed, for scroll-triggered pagination on the downloads page. */
+export async function fetchReleasesPage(
+  page: number,
+  perPage = 10,
+): Promise<ReleasesPage> {
+  const resp = await fetch(
+    `https://api.github.com/repos/${REPO}/releases?per_page=${perPage}&page=${page}`,
+    {headers: {Accept: 'application/vnd.github+json'}},
+  );
+  if (!resp.ok) {
+    throw new Error(`GitHub returned ${resp.status}`);
+  }
+  return {
+    releases: toReleases(await resp.json()),
+    hasMore: hasNextPage(resp.headers.get('Link')),
+  };
+}
+
+/** Packs a tag + OS into one opaque, URL-safe `?b=` token for a share link. */
+export function encodeBuildId(tag: string, os: OS): string {
+  return btoa(`${tag}|${os}`)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/** Reverses {@link encodeBuildId}, or null if `id` isn't one of ours. */
+export function decodeBuildId(id: string | null): {tag: string; os: OS} | null {
+  if (!id) return null;
+  try {
+    const base64 = id.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const [tag, os] = atob(padded).split('|');
+    if (!tag || !(os === 'macos' || os === 'windows' || os === 'ubuntu')) return null;
+    return {tag, os};
+  } catch {
+    return null;
+  }
+}
+
+/** "9 Sep 2026" — a release's publish date, made readable. */
+export function formatPublished(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, {dateStyle: 'medium'}).format(
+    new Date(iso),
+  );
+}
+
+/** The platform to preselect: the visitor's own, so their row is the one that already works. */
+export function defaultOS(): OS {
+  if (typeof navigator === 'undefined') return 'macos';
+  const platform = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+  if (platform.includes('mac')) return 'macos';
+  if (platform.includes('win')) return 'windows';
+  return 'ubuntu';
 }
 
 /** Folds the `.sha256`/`.sig` sidecars into the artifact they describe. */
