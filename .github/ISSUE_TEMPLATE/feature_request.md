@@ -1,7 +1,7 @@
 ---
 name: Feature request
 about: Propose something new yv should do
-title: ''
+title: 'feat ✨ '
 labels: enhancement
 assignees: ''
 ---

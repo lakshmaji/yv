@@ -1,7 +1,7 @@
 ---
 name: Suggestion
 about: A smaller improvement, tweak, or idea that isn't a bug or a full feature
-title: ''
+title: 'chore 🔧 '
 labels: suggestion
 assignees: ''
 ---

@@ -62,10 +62,14 @@ cd frontend && bunx tsc --noEmit
 Every PR needs a changeset (`bunx changeset`) — CI's `changeset` job blocks
 without one, and a PR merged without it releases to nobody, silently.
 
-### Branches and commits
+### Branches, commits and PR titles
 
 Branches: `<type>/<short-slug>` — `feat/downloads-page-redesign`,
 `fix/windows-updater-path`, `chore/bump-docusaurus`.
+
+PR titles follow the same `type emoji subject` shape as commits below —
+`chore 🔧 add PR/issue templates`, not a free-form sentence — since GitHub
+uses the PR title as the squash-merge commit subject.
 
 Commits: Conventional Commits type, one gitmoji, a short imperative subject,
 then a body that gives the why before the what/how:
