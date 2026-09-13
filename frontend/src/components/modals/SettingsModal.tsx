@@ -5,7 +5,27 @@ import { PANELS, togglePanel } from '../../lib/dashboardPanels';
 import { addClips, clipDir, clipLabel, playClip } from '../../lib/audio';
 import { DRONE_VARIANTS, variantById } from '../../lib/drone';
 import { formatBytes, shortenPath } from '../../lib/utils';
-import type { AppSettings, MetricsStorageInfo, PanelId } from '../../types';
+import type { AppSettings, MetricsStorageInfo, PanelId, SharePairingPolicy } from '../../types';
+
+// Mirrors internal/models.SharePairingAlways/Once/Never, which is the
+// enforcement point. Order here is the order they're offered in the select.
+const PAIRING_POLICIES: { value: SharePairingPolicy; label: string; hint: string }[] = [
+  {
+    value: 'always',
+    label: 'Every time (default)',
+    hint: 'Whoever wants to share reads an 8-character code off their screen, and you type it here to let them in. A fresh one is generated every time, and this device never sees it until you enter it — so nothing can connect without a person on both ends.',
+  },
+  {
+    value: 'once',
+    label: 'Once per session',
+    hint: 'A device is only asked for a code the first time it connects while yv is open. After that it connects without asking again — until you quit yv, since a restarted yv looks like a new device to everyone nearby anyway.',
+  },
+  {
+    value: 'never',
+    label: 'Never',
+    hint: 'Any device on this network can connect without a code at all. This gives up the one thing that tells a real person apart from a stranger on the same Wi-Fi — only choose this if you trust every device this network can reach.',
+  },
+];
 
 // The useful range spans three orders of magnitude and every value in it is
 // arbitrary, so a fixed list beats a number input nobody knows how to fill in.
@@ -46,6 +66,7 @@ export default function SettingsModal() {
   // Where to look for committed yv.yaml files, and how often.
   const [scanDir, setScanDir] = createSignal('');
   const [scanInterval, setScanInterval] = createSignal(0);
+  const [pairingPolicy, setPairingPolicy] = createSignal<SharePairingPolicy>('always');
   const [storage, setStorage] = createSignal<MetricsStorageInfo | null>(null);
   const [confirmClear, setConfirmClear] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -78,6 +99,7 @@ export default function SettingsModal() {
     setCrashClip(current.droneCrashClip || '');
     setScanDir(current.scanDir || '');
     setScanInterval(current.scanInterval || 0);
+    setPairingPolicy(current.sharePairingPolicy || 'always');
     setConfirmClear(false);
     setError('');
     setBroken([]);
@@ -218,6 +240,7 @@ export default function SettingsModal() {
       droneCrashClip: crashClip().trim(),
       scanDir: scanDir().trim(),
       scanInterval: scanInterval(),
+      sharePairingPolicy: pairingPolicy(),
     };
 
     // A rejected binding call would otherwise leave the modal open with no
@@ -709,19 +732,23 @@ export default function SettingsModal() {
               </span>
             </label>
 
-            {/* There is nothing to configure. Every connection is gated by a
-                code generated for that one attempt, so there is no stored PIN
-                to set, to forget, or to leave switched off. */}
             <div class="settings-row">
               <div class="settings-row-main">
-                <div class="settings-row-label">Connections always need a code</div>
+                <div class="settings-row-label">Ask for a connection code</div>
                 <div class="settings-row-hint">
-                  Whoever wants to share reads an 8-character code off their screen, and you type
-                  it here to let them in. A fresh one is generated every time, and this device
-                  never sees it until you enter it — so nothing can connect without a person on
-                  both ends. You are still asked separately before anything is saved.
+                  {PAIRING_POLICIES.find((p) => p.value === pairingPolicy())?.hint}
                 </div>
               </div>
+              <span class="settings-row-control">
+                <select
+                  value={pairingPolicy()}
+                  onChange={(e) => setPairingPolicy(e.currentTarget.value as SharePairingPolicy)}
+                >
+                  <For each={PAIRING_POLICIES}>
+                    {(p) => <option value={p.value}>{p.label}</option>}
+                  </For>
+                </select>
+              </span>
             </div>
           </div>
 

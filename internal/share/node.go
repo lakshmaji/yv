@@ -161,6 +161,13 @@ type Node struct {
 	nameMu    sync.RWMutex
 	localName string
 
+	// pairingPolicy controls whether handleConnect prompts for a code at all.
+	// Guarded separately from mu for the same reason localName is: it is
+	// written from the settings observer while a connect request may be being
+	// served on another goroutine.
+	pairingMu     sync.RWMutex
+	pairingPolicy string
+
 	// conns holds per-peer connection codes and live connections.
 	conns *connTable
 
@@ -206,11 +213,12 @@ func (n *Node) SetFileSink(fn func(offer models.ShareOffer, body io.Reader, onPr
 // New creates a Node. Nothing is opened until Start.
 func New(onPayload func(models.SharePayload) string) *Node {
 	return &Node{
-		localName:    LocalName(),
-		peers:        make(map[peer.ID]*peerRec),
-		conns:        newConnTable(),
-		decisionWait: decisionTimeout,
-		onPayload:    onPayload,
+		localName:     LocalName(),
+		pairingPolicy: models.SharePairingAlways,
+		peers:         make(map[peer.ID]*peerRec),
+		conns:         newConnTable(),
+		decisionWait:  decisionTimeout,
+		onPayload:     onPayload,
 	}
 }
 
@@ -241,6 +249,28 @@ func (n *Node) LocalName() string {
 	n.nameMu.RLock()
 	defer n.nameMu.RUnlock()
 	return n.localName
+}
+
+// SetPairingPolicy sets how handleConnect decides whether a nearby device
+// needs to prove a person is asking. An unrecognised value falls back to
+// SharePairingAlways, the safe default, rather than silently accepting
+// everyone because of a typo upstream.
+func (n *Node) SetPairingPolicy(policy string) {
+	switch policy {
+	case models.SharePairingOnce, models.SharePairingNever:
+	default:
+		policy = models.SharePairingAlways
+	}
+	n.pairingMu.Lock()
+	n.pairingPolicy = policy
+	n.pairingMu.Unlock()
+}
+
+// PairingPolicy is the policy currently in effect.
+func (n *Node) PairingPolicy() string {
+	n.pairingMu.RLock()
+	defer n.pairingMu.RUnlock()
+	return n.pairingPolicy
 }
 
 // Start brings up the libp2p host, registers the stream handlers, and begins

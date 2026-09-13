@@ -399,6 +399,20 @@ func (n *Node) handleShare(s network.Stream) {
 // mechanism: the code proves a conversation happened between two people, which
 // is precisely what a stranger on the same Wi-Fi cannot produce.
 func (n *Node) handleConnect(s network.Stream, remote peer.ID, offer models.ShareOffer, codeHash string) bool {
+	policy := n.PairingPolicy()
+
+	// SharePairingNever accepts every request without showing a prompt at
+	// all; SharePairingOnce skips the prompt for a peer already paired this
+	// session. Both trade away the guarantee the code exists for, which is
+	// why a person has to opt into them in Settings.
+	if policy == models.SharePairingNever ||
+		(policy == models.SharePairingOnce && n.conns.Connected(remote, time.Now())) {
+		n.conns.OpenSession(remote)
+		_ = s.SetWriteDeadline(time.Now().Add(offerTimeout))
+		_, err := s.Write([]byte{respAccept})
+		return err == nil
+	}
+
 	// A request with no code behind it could only ever be accepted by guessing
 	// nothing, so it is refused rather than shown.
 	if codeHash == "" {
@@ -438,7 +452,11 @@ func (n *Node) handleConnect(s network.Stream, remote peer.ID, offer models.Shar
 	resp := respNoAnswer
 	switch {
 	case accepted:
-		n.conns.Open(remote, time.Now())
+		if policy == models.SharePairingOnce {
+			n.conns.OpenSession(remote)
+		} else {
+			n.conns.Open(remote, time.Now())
+		}
 		resp = respAccept
 	case answered:
 		resp = respDecline

@@ -11,8 +11,9 @@ import { go } from '../../wails';
  * the wire, so their device cannot show it to them; being told is the only way
  * they can have it, and that is exactly what the step is for.
  *
- * Every peer goes through this. There is no setting that turns it off, because
- * a lock people can quietly leave open is one that is quietly left open.
+ * This is what runs on the sending side. Whether the *receiving* device shows a
+ * prompt at all is that device's own choice — Settings → Sharing — since it is
+ * always the receiver deciding whether to trust the request.
  */
 export default function PeerConnectModal() {
   const peer = () => sharePeer();

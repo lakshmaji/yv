@@ -20,6 +20,8 @@ Tap a dinosaur to start sharing. The sending device draws an 8-character code an
 
 Connections last 15 minutes, extended automatically while a transfer is in progress.
 
+Settings → Sharing lets you change how often the code is asked for: every time (the default), once per running session, or never. The last two trade away the guarantee the code exists for, so they are opt-in.
+
 ![Connection flow](./.github/assets/connection.png)
 
 ### Send project config

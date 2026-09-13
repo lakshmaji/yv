@@ -38,57 +38,57 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "zero value gets every default",
 			in:   models.Settings{},
-			want: models.Settings{SchemaVersion: 1, MetricsEnabled: false, RetentionDays: 365, Panels: all},
+			want: models.Settings{SchemaVersion: 1, MetricsEnabled: false, RetentionDays: 365, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "negative retention falls back to default",
 			in:   models.Settings{RetentionDays: -5},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "retention above the cap is clamped",
 			in:   models.Settings{RetentionDays: 5000},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: MaxRetentionDays, Panels: all},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: MaxRetentionDays, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "in-range retention is preserved",
 			in:   models.Settings{RetentionDays: 30},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 30, Panels: all},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 30, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "enabled flag is preserved",
 			in:   models.Settings{MetricsEnabled: true, RetentionDays: 7},
-			want: models.Settings{SchemaVersion: 1, MetricsEnabled: true, RetentionDays: 7, Panels: all},
+			want: models.Settings{SchemaVersion: 1, MetricsEnabled: true, RetentionDays: 7, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "stale schema version is upgraded",
 			in:   models.Settings{SchemaVersion: 0, RetentionDays: 90},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 90, Panels: all},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 90, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "panel subset survives",
 			in:   models.Settings{Panels: []string{PanelActivity}},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: []string{PanelActivity}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: []string{PanelActivity}, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "audio clips keep their order",
 			in:   models.Settings{AudioClips: []string{"/b.mp3", "/a.wav"}},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/b.mp3", "/a.wav"}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/b.mp3", "/a.wav"}, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "duplicate and unsupported clips are dropped",
 			in:   models.Settings{AudioClips: []string{"/a.mp3", "/a.mp3", "/notes.txt"}},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/a.mp3"}},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, AudioClips: []string{"/a.mp3"}, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "an all-invalid clip list normalises away",
 			in:   models.Settings{AudioClips: []string{"/notes.txt"}},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, SharePairingPolicy: models.SharePairingAlways},
 		},
 		{
 			name: "sound is audible by default and mute is preserved",
 			in:   models.Settings{SoundMuted: true},
-			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, SoundMuted: true},
+			want: models.Settings{SchemaVersion: 1, RetentionDays: 365, Panels: all, SoundMuted: true, SharePairingPolicy: models.SharePairingAlways},
 		},
 	}
 
@@ -156,6 +156,12 @@ func TestValidate(t *testing.T) {
 		{"no fan clip", models.Settings{DroneFanClip: ""}, false},
 		{"supported crash clip", models.Settings{DroneCrashClip: "/boom.wav"}, false},
 		{"unsupported crash clip", models.Settings{DroneCrashClip: "/boom.aiff"}, true},
+		{"no share pairing policy", models.Settings{SharePairingPolicy: ""}, false},
+		{"share pairing always", models.Settings{SharePairingPolicy: models.SharePairingAlways}, false},
+		{"share pairing once", models.Settings{SharePairingPolicy: models.SharePairingOnce}, false},
+		{"share pairing never", models.Settings{SharePairingPolicy: models.SharePairingNever}, false},
+		{"share pairing case-insensitive", models.Settings{SharePairingPolicy: "ONCE"}, false},
+		{"unknown share pairing policy", models.Settings{SharePairingPolicy: "sometimes"}, true},
 	}
 
 	for _, tt := range tests {
