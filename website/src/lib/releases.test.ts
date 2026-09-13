@@ -110,5 +110,8 @@ test('encodeBuildId/decodeBuildId round-trip, and reject garbage', () => {
 });
 
 test('formatPublished renders a stable, locale-formatted date', () => {
-  expect(formatPublished('2026-01-01T00:00:00Z')).toContain('2026');
+  // Midday, not midnight: a UTC day boundary can land on the previous or
+  // next day once formatted in a non-UTC timezone, which would flake this
+  // assertion depending on where it runs.
+  expect(formatPublished('2026-06-15T12:00:00Z')).toContain('2026');
 });

@@ -203,6 +203,10 @@ export default function Downloads(): ReactNode {
     const url = new URL(window.location.href);
     url.searchParams.set('b', encodeBuildId(tag, os));
     const link = url.toString();
+    if (!navigator.clipboard) {
+      window.prompt('Copy this link:', link);
+      return;
+    }
     navigator.clipboard
       .writeText(link)
       .then(() => {
@@ -241,6 +245,7 @@ export default function Downloads(): ReactNode {
                 <button
                   key={o}
                   type="button"
+                  aria-pressed={o === os}
                   className={clsx(o === os && styles.selected)}
                   onClick={() => setOs(o)}>
                   {OS_LABEL[o]}
